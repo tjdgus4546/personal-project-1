@@ -4,6 +4,7 @@
     <title>로그인</title>
 </head>
 <body>
+    <button onclick="location.href='/'">메인페이지</button>
     <h1>로그인</h1>
     <form id="loginForm">
         <input type="email" id="email" name="email" placeholder="이메일" required><br>
@@ -13,27 +14,35 @@
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-
+    
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
+    
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+    
+                const result = await response.json();
+    
+                if (response.ok) {
+                localStorage.setItem('token', result.token); // ✅ 토큰만 저장
 
-            const response = await fetch('/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-
-            const result = await response.json();
-            console.log(result);
-            if (response.ok) {
-                alert('Login successful!');
-                window.location.href = '/'; // 홈페이지로 리다이렉트
-            } else {
-                alert(result.message); // 오류 메시지 표시
+                   alert('로그인 성공!');
+                window.location.href = '/';
+                }else {
+                    alert(result.message || '로그인 실패');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('에러 발생');
             }
         });
     </script>
+    
 </body>
 </html>

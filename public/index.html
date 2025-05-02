@@ -3,10 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up</title>
+    <title>Main</title>
 </head>
 <body>
+    <button onclick="location.href='/signup'">회원가입</button>
+    <button onclick="location.href='/login'">로그인</button>
+    <button id="logoutBtn">로그아웃</button>
 
     
+    <!-- <button onclick="location.href='/helpId'">아이디 찾기</button>
+    <button onclick="location.href='/helpPassword'">비밀번호 찾기</button> -->
+
+    <h1 id="greeting">환영합니다!</h1>
+
+    <script>
+        async function loadUserInfo() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('greeting').textContent = '로그인해주세요.';
+                return;
+            }
+
+            const response = await fetch('/my-info', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (response.ok) {
+                const user = await response.json();
+                document.getElementById('greeting').textContent = `${user.username}님, 환영합니다!`;
+            } else {
+                document.getElementById('greeting').textContent = '인증 실패. 다시 로그인해주세요.';
+            }
+        }
+
+        loadUserInfo();
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+        localStorage.removeItem('token'); // ✅ 토큰 제거
+        alert('로그아웃되었습니다.');
+        window.location.href = '/'; // 로그인 페이지로 이동
+    });
+    </script>
 </body>
 </html>

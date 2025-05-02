@@ -4,9 +4,26 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const User = require('./models/User');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET;
+const mongoURI = process.env.MONGO_URI;
+
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.sendStatus(401); // Unauthorized
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403); // Forbidden
+        req.user = user; // 사용자 정보 요청 객체에 삽입
+        next();
+    });
+}
 
 // MongoDB 연결
 mongoose.connect('mongodb://localhost:27017/mydatabase', {
@@ -36,6 +53,14 @@ app.get('/signup', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'signup.html'));
 });
 
+app.get('/my-info', authenticateToken, async (req, res) => {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json(user);
+});
+
+
 app.post('/signup', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -64,27 +89,26 @@ app.post('/signup', async (req, res) => {
 
 // 로그인 라우트
 app.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
+    const { email, password } = req.body;
 
-        // 사용자 찾기
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ message: 'User not found' });
-        }
-
-        // 비밀번호 비교
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-
-        // 로그인 성공
-        res.status(200).json({ message: 'Login successful', user });
-    } catch (err) {
-        console.error('Error details:', err);
-        res.status(500).json({ message: 'Error logging in', error: err.message });
+    const user = await User.findOne({ email });
+    if (!user) {
+        return res.status(400).json({ message: 'User not found' });
     }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+        return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // ✅ JWT 생성
+    const token = jwt.sign(
+        { id: user._id, username: user.username },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+
+    res.json({ message: 'Login successful', token });
 });
 
 // 서버 시작
