@@ -80,10 +80,10 @@ app.post('/signup', async (req, res) => {
         await newUser.save();
 
         // 응답
-        res.status(201).json({ message: 'User registered successfully', user: newUser });
+        res.status(201).json({ message: '회원가입 성공!', user: newUser });
     } catch (err) {
         console.error('Error details:', err); // 오류 상세 정보 출력
-        res.status(500).json({ message: 'Error registering user', error: err.message });
+        res.status(500).json({ message: '서버 오류', error: err.message });
     }
 });
 

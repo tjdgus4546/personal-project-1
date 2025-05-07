@@ -6,8 +6,8 @@
     <title>Main</title>
 </head>
 <body>
-    <button onclick="location.href='/signup'">회원가입</button>
-    <button onclick="location.href='/login'">로그인</button>
+    <button id="signupBtn" onclick="location.href='/signup'">회원가입</button>
+    <button id="loginBtn" onclick="location.href='/login'">로그인</button>
     <button id="logoutBtn">로그아웃</button>
 
     
@@ -17,34 +17,50 @@
     <h1 id="greeting">환영합니다!</h1>
 
     <script>
-        async function loadUserInfo() {
+        document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
-            if (!token) {
-                document.getElementById('greeting').textContent = '로그인해주세요.';
-                return;
-            }
+            const signupBtn = document.getElementById('signupBtn');
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const greeting = document.getElementById('greeting');
 
-            const response = await fetch('/my-info', {
-                headers: {
-                    'Authorization': 'Bearer ' + token
-                }
-            });
+            if (token) {
+                // 로그인 상태
+                signupBtn.style.display = 'none';
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
 
-            if (response.ok) {
-                const user = await response.json();
-                document.getElementById('greeting').textContent = `${user.username}님, 환영합니다!`;
+                // 사용자 정보 가져오기
+                fetch('/my-info', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                })
+                .then(response => response.json())
+                .then(user => {
+                    if (user.username) {
+                        greeting.textContent = `${user.username}님, 환영합니다!`;
+                    }
+                })
+                .catch(err => {
+                    console.error('유저 정보 불러오기 실패:', err);
+                });
+
             } else {
-                document.getElementById('greeting').textContent = '인증 실패. 다시 로그인해주세요.';
+                // 로그아웃 상태
+                signupBtn.style.display = 'inline-block';
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                greeting.textContent = '로그인이 필요합니다.';
             }
-        }
 
-        loadUserInfo();
-
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-        localStorage.removeItem('token'); // ✅ 토큰 제거
-        alert('로그아웃되었습니다.');
-        window.location.href = '/'; // 로그인 페이지로 이동
-    });
+            // 로그아웃 버튼 클릭 이벤트
+            logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('token'); // 토큰 삭제
+                alert('로그아웃 되었습니다.');
+                window.location.reload(); // 페이지 새로고침으로 상태 갱신
+            });
+        });
     </script>
 </body>
 </html>
