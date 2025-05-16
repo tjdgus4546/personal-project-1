@@ -10,7 +10,22 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
-const mongoURI = process.env.MONGO_URI;
+
+//db 연결
+const userDb = mongoose.createConnection(process.env.USER_DB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+userDb.on('connected', () => console.log('UserDB 연결 성공'));
+userDb.on('error', (err) => console.log('UserDB 연결 오류:', err));
+
+// 채팅 DB 연결
+const chatDb = mongoose.createConnection(process.env.CHAT_DB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+chatDb.on('connected', () => console.log('ChatDB 연결 성공'));
+chatDb.on('error', (err) => console.log('ChatDB 연결 오류:', err));
 
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -25,15 +40,15 @@ function authenticateToken(req, res, next) {
     });
 }
 
-// MongoDB 연결
-mongoose.connect('mongodb://localhost:27017/mydatabase', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('MongoDB connected');
-}).catch(err => {
-    console.error('MongoDB connection error:', err);
-});
+// // MongoDB 연결
+// mongoose.connect('mongodb://localhost:27017/mydatabase', {
+//     useNewUrlParser: true,
+//     useUnifiedTopology: true
+// }).then(() => {
+//     console.log('MongoDB connected');
+// }).catch(err => {
+//     console.error('MongoDB connection error:', err);
+// });
 
 // 미들웨어 설정
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -86,6 +101,19 @@ app.post('/signup', async (req, res) => {
         res.status(500).json({ message: '서버 오류', error: err.message });
     }
 });
+
+app.post('/message', async (req, res) => {
+    const { sender, content } = req.body;
+
+    try {
+        const newMessage = new Message({ sender, content });
+        await newMessage.save();
+        res.status(201).json({ message: '메시지 저장 성공' });
+    } catch (err) {
+        res.status(500).json({ message: '메시지 저장 실패', error: err.message });
+    }
+});
+
 
 // 로그인 라우트
 app.post('/login', async (req, res) => {
