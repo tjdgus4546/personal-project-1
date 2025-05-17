@@ -1,26 +1,29 @@
-// models/User.js
-const mongoose = require('mongoose');
-
-const userSchema = new mongoose.Schema({
-    email: {
-        type: String,
-        required: true,
-        unique: true,            // 이메일은 고유해야 함
-        lowercase: true,
-        trim: true,
-        match: [/^\S+@\S+\.\S+$/, 'Invalid email format'] // 기본 이메일 형식 검사
+const userSchema = new Schema({
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  gameSessions: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "GameSession",
     },
-    username: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    password: {
-        type: String,
-        required: true
-    }
-}, {
-    timestamps: true // createdAt, updatedAt 자동 생성
+  ],
 });
 
-module.exports = mongoose.model('User', userSchema);
+const User = model("User", userSchema);

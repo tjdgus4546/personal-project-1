@@ -1,14 +1,18 @@
-// models/Chat.js
-const mongoose = require('mongoose');
-
-// models/Question.js
-const mongoose = require('mongoose');
-
-const questionSchema = new mongoose.Schema({
-    question: { type: String, required: true },
-    answer: { type: String, required: true },
-    options: [String],
-    points: { type: Number, default: 10 }
+const quizSchema = new Schema({
+  title: {
+    type: String,
+    required: true,
+  },
+  questions: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Question",
+    },
+  ],
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model('Question', questionSchema);
+const Quiz = model("Quiz", quizSchema);
