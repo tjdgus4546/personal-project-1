@@ -1,3 +1,6 @@
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
 const quizSchema = new Schema({
   title: {
     type: String,
@@ -15,4 +18,4 @@ const quizSchema = new Schema({
   },
 });
 
-const Quiz = model("Quiz", quizSchema);
+module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);

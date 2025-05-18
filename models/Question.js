@@ -1,3 +1,6 @@
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
 const questionSchema = new Schema({
   quiz: {
     type: Schema.Types.ObjectId,
@@ -43,4 +46,4 @@ const questionSchema = new Schema({
   },
 });
 
-const Question = model("Question", questionSchema);
+module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);

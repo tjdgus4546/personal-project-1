@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
@@ -5,50 +6,20 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const User = require('./models/User');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
+const connectDB = require('./config/DB');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-//db 연결
-const userDb = mongoose.createConnection(process.env.USER_DB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+// ✅ MongoDB 연결
+connectDB().then(({ userDb, chatDb }) => {
+  app.set('userDb', userDb);  // User DB를 전역에서 사용 가능하도록 설정
+  app.set('quizDb', chatDb);  // Chat DB를 전역에서 사용 가능하도록 설정
+}).catch(err => {
+  console.error('DB 연결 실패:', err);
+  process.exit(1);
 });
-userDb.on('connected', () => console.log('UserDB 연결 성공'));
-userDb.on('error', (err) => console.log('UserDB 연결 오류:', err));
-
-// 채팅 DB 연결
-const chatDb = mongoose.createConnection(process.env.CHAT_DB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
-chatDb.on('connected', () => console.log('ChatDB 연결 성공'));
-chatDb.on('error', (err) => console.log('ChatDB 연결 오류:', err));
-
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) return res.sendStatus(401); // Unauthorized
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403); // Forbidden
-        req.user = user; // 사용자 정보 요청 객체에 삽입
-        next();
-    });
-}
-
-// // MongoDB 연결
-// mongoose.connect('mongodb://localhost:27017/mydatabase', {
-//     useNewUrlParser: true,
-//     useUnifiedTopology: true
-// }).then(() => {
-//     console.log('MongoDB connected');
-// }).catch(err => {
-//     console.error('MongoDB connection error:', err);
-// });
 
 // 미들웨어 설정
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -68,13 +39,12 @@ app.get('/signup', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'signup.html'));
 });
 
-app.get('/my-info', authenticateToken, async (req, res) => {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+// app.get('/my-info', authenticateToken, async (req, res) => {
+//     const user = await User.findById(req.user.id).select('-password');
+//     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    res.json(user);
-});
-
+//     res.json(user);
+// });
 
 app.post('/signup', async (req, res) => {
     try {

@@ -1,3 +1,6 @@
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
 const gameSessionSchema = new Schema({
   quiz: {
     type: Schema.Types.ObjectId,
@@ -40,4 +43,4 @@ const gameSessionSchema = new Schema({
   ],
 });
 
-const GameSession = model("GameSession", gameSessionSchema);
+module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);
