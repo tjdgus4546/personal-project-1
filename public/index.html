@@ -36,10 +36,24 @@
                         'Authorization': 'Bearer ' + token
                     }
                 })
-                .then(response => response.json())
+                .then(async (response) => {
+                    if(!response.ok) {
+                        if (response.status === 401 || response.status === 403) {
+                            console.warn('토큰 만료 또는 인증 실패 : 자동 로그아웃');
+                            localStorage.removeItem('token');
+                            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                            window.location.href = '/login';
+                            return;
+                        } else {
+                            throw new Error('서버 응답 오류');
+                        }
+                    }
+                
+                return response.json();
+            })
                 .then(user => {
                     if (user.username) {
-                        greeting.textContent = `${user.username}님, 환영합니다!`;
+                        greeting.textContent = `${user.username}님 환영합니다!`;
                     }
                 })
                 .catch(err => {
