@@ -1,112 +1,34 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const User = require('./models/User');
 const jwt = require('jsonwebtoken');
 const connectDB = require('./config/DB');
+const authRoutes = require('./routes/AuthRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET;
 
 // ✅ MongoDB 연결
-connectDB().then(({ userDb, chatDb }) => {
+connectDB().then(({ userDb, quizDb }) => {
   app.set('userDb', userDb);  // User DB를 전역에서 사용 가능하도록 설정
-  app.set('quizDb', chatDb);  // Chat DB를 전역에서 사용 가능하도록 설정
+  app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
 }).catch(err => {
   console.error('DB 연결 실패:', err);
   process.exit(1);
 });
 
 // 미들웨어 설정
-app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use('/auth', authRoutes);
 
 // 라우트 설정
+app.use('/', authRoutes);
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/signup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'signup.html'));
-});
-
-// app.get('/my-info', authenticateToken, async (req, res) => {
-//     const user = await User.findById(req.user.id).select('-password');
-//     if (!user) return res.status(404).json({ message: 'User not found' });
-
-//     res.json(user);
-// });
-
-app.post('/signup', async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-
-        // 입력 데이터 확인
-        if (!username || !email || !password) {
-            return res.status(400).json({ message: 'All fields are required' });
-        }
-
-        // 비밀번호 해시 처리
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // 새로운 사용자 생성
-        const newUser = new User({ username, email, password: hashedPassword });
-
-        // 데이터베이스에 저장
-        await newUser.save();
-
-        // 응답
-        res.status(201).json({ message: '회원가입 성공!', user: newUser });
-    } catch (err) {
-        console.error('Error details:', err); // 오류 상세 정보 출력
-        res.status(500).json({ message: '서버 오류', error: err.message });
-    }
-});
-
-app.post('/message', async (req, res) => {
-    const { sender, content } = req.body;
-
-    try {
-        const newMessage = new Message({ sender, content });
-        await newMessage.save();
-        res.status(201).json({ message: '메시지 저장 성공' });
-    } catch (err) {
-        res.status(500).json({ message: '메시지 저장 실패', error: err.message });
-    }
-});
-
-
-// 로그인 라우트
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) {
-        return res.status(400).json({ message: 'User not found' });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-    }
-
-    // ✅ JWT 생성
-    const token = jwt.sign(
-        { id: user._id, username: user.username },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-    );
-
-    res.json({ message: 'Login successful', token });
 });
 
 // 서버 시작
