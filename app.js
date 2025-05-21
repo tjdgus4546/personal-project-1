@@ -1,15 +1,17 @@
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const path = require('path');
-const bcrypt = require('bcrypt');
-const User = require('./models/User');
-const jwt = require('jsonwebtoken');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
+const quizRoutes = require('./routes/QuizRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ✅ MongoDB 연결
 connectDB().then(({ userDb, quizDb }) => {
@@ -21,11 +23,11 @@ connectDB().then(({ userDb, quizDb }) => {
 });
 
 // 미들웨어 설정
-app.use(bodyParser.json());
 app.use('/auth', authRoutes);
 
 // 라우트 설정
 app.use('/', authRoutes);
+app.use('/', quizRoutes);
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
