@@ -6,12 +6,13 @@ const quizSchema = new Schema({
     type: String,
     required: true,
   },
-  questions: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "Question",
-    },
-  ],
+  description: String,
+  creatorId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  questions: [questionSchema],
   createdAt: {
     type: Date,
     default: Date.now,
