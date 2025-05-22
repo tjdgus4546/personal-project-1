@@ -4,8 +4,8 @@ const path = require('path');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
-
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));

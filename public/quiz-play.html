@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>퀴즈 플레이</title>
+</head>
+<body>
+  <h1 id="quizTitle">퀴즈 시작</h1>
+  <div id="questionBox"></div>
+  <input type="text" id="answerInput" placeholder="정답을 입력하세요">
+  <button id="submitAnswer">정답 제출</button>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id');
+    let currentIndex = 0;
+    let questions = [];
+
+    fetch(`/quiz/${quizId}`)
+      .then(res => res.json())
+      .then(quiz => {
+        document.getElementById('quizTitle').textContent = quiz.title;
+        questions = quiz.questions;
+        showQuestion();
+      })
+      .catch(err => alert('퀴즈 로딩 실패'));
+
+    function showQuestion() {
+      const q = questions[currentIndex];
+      if (!q) return document.getElementById('questionBox').textContent = '퀴즈 완료!';
+
+      let html = `<p><strong>${q.order}. ${q.text}</strong></p>`;
+      if (q.imageBase64) {
+        html += `<img src="${q.imageBase64}" width="300"><br>`;
+      }
+      if (q.youtubeUrl) {
+        html += `<iframe width="300" height="170" src="${q.youtubeUrl.replace('watch?v=', 'embed/')}" frameborder="0" allowfullscreen></iframe>`;
+      }
+      document.getElementById('questionBox').innerHTML = html;
+    }
+
+    document.getElementById('submitAnswer').addEventListener('click', () => {
+      const userAnswer = document.getElementById('answerInput').value.trim().toLowerCase();
+      const correct = questions[currentIndex].answer.trim().toLowerCase();
+
+      if (userAnswer === correct) {
+        alert('정답입니다!');
+      } else {
+        alert('틀렸습니다.');
+      }
+
+      currentIndex++;
+      document.getElementById('answerInput').value = '';
+      showQuestion();
+    });
+  </script>
+</body>
+</html>

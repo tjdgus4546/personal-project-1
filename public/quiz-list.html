@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>퀴즈 목록</title>
+</head>
+<body>
+  <h1>전체 퀴즈 목록</h1>
+  <ul id="quizList"></ul>
+  <button onclick="location.href='/'">메인으로</button>
+    
+  <script>
+    fetch('/quiz/list')
+      .then(res => res.json())
+      .then(data => {
+        const ul = document.getElementById('quizList');
+        data.forEach(quiz => {
+          const li = document.createElement('li');
+          li.innerHTML = `<a href="/quiz/play?id=${quiz._id}">
+                            <strong>${quiz.title}</strong>
+                          </a> - ${quiz.description || ''}`;
+          ul.appendChild(li);
+        });
+      })
+      .catch(err => {
+        console.error('퀴즈 목록 불러오기 실패:', err);
+        alert('퀴즈를 불러오는 중 오류 발생');
+      });
+  </script>
+</body>
+</html>
