@@ -15,6 +15,24 @@
     <button onclick="location.href='/helpPassword'">비밀번호 찾기</button> -->
 
     <h1 id="greeting">환영합니다!</h1>
+    <input type="text" id="inviteInput" placeholder="초대 코드 입력">
+    <button onclick="joinByInvite()">입장</button>
+    
+    <script>
+    async function joinByInvite() {
+    const code = document.getElementById('inviteInput').value.trim();
+    if (!code) return alert('초대 코드를 입력하세요');
+
+    const res = await fetch(`/game/invite/${code}`);
+    const result = await res.json();
+
+    if (res.ok && result.sessionId) {
+        window.location.href = `/quiz/session?id=${result.sessionId}`;
+    } else {
+        alert('초대 코드가 유효하지 않습니다');
+    }
+    }
+    </script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {

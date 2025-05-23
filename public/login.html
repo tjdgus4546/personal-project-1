@@ -30,8 +30,8 @@
                 const result = await response.json();
     
                 if (response.ok) {
-                localStorage.setItem('token', result.token); // ✅ 토큰만 저장
-
+                localStorage.setItem('token', result.token);
+                localStorage.setItem('username', result.username);
                    alert('로그인 성공!');
                 window.location.href = '/';
                 }else {

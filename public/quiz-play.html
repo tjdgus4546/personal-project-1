@@ -2,56 +2,49 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>퀴즈 플레이</title>
+  <title>퀴즈 시작</title>
 </head>
 <body>
-  <h1 id="quizTitle">퀴즈 시작</h1>
-  <div id="questionBox"></div>
-  <input type="text" id="answerInput" placeholder="정답을 입력하세요">
-  <button id="submitAnswer">정답 제출</button>
+  <h1 id="quizTitle">퀴즈 정보 로딩 중...</h1>
+  <p id="quizDesc"></p>
+  <button id="startGameBtn">게임 세션 시작</button>
 
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id');
-    let currentIndex = 0;
-    let questions = [];
+    const quizId = new URLSearchParams(window.location.search).get('id');
+    const username = localStorage.getItem('username') || '익명';
 
+    // 퀴즈 정보 로딩
     fetch(`/quiz/${quizId}`)
       .then(res => res.json())
       .then(quiz => {
         document.getElementById('quizTitle').textContent = quiz.title;
-        questions = quiz.questions;
-        showQuestion();
+        document.getElementById('quizDesc').textContent = quiz.description || '';
       })
-      .catch(err => alert('퀴즈 로딩 실패'));
+      .catch(err => {
+        console.error('퀴즈 불러오기 실패:', err);
+        alert('퀴즈 정보를 불러오는 데 실패했습니다.');
+      });
 
-    function showQuestion() {
-      const q = questions[currentIndex];
-      if (!q) return document.getElementById('questionBox').textContent = '퀴즈 완료!';
-
-      let html = `<p><strong>${q.order}. ${q.text}</strong></p>`;
-      if (q.imageBase64) {
-        html += `<img src="${q.imageBase64}" width="300"><br>`;
-      }
-      if (q.youtubeUrl) {
-        html += `<iframe width="300" height="170" src="${q.youtubeUrl.replace('watch?v=', 'embed/')}" frameborder="0" allowfullscreen></iframe>`;
-      }
-      document.getElementById('questionBox').innerHTML = html;
-    }
-
-    document.getElementById('submitAnswer').addEventListener('click', () => {
-      const userAnswer = document.getElementById('answerInput').value.trim().toLowerCase();
-      const correct = questions[currentIndex].answer.trim().toLowerCase();
-
-      if (userAnswer === correct) {
-        alert('정답입니다!');
-      } else {
-        alert('틀렸습니다.');
-      }
-
-      currentIndex++;
-      document.getElementById('answerInput').value = '';
-      showQuestion();
+    // 게임 시작 버튼
+    document.getElementById('startGameBtn').addEventListener('click', () => {
+      fetch('/game/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quizId, username })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.sessionId) {
+          // 세션 ID를 포함한 URL로 이동
+          window.location.href = `/quiz/session?id=${data.sessionId}`;
+        } else {
+          alert('게임 세션 생성 실패');
+        }
+      })
+      .catch(err => {
+        console.error('세션 생성 에러:', err);
+        alert('서버 오류');
+      });
     });
   </script>
 </body>

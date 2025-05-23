@@ -53,6 +53,10 @@ router.get('/quiz/play', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
 });
 
+router.get('/quiz/session', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
+});
+
 router.get('/quiz/:id', async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);

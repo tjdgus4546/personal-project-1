@@ -36,10 +36,10 @@ const signup = async (req, res) => {
 const login = async (req, res) => {
   const userDb = req.app.get('userDb');
   const User = require('../models/User')(userDb);
-
-  const { email, password } = req.body;
+  const JWT_SECRET = process.env.JWT_SECRET;
 
   try {
+    const { email, password } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: '사용자를 찾을 수 없습니다.' });
@@ -54,7 +54,11 @@ const login = async (req, res) => {
       expiresIn: '2h',
     });
 
-    res.json({ token });
+    res.json({
+      message: 'Login successful',
+      token,
+      username: user.username
+    });
   } catch (err) {
     res.status(500).json({ message: '서버 오류', error: err.message });
   }

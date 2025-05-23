@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>퀴즈 세션</title>
+</head>
+<body>
+    
+  <h1>실시간 퀴즈 세션</h1>
+  <div id="questionBox"></div>
+  <!-- 채팅 영역 -->
+  <div id="chatLog"></div>
+  <input type="text" id="chatInput" placeholder="정답을 입력하세요">
+  <button onclick="sendMessage()">전송</button>
+  <h1>초대코드: <span id="inviteCode">로딩중...</span></h1>
+  
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const sessionId = new URLSearchParams(window.location.search).get('id');
+    const username = localStorage.getItem('username') || '익명';
+    console.log('[debug] username:', username);
+      // 세션 입장
+    socket.emit('joinSession', { sessionId, username });
+
+    //초대코드 표시
+    fetch(`/game/session/${sessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        const inviteCode = data.inviteCode || '없음';
+        document.getElementById('inviteCode').textContent = inviteCode;
+      })
+      .catch(err => {
+        console.error('세션 정보 요청 실패:', err);
+      });
+
+     // 채팅 메시지 수신
+    socket.on('chat', ({ user, message }) => {
+        const chatLog = document.getElementById('chatLog');
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${user}</strong>: ${message}`;
+        chatLog.appendChild(p);
+    });
+
+    // 정답 알림 수신
+    socket.on('correct', ({ username }) => {
+        const chatLog = document.getElementById('chatLog');
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${username}</strong>님이 정답을 맞혔습니다! 🎉`;
+        chatLog.appendChild(p);
+    });
+
+    // 메시지 전송
+    function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        if (message) {
+        socket.emit('chatMessage', { sessionId, username, message });
+        input.value = '';
+        }
+    }
+
+    socket.on('next', ({ index }) => {
+        currentIndex = index;
+        showQuestion();
+        });
+
+    socket.on('end', ({ message }) => {
+        alert(message || '퀴즈가 종료되었습니다!');
+        });
+  </script>
+</body>
+</html>

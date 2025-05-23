@@ -1,46 +1,19 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-const gameSessionSchema = new Schema({
-  quiz: {
-    type: Schema.Types.ObjectId,
-    ref: "Quiz",
-    required: true,
-  },
-  participants: [
-    {
-      user: {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-      },
-      score: {
-        type: Number,
-        default: 0,
-      },
-    },
-  ],
-  startTime: {
-    type: Date,
-    default: Date.now,
-  },
-  endTime: {
-    type: Date,
-    required: true,
-  },
-  chatLogs: [
-    {
-      user: {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-      },
-      message: String,
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-    },
-  ],
+const playerSchema = new Schema({
+  username: String,
+  score: { type: Number, default: 0 },
+  answered: { type: Map, of: Boolean, default: {} }
 });
 
-module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);
+const gameSessionSchema = new Schema({
+  quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
+  players: [playerSchema],
+  currentQuestionIndex: { type: Number, default: 0 },
+  startedAt: { type: Date, default: Date.now },
+  isActive: { type: Boolean, default: true },
+  inviteCode: { type: String, unique: true },
+});
+
+module.exports = (quizDb) => quizDb.model('GameSession', gameSessionSchema, 'game_sessions');
