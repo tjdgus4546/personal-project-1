@@ -3,26 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <title>퀴즈 세션</title>
+    <style>
+    .hidden { display: none; }
+    </style>
 </head>
 <body>
     
   <h1>실시간 퀴즈 세션</h1>
-  <div id="questionBox"></div>
-  <!-- 채팅 영역 -->
-  <div id="chatLog"></div>
-  <input type="text" id="chatInput" placeholder="정답을 입력하세요">
-  <button onclick="sendMessage()">전송</button>
-  <h1>초대코드: <span id="inviteCode">로딩중...</span></h1>
-  
+
+    <!-- ✅ 대기 화면 -->
+  <div id="lobbySection">
+    <h2>게임 대기 중...</h2>
+    <p>초대코드: <span id="inviteCode">로딩중...</span></p>
+    <p>참가자 목록:</p>
+    <ul id="playerList"></ul>
+    <button id="startBtn" class="hidden">게임 시작</button>
+  </div>
+
+  <!-- ✅ 게임 화면 -->
+  <div id="gameSection" class="hidden">
+    <div id="questionBox"></div>
+
+    <div id="chatLog"></div>
+    <input type="text" id="chatInput" placeholder="정답을 입력하세요1">
+    <button onclick="sendMessage()">전송</button>
+
+    <h2>현재 점수판</h2>
+    <ul id="scoreboard"></ul>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('id');
     const username = localStorage.getItem('username') || '익명';
-    console.log('[debug] username:', username);
-      // 세션 입장
-    socket.emit('joinSession', { sessionId, username });
+
+    const lobbySection = document.getElementById('lobbySection');
+    const gameSection = document.getElementById('gameSection');
+    const startBtn = document.getElementById('startBtn');
+    const playerList = document.getElementById('playerList');
+    let questions = [];
+    let currentIndex = -1;
 
     //초대코드 표시
     fetch(`/game/session/${sessionId}`)
@@ -35,6 +56,59 @@
         console.error('세션 정보 요청 실패:', err);
       });
 
+      //스코어 표시부분
+    socket.on('scoreboard', ({ players }) => {
+      console.log('[SOCKET] scoreboard 수신:', players); // ✅ 콘솔 찍기
+
+      const board = document.getElementById('scoreboard');
+      board.innerHTML = ''; // 초기화
+      players
+        .sort((a, b) => b.score - a.score) // 점수순 정렬
+        .forEach(p => {
+          const li = document.createElement('li');
+          li.textContent = `${p.username}: ${p.score}점`;
+          board.appendChild(li);
+        });
+    });
+
+    // 세션 입장
+    socket.emit('joinSession', { sessionId, username });
+
+    // 대기실 수신
+    socket.on('waiting-room', ({ host, players, isStarted }) => {
+      playerList.innerHTML = '';
+      players.forEach(name => {
+        const li = document.createElement('li');
+        li.textContent = name;
+        playerList.appendChild(li);
+      });
+
+      // 방장인 경우 시작 버튼 보이기
+      if (username === host && !isStarted) {
+        startBtn.classList.remove('hidden');
+        startBtn.onclick = () => {
+          socket.emit('startGame', { sessionId, username });
+          startBtn.disabled = true; // 중복 클릭 방지
+        };
+      }
+    });
+
+    // 게임 시작됨
+    socket.on('game-started', ({ quiz }) => {
+      questions = quiz.questions;
+      currentIndex = 0;
+
+      lobbySection.classList.add('hidden');
+      gameSection.classList.remove('hidden');
+
+      showQuestion();
+    });
+
+    socket.on('next', ({ index }) => {
+      currentIndex = index;
+      showQuestion();
+    });
+
      // 채팅 메시지 수신
     socket.on('chat', ({ user, message }) => {
         const chatLog = document.getElementById('chatLog');
@@ -42,33 +116,83 @@
         p.innerHTML = `<strong>${user}</strong>: ${message}`;
         chatLog.appendChild(p);
     });
+    
+    function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      input.value = '';
 
-    // 정답 알림 수신
-    socket.on('correct', ({ username }) => {
+      if (!message) return;
+
+      const correctAnswer = questions[currentIndex].answer.trim().toLowerCase();
+      const chatLog = document.getElementById('chatLog');
+
+      if (message.toLowerCase() === correctAnswer) {
+        // 정답일 경우
+        socket.emit('correct', { sessionId, username });
+      } else {
+        // 일반 채팅일 경우 DB에 저장 요청
+        socket.emit('chatMessage', { sessionId, username, message });
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${user}</strong>: ${message}`;
+        document.getElementById('chatLog').appendChild(p);
+      }
+    }
+
+      socket.on('correct', ({ username }) => {
         const chatLog = document.getElementById('chatLog');
         const p = document.createElement('p');
         p.innerHTML = `<strong>${username}</strong>님이 정답을 맞혔습니다! 🎉`;
         chatLog.appendChild(p);
-    });
+      });
 
-    // 메시지 전송
-    function sendMessage() {
-        const input = document.getElementById('chatInput');
-        const message = input.value.trim();
-        if (message) {
-        socket.emit('chatMessage', { sessionId, username, message });
-        input.value = '';
-        }
-    }
 
-    socket.on('next', ({ index }) => {
-        currentIndex = index;
-        showQuestion();
+    // 서버에서 점수판 업데이트만 받으면 됨
+    socket.on('scoreboard', ({ players }) => {
+      const board = document.getElementById('scoreboard');
+      board.innerHTML = '';
+      players
+        .sort((a, b) => b.score - a.score)
+        .forEach(p => {
+          const li = document.createElement('li');
+          li.textContent = `${p.username}: ${p.score}점`;
+          board.appendChild(li);
         });
+    });
 
     socket.on('end', ({ message }) => {
         alert(message || '퀴즈가 종료되었습니다!');
         });
+
+  function showQuestion() {
+    const box = document.getElementById('questionBox');
+    const question = questions[currentIndex];
+
+    if (!question) {
+      box.innerHTML = '<p>문제를 불러올 수 없습니다.</p>';
+      return;
+    }
+
+    let html = `<h2>문제 #${currentIndex + 1}</h2>`;
+    html += `<p>${question.text}</p>`;
+
+    // 이미지가 있다면 표시
+    if (question.imageBase64) {
+      html += `<img src="${question.imageBase64}" alt="문제 이미지" style="max-width: 300px;">`;
+    }
+
+    // YouTube 링크가 있다면 iframe으로 표시
+    if (question.youtubeUrl) {
+      html += `<div style="margin-top: 10px;">
+                <iframe width="560" height="315"
+                  src="${question.youtubeUrl}"
+                  frameborder="0" allowfullscreen></iframe>
+              </div>`;
+    }
+
+    box.innerHTML = html;
+  }
+
   </script>
 </body>
 </html>

@@ -7,7 +7,7 @@
 <body>
   <h1 id="quizTitle">퀴즈 정보 로딩 중...</h1>
   <p id="quizDesc"></p>
-  <button id="startGameBtn">게임 세션 시작</button>
+  <button id="createSession">게임 세션 만들기</button>
 
   <script>
     const quizId = new URLSearchParams(window.location.search).get('id');
@@ -25,8 +25,8 @@
         alert('퀴즈 정보를 불러오는 데 실패했습니다.');
       });
 
-    // 게임 시작 버튼
-    document.getElementById('startGameBtn').addEventListener('click', () => {
+    // 세션 생성 버튼
+    document.getElementById('createSession').addEventListener('click', () => {
       fetch('/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

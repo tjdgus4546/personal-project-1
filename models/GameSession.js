@@ -4,7 +4,10 @@ const { Schema } = mongoose;
 const playerSchema = new Schema({
   username: String,
   score: { type: Number, default: 0 },
-  answered: { type: Map, of: Boolean, default: {} }
+  answered: {
+    type: Schema.Types.Mixed,
+    default: {}
+  }
 });
 
 const gameSessionSchema = new Schema({
@@ -14,6 +17,8 @@ const gameSessionSchema = new Schema({
   startedAt: { type: Date, default: Date.now },
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
+  started: { type: Boolean, default: false },
+  host: { type: String, required: true },
 });
 
 module.exports = (quizDb) => quizDb.model('GameSession', gameSessionSchema, 'game_sessions');

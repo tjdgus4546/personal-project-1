@@ -44,7 +44,9 @@ router.post('/start', async (req, res) => {
       startedAt: new Date(),
       isActive: true,
       currentQuestionIndex: 0,
-      inviteCode, // ✅ 포함
+      inviteCode,
+      started: false,
+      host: username,
     });
 
     res.status(201).json({
@@ -69,6 +71,12 @@ router.get('/invite/:code', async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: '에러 발생', error: err.message });
   }
+});
+
+router.get('/chatlogs/:sessionId', async (req, res) => {
+  const ChatSessionLog = require('../models/ChatSessionLog')(quizDb);
+  const logs = await ChatSessionLog.findOne({ sessionId: req.params.sessionId }).lean();
+  res.json(logs?.messages || []);
 });
 
 module.exports = router;
