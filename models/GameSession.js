@@ -17,7 +17,7 @@ const gameSessionSchema = new Schema({
   startedAt: { type: Date, default: Date.now },
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
-  started: { type: Boolean, default: false },
+  isStarted: { type: Boolean, default: false },
   host: { type: String, required: true },
 });
 

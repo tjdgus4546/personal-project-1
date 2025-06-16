@@ -43,22 +43,10 @@
     const startBtn = document.getElementById('startBtn');
     const playerList = document.getElementById('playerList');
     let questions = [];
-    let currentIndex = -1;
+    let currentIndex = 0;
 
-    //초대코드 표시
-    fetch(`/game/session/${sessionId}`)
-      .then(res => res.json())
-      .then(data => {
-        const inviteCode = data.inviteCode || '없음';
-        document.getElementById('inviteCode').textContent = inviteCode;
-      })
-      .catch(err => {
-        console.error('세션 정보 요청 실패:', err);
-      });
-
-      //스코어 표시부분
+    //스코어 표시부분
     socket.on('scoreboard', ({ players }) => {
-      console.log('[SOCKET] scoreboard 수신:', players); // ✅ 콘솔 찍기
 
       const board = document.getElementById('scoreboard');
       board.innerHTML = ''; // 초기화
@@ -71,8 +59,47 @@
         });
     });
 
+    //새로고침시 원래 상태 유지
+    fetch(`/game/session/${sessionId}`)
+    .then(res => res.json())
+    .then(data => {
+      questions = data.quiz.questions;
+      currentIndex = data.currentQuestionIndex;
+      const inviteCode = data.inviteCode || '없음';
+      document.getElementById('inviteCode').textContent = inviteCode;
+      const board = document.getElementById('scoreboard');
+      board.innerHTML = '';
+      data.players
+        .sort((a, b) => b.score - a.score)
+        .forEach(p => {
+          const li = document.createElement('li');
+          li.textContent = `${p.username}: ${p.score}점`;
+          board.appendChild(li);
+        });
+
+      if (data.isStarted) {
+        // 이미 게임 중이라면 바로 게임화면으로 전환
+        lobbySection.classList.add('hidden');
+        gameSection.classList.remove('hidden');
+        showQuestion();
+      }
+    });
+
     // 세션 입장
     socket.emit('joinSession', { sessionId, username });
+    
+    // 채팅 기록 불러오기
+    fetch(`/game/chat/${sessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        const chatLog = document.getElementById('chatLog');
+        data.messages.forEach(msg => {
+          const p = document.createElement('p');
+          p.innerHTML = `<strong>${msg.username}</strong>: ${msg.message}`;
+          chatLog.appendChild(p);
+        });
+      })
+      .catch(err => console.error('채팅 기록 불러오기 실패:', err));
 
     // 대기실 수신
     socket.on('waiting-room', ({ host, players, isStarted }) => {
@@ -109,14 +136,7 @@
       showQuestion();
     });
 
-     // 채팅 메시지 수신
-    socket.on('chat', ({ user, message }) => {
-        const chatLog = document.getElementById('chatLog');
-        const p = document.createElement('p');
-        p.innerHTML = `<strong>${user}</strong>: ${message}`;
-        chatLog.appendChild(p);
-    });
-    
+    //메세지 입력시 정답인지 일반채팅인지 판별
     function sendMessage() {
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
@@ -134,18 +154,18 @@
         // 일반 채팅일 경우 DB에 저장 요청
         socket.emit('chatMessage', { sessionId, username, message });
         const p = document.createElement('p');
-        p.innerHTML = `<strong>${user}</strong>: ${message}`;
+        p.innerHTML = `<strong>${username}</strong>: ${message}`;
         document.getElementById('chatLog').appendChild(p);
       }
     }
 
-      socket.on('correct', ({ username }) => {
-        const chatLog = document.getElementById('chatLog');
-        const p = document.createElement('p');
-        p.innerHTML = `<strong>${username}</strong>님이 정답을 맞혔습니다! 🎉`;
-        chatLog.appendChild(p);
-      });
-
+    //정답시 중복 방지하여 출력한다
+    socket.on('correct', ({ username }) => {
+      const chatLog = document.getElementById('chatLog');
+      const p = document.createElement('p');
+      p.innerHTML = `<strong>${username}</strong>님이 정답을 맞혔습니다! 🎉1`;
+      chatLog.appendChild(p);
+    });
 
     // 서버에서 점수판 업데이트만 받으면 됨
     socket.on('scoreboard', ({ players }) => {

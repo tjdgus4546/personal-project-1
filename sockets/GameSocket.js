@@ -7,7 +7,6 @@ module.exports = (io, app) => {
   const timers = {}; // 세션별 타이머 저장
 
   io.on('connection', (socket) => {
-    console.log('[Socket] 연결됨:', socket.id);
 
     socket.on('joinSession', async ({ sessionId, username }) => {
       const session = await GameSession.findById(sessionId);
@@ -35,7 +34,6 @@ module.exports = (io, app) => {
 
       if (updated) {
         await session.save();
-        console.log(`[JOINED] ${username} → 세션에 등록됨`);
       }
 
       io.to(sessionId).emit('chat', {
@@ -68,7 +66,7 @@ module.exports = (io, app) => {
         
         session.isStarted = true;
         session.isActive = true;
-        session.currentQuestionIndex = -1; // 첫 문제 준비
+        session.currentQuestionIndex = 0; // 첫 문제 준비
         await session.save();
         
         const quiz = await Quiz.findById(session.quizId).lean();
@@ -82,9 +80,9 @@ module.exports = (io, app) => {
     socket.on('chatMessage', async ({ sessionId, username, message }) => {
       if (!message?.trim()) return;
 
-    const ChatSessionLog = require('../models/ChatLog')(quizDb);
+        const ChatLog = require('../models/ChatLog')(quizDb);
 
-      await ChatSessionLog.updateOne(
+      await ChatLog.updateOne(
         { sessionId },
         {
           $push: {
@@ -117,6 +115,20 @@ module.exports = (io, app) => {
         // socket.emit('correct-ack', { isNew: false });
       }
 
+      await ChatLog.findOneAndUpdate(
+        { sessionId },
+        {
+          $push: {
+            messages: {
+              username,
+              message: `${username}님이 정답을 맞혔습니다! 🎉2`,
+              createdAt: new Date()
+            }
+          }
+        },
+        { upsert: true, new: true }
+      );
+
       // 정답인정
       player.score += 1;
       player.answered[qIndex] = true;
@@ -133,13 +145,17 @@ module.exports = (io, app) => {
     });
 
     socket.on('disconnect', () => {
-      console.log('[Socket] 연결 해제:', socket.id);
+
     });
   });
 
   // 문제 타이머 함수
   function startQuestionTimer(sessionId, io, app) {
     const interval = setInterval(async () => {
+    const quizDb = app.get('quizDb');
+    const GameSession = require('../models/GameSession')(quizDb);
+    const Quiz = require('../models/Quiz')(quizDb);
+
       const session = await GameSession.findById(sessionId);
       if (!session || !session.isActive) {
         clearInterval(interval);
@@ -148,7 +164,7 @@ module.exports = (io, app) => {
       }
 
       const quiz = await Quiz.findById(session.quizId).lean();
-      io.to(sessionId).emit('game-started', { quiz });
+      //io.to(sessionId).emit('game-started', { quiz });
       session.currentQuestionIndex += 1;
 
       if (session.currentQuestionIndex >= quiz.questions.length) {
