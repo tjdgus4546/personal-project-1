@@ -8,6 +8,7 @@
     </style>
 </head>
 <body>
+  <button id="outBtn" onclick="location.href='/'">나가기</button>
     
   <h1>실시간 퀴즈 세션</h1>
 
@@ -95,7 +96,7 @@
         const chatLog = document.getElementById('chatLog');
         data.messages.forEach(msg => {
           const p = document.createElement('p');
-          p.innerHTML = `<strong>${msg.username}</strong>: ${msg.message}`;
+          p.innerHTML = `${msg.username}: ${msg.message}`;
           chatLog.appendChild(p);
         });
       })
@@ -154,7 +155,7 @@
         // 일반 채팅일 경우 DB에 저장 요청
         socket.emit('chatMessage', { sessionId, username, message });
         const p = document.createElement('p');
-        p.innerHTML = `<strong>${username}</strong>: ${message}`;
+        p.innerHTML = `${username}: ${message}`;
         document.getElementById('chatLog').appendChild(p);
       }
     }
@@ -163,7 +164,7 @@
     socket.on('correct', ({ username }) => {
       const chatLog = document.getElementById('chatLog');
       const p = document.createElement('p');
-      p.innerHTML = `<strong>${username}</strong>님이 정답을 맞혔습니다! 🎉1`;
+      p.innerHTML = `${username}: ${username}님이 정답을 맞혔습니다! 🎉`;
       chatLog.appendChild(p);
     });
 

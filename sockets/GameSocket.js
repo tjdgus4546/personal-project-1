@@ -121,7 +121,7 @@ module.exports = (io, app) => {
           $push: {
             messages: {
               username,
-              message: `${username}님이 정답을 맞혔습니다! 🎉2`,
+              message: `${username}님이 정답을 맞혔습니다! 🎉`,
               createdAt: new Date()
             }
           }

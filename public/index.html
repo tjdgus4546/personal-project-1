@@ -9,6 +9,8 @@
     <button id="signupBtn" onclick="location.href='/signup'">회원가입</button>
     <button id="loginBtn" onclick="location.href='/login'">로그인</button>
     <button id="logoutBtn">로그아웃</button>
+    <button id="quizListBtn" onclick="location.href='/quiz/list-page'">퀴즈 리스트</button>
+    <button id="quizCreateBtn" onclick="location.href='/quiz/create'">퀴즈 만들기</button>
 
     
     <!-- <button onclick="location.href='/helpId'">아이디 찾기</button>
@@ -40,6 +42,8 @@
             const signupBtn = document.getElementById('signupBtn');
             const loginBtn = document.getElementById('loginBtn');
             const logoutBtn = document.getElementById('logoutBtn');
+            const quizListBtn = document.getElementById('quizListBtn');
+            const quizCreateBtn = document.getElementById('quizCreateBtn');
             const greeting = document.getElementById('greeting');
 
             if (token) {
@@ -47,6 +51,8 @@
                 signupBtn.style.display = 'none';
                 loginBtn.style.display = 'none';
                 logoutBtn.style.display = 'inline-block';
+                quizListBtn.style.display = 'inline-block';
+                quizCreateBtn.style.display = 'inline-block';
 
                 // 사용자 정보 가져오기
                 fetch('/my-info', {
@@ -83,6 +89,8 @@
                 signupBtn.style.display = 'inline-block';
                 loginBtn.style.display = 'inline-block';
                 logoutBtn.style.display = 'none';
+                quizListBtn.style.display = 'none';
+                quizCreateBtn.style.display = 'none';
                 greeting.textContent = '로그인이 필요합니다.';
             }
 
