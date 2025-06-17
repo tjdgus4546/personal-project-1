@@ -19,6 +19,7 @@ const gameSessionSchema = new Schema({
   inviteCode: { type: String, unique: true },
   isStarted: { type: Boolean, default: false },
   host: { type: String, required: true },
+  skipVotes: {type: [String], default: []},
 });
 
 module.exports = (quizDb) => quizDb.model('GameSession', gameSessionSchema, 'game_sessions');

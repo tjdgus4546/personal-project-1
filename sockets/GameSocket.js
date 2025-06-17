@@ -71,7 +71,7 @@ module.exports = (io, app) => {
         
         const quiz = await Quiz.findById(session.quizId).lean();
 
-        io.to(sessionId).emit('game-started', { quiz }); // 클라이언트에서 UI 전환
+        io.to(sessionId).emit('game-started', { quiz, host: session.host }); // 클라이언트에서 UI 전환
 
         startQuestionTimer(sessionId, io, app); // 타이머 시작
     });
@@ -147,27 +147,42 @@ module.exports = (io, app) => {
     socket.on('disconnect', () => {
 
     });
+
+  // 스킵투표
+  socket.on('voteSkip', async ({ sessionId, username }) => {
+    const session = await GameSession.findById(sessionId);
+    if (!session || !session.isActive) return;
+
+    if (!session.skipVotes.includes(username)) {
+      session.skipVotes.push(username);
+      await session.save();
+
+      const totalPlayers = session.players.length;
+      const voteRatio = session.skipVotes.length / totalPlayers;
+
+      if (voteRatio >= 0.3) {
+        await goToNextQuestion(sessionId, io, app);
+      }
+    }
   });
 
-  // 문제 타이머 함수
-  function startQuestionTimer(sessionId, io, app) {
-    const interval = setInterval(async () => {
-    const quizDb = app.get('quizDb');
-    const GameSession = require('../models/GameSession')(quizDb);
-    const Quiz = require('../models/Quiz')(quizDb);
+  // //방장 강제스킵
+  socket.on('forceSkip', async ({ sessionId, username }) => {
+    const session = await GameSession.findById(sessionId);
+    if (!session || session.host !== username) return;
 
-      const session = await GameSession.findById(sessionId);
-      if (!session || !session.isActive) {
-        clearInterval(interval);
-        delete timers[sessionId];
-        return;
-      }
+    await goToNextQuestion(sessionId, io, app);
+  });
 
-      const quiz = await Quiz.findById(session.quizId).lean();
-      //io.to(sessionId).emit('game-started', { quiz });
-      session.currentQuestionIndex += 1;
+  socket.on('forceSkip', async ({ sessionId, username }) => {
+    const session = await GameSession.findById(sessionId);
+    if (!session || session.host !== username) return;
 
-      if (session.currentQuestionIndex >= quiz.questions.length) {
+    const quiz = await Quiz.findById(session.quizId).lean();
+    session.currentQuestionIndex += 1;
+    session.skipVotes = []; // reset
+
+    if (session.currentQuestionIndex >= quiz.questions.length) {
         session.isActive = false;
         await session.save();
 
@@ -178,7 +193,55 @@ module.exports = (io, app) => {
         await session.save();
         io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
       }
-    }, 90000); // 90초
-    timers[sessionId] = interval;
+    await session.save();
+
+    io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
+  });
+
+  });
+
+  //초수계산
+  function startQuestionTimer(sessionId, io, app) {
+  const interval = setInterval(() => {
+    goToNextQuestion(sessionId, io, app); // 바로 호출만
+  }, 90000); // 90초
+
+  timers[sessionId] = interval;
   }
+
+  //문제 타이머 함수
+  async function goToNextQuestion(sessionId, io, app) {
+  const quizDb = app.get('quizDb');
+  const GameSession = require('../models/GameSession')(quizDb);
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  const session = await GameSession.findById(sessionId);
+  if (!session) return;
+
+  const quiz = await Quiz.findById(session.quizId).lean();
+
+  // 기존 타이머 종료
+  if (timers[sessionId]) {
+    clearInterval(timers[sessionId]);
+    delete timers[sessionId];
+  }
+
+  session.currentQuestionIndex += 1;
+  session.skipVotes = [];
+
+  if (session.currentQuestionIndex >= quiz.questions.length) {
+    session.isActive = false;
+    await session.save();
+    io.to(sessionId).emit('end', { message: '퀴즈 종료!' });
+    return;
+  }
+
+  await session.save();
+  io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
+
+  // 새 타이머 시작
+  startQuestionTimer(sessionId, io, app);
+}
+
+
 };

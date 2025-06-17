@@ -9,6 +9,8 @@
 </head>
 <body>
   <button id="outBtn" onclick="location.href='/'">나가기</button>
+  <button id="forceSkipBtn" class="hidden">강제스킵</button>
+  <button id="voteSkipBtn" class="hidden">스킵투표</button>
     
   <h1>실시간 퀴즈 세션</h1>
 
@@ -18,7 +20,7 @@
     <p>초대코드: <span id="inviteCode">로딩중...</span></p>
     <p>참가자 목록:</p>
     <ul id="playerList"></ul>
-    <button id="startBtn" class="hidden">게임 시작</button>
+    <button id="startBtn" class="hidden">게임시작</button>
   </div>
 
   <!-- ✅ 게임 화면 -->
@@ -43,6 +45,9 @@
     const gameSection = document.getElementById('gameSection');
     const startBtn = document.getElementById('startBtn');
     const playerList = document.getElementById('playerList');
+    const voteSkipBtn = document.getElementById('voteSkipBtn');
+    const forceSkipBtn = document.getElementById('forceSkipBtn');
+
     let questions = [];
     let currentIndex = 0;
 
@@ -122,16 +127,31 @@
     });
 
     // 게임 시작됨
-    socket.on('game-started', ({ quiz }) => {
+    socket.on('game-started', ({ quiz, host }) => {
       questions = quiz.questions;
       currentIndex = 0;
 
       lobbySection.classList.add('hidden');
       gameSection.classList.remove('hidden');
-
+      voteSkipBtn.classList.remove('hidden');
+      
+        if (username === host) {
+          forceSkipBtn.classList.remove('hidden');
+      };
       showQuestion();
     });
+    
+    //스킵투표
+    voteSkipBtn.addEventListener('click', () => {
+      socket.emit('voteSkip', { sessionId, username });
+    });
 
+    //방장 강제스킵
+    forceSkipBtn.addEventListener('click', () => {
+      socket.emit('forceSkip', { sessionId, username });
+    });
+  
+    //문제 넘기기
     socket.on('next', ({ index }) => {
       currentIndex = index;
       showQuestion();
