@@ -6,7 +6,8 @@ const questionSchema = new Schema({
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   answer: { type: String, required: true },
-  order: { type: Number, required: true }
+  order: { type: Number, required: true },
+  timeLimit: {type: Number, default: 90 , min: 5, max: 180 },
 });
 
 const quizSchema = new Schema({

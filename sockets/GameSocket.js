@@ -201,10 +201,22 @@ module.exports = (io, app) => {
   });
 
   //초수계산
-  function startQuestionTimer(sessionId, io, app) {
-  const interval = setInterval(() => {
+  async function startQuestionTimer(sessionId, io, app) {
+  
+  const quizDb = app.get('quizDb');
+  const GameSession = require('../models/GameSession')(quizDb);
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  const session = await GameSession.findById(sessionId);
+  if (!session || !session.isActive) return;
+  
+  const quiz = await Quiz.findById(session.quizId).lean();
+  const currentQuestion = quiz.questions[session.currentQuestionIndex];
+  const timeLimit = currentQuestion.timeLimit || 90;
+    
+  const interval = setTimeout(async () => {
     goToNextQuestion(sessionId, io, app); // 바로 호출만
-  }, 90000); // 90초
+  }, timeLimit* 1000);
 
   timers[sessionId] = interval;
   }

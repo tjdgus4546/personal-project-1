@@ -47,8 +47,11 @@
         <label>유튜브 링크:</label>
         <input type="text" name="youtubeUrl"><br>
 
-        <label>정답:</label><br>
+        <label>정답</label><br>
         <input type="text" name="answer" required><br>
+
+        <label>문제 제한 시간 (초, 생략 가능)</label>
+        <input type="number" name="timeLimit" min="10" max="180" placeholder="기본 90초">
 
         <input type="hidden" name="imageBase64">
       `;
@@ -116,12 +119,16 @@
       const blocks = document.querySelectorAll('.question-block');
 
       const questions = Array.from(blocks).map((block, index) => {
+        const timeLimitInput = block.querySelector('[name="timeLimit"]').value;
+        const timeLimit = timeLimitInput.trim() === '' ? 90 : parseInt(timeLimitInput);
+        
         return {
           text: block.querySelector('[name="text"]').value,
           imageBase64: block.querySelector('[name="imageBase64"]').value || null,
           youtubeUrl: block.querySelector('[name="youtubeUrl"]').value || null,
           answer: block.querySelector('[name="answer"]').value,
-          order: index + 1
+          order: index + 1,
+          timeLimit: timeLimit,
         };
       });
 
