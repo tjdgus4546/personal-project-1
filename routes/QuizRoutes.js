@@ -14,6 +14,13 @@ router.post('/quiz/create', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: '필수 항목 누락' });
     }
 
+    //base64 이미지 검증
+    for (const q of questions) {
+      if (q.imageBase64 && !isBase64ImageSafe(q.imageBase64)) {
+        return res.status(400).json({ message: '지원되지 않는 이미지 형식입니다.' });
+      }
+    }
+
     const newQuiz = new Quiz({
       title,
       description,

@@ -42,7 +42,7 @@
         <textarea name="text" required></textarea><br>
 
         <label>이미지 업로드:</label>
-        <input type="file" accept="image/*" class="imageInput"><br>
+        <input type="file" accept=".jpg,.jpeg,.webp,.png" class="imageInput"><br>
 
         <label>유튜브 링크:</label>
         <input type="text" name="youtubeUrl"><br>
@@ -58,17 +58,25 @@
       container.appendChild(block);
 
       // 이미지 업로드 이벤트 바인딩
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
       block.querySelector('.imageInput').addEventListener('change', function (e) {
         const file = e.target.files[0];
-        if (file) {
-          compressImage(file, 100 * 1024, (base64) => {
-            if (base64) {
-              block.querySelector('[name="imageBase64"]').value = base64;
-            } else {
-              alert('이미지 압축에 실패했습니다.');
-            }
-          });
+        if (!file) return;
+
+        if (!allowedTypes.includes(file.type)) {
+          alert('허용되지 않은 이미지 형식입니다. jpg, png, webp만 업로드할 수 있습니다.');
+          e.target.value = ''; // 파일 입력 초기화
+          return;
         }
+        
+        compressImage(file, 100 * 1024, (base64) => {
+          if (base64) {
+            block.querySelector('[name="imageBase64"]').value = base64;
+          } else {
+            alert('이미지 압축에 실패했습니다.');
+          }
+        });
+
       });
     }
 
@@ -127,7 +135,7 @@
           imageBase64: block.querySelector('[name="imageBase64"]').value || null,
           youtubeUrl: block.querySelector('[name="youtubeUrl"]').value || null,
           answer: block.querySelector('[name="answer"]').value,
-          order: index + 1,
+          order: index + 1, 
           timeLimit: timeLimit,
         };
       });
