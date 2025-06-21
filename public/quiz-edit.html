@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>문제CRUD</title>
+</head>
+<body>
+
+    <button onclick="location.href='/'">메인으로</button>
+    <button onclick="location.href='/quiz-init'">퀴즈 편집</button>
+
+    <h2>문제 편집</h2>
+    <div id="questionForm">
+    <input type="text" id="text" placeholder="문제 내용"><br>
+    <input type="text" id="answer" placeholder="정답"><br>
+    <input type="number" id="timeLimit" placeholder="제한 시간 (초)"><br>
+    <button onclick="addQuestion()">문제 추가</button>
+    </div>
+
+    <ul id="questionList"></ul>
+    <button onclick="markQuizComplete()">퀴즈 완성</button>
+
+    <script>
+    const urlParams = new URLSearchParams(location.search);
+    const quizId = urlParams.get('quizId');
+
+    async function addQuestion() {
+    const text = document.getElementById('text').value;
+    const answer = document.getElementById('answer').value;
+    const timeLimit = parseInt(document.getElementById('timeLimit').value) || 90;
+    const token = localStorage.getItem('token');
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+    const res = await fetch(`/quiz/${quizId}/add-question`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+         },
+        body: JSON.stringify({ text, answer, timeLimit })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        alert('문제 추가 완료!');
+        loadQuestions();
+    } else {
+        alert('문제 추가 실패: ' + data.message);
+    }
+    }
+
+    async function loadQuestions() {
+    const res = await fetch(`/quiz/${quizId}`);
+    const data = await res.json();
+    const list = document.getElementById('questionList');
+    list.innerHTML = '';
+    data.questions.forEach(q => {
+        const li = document.createElement('li');
+        li.textContent = `${q.order}. ${q.text} (제한시간: ${q.timeLimit || 90}초)`;
+        list.appendChild(li);
+    });
+    }
+
+    async function markQuizComplete() {
+    const token = localStorage.getItem('token');
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+    const res = await fetch(`/quiz/${quizId}/complete`, { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+     });
+    if (res.ok) {
+        alert('퀴즈가 완성되었습니다!');
+        window.location.href = '/quiz/list-page';
+    } else {
+        alert('완성 실패');
+    }
+    }
+
+    loadQuestions();
+    </script>
+
+</body>
+</html>

@@ -3,41 +3,161 @@ const router = express.Router();
 const authenticateToken = require('../middlewares/AuthMiddleware');
 const path = require('path');
 
-router.post('/quiz/create', authenticateToken, async (req, res) => {
+//나의 퀴즈 확인
+router.get('/quiz/my-list', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
 
   try {
-    const { title, description, questions } = req.body;
+    const quizzes = await Quiz.find({ creatorId: req.user.id }).sort({ createdAt: -1 });
+    res.json(quizzes);
+  } catch (err) {
+    res.status(500).json({ message: '퀴즈 조회 실패', error: err.message });
+  }
+});
 
-    if (!title || !questions || !Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({ message: '필수 항목 누락' });
-    }
+//퀴즈 제목 설명 저장
+router.post('/quiz/init', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
 
-    //base64 이미지 검증
-    for (const q of questions) {
-      if (q.imageBase64 && !isBase64ImageSafe(q.imageBase64)) {
-        return res.status(400).json({ message: '지원되지 않는 이미지 형식입니다.' });
-      }
+  try {
+    const { title, description } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ message: '퀴즈 제목은 필수입니다.' });
     }
 
     const newQuiz = new Quiz({
       title,
       description,
-      creatorId: req.user.id, // ✅ JWT에서 추출한 사용자 ID
-      questions
+      creatorId: req.user.id,
+      questions: [], // 문제는 비어있음
+      isComplete: false // 이후에 추가될 필드 (선택)
     });
 
     await newQuiz.save();
-    res.status(201).json({ message: '퀴즈 생성 성공', quizId: newQuiz._id });
+
+    res.status(201).json({ message: '퀴즈 생성 시작됨', quizId: newQuiz._id });
   } catch (err) {
-    console.error('퀴즈 저장 오류:', err);
-    res.status(500).json({ message: '서버 오류', error: err.message });
+    console.error('퀴즈 init 오류:', err);
+    res.status(500).json({ message: '퀴즈 생성 실패', error: err.message });
   }
 });
 
+// 퀴즈에 문제 한 개 추가
+router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const { text, answer, imageBase64, youtubeUrl, timeLimit } = req.body;
+
+    if (!text || !answer) {
+      return res.status(400).json({ message: '질문과 정답은 필수입니다.' });
+    }
+
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+
+    // 권한 체크
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const order = quiz.questions.length + 1;
+
+    let parsedTimeLimit = parseInt(timeLimit, 10);
+    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 10 || parsedTimeLimit > 180) {
+      parsedTimeLimit = 90;
+    }
+
+    const newQuestion = {
+      text,
+      answer,
+      imageBase64: imageBase64?.trim() || null,
+      youtubeUrl: youtubeUrl?.trim() || null,
+      order,
+      timeLimit: parsedTimeLimit
+    };
+
+    quiz.questions.push(newQuestion);
+    await quiz.save();
+
+    res.status(201).json({ message: '문제 추가 성공', order });
+  } catch (err) {
+    console.error('문제 추가 오류:', err);
+    res.status(500).json({ message: '문제 추가 실패', error: err.message });
+  }
+});
+
+
+//퀴즈 작성 완료
+router.post('/quiz/:id/complete', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+
+    quiz.isComplete = true;
+    await quiz.save();
+
+    res.json({ message: '퀴즈가 완료되었습니다.' });
+  } catch (err) {
+    res.status(500).json({ message: '퀴즈 완료 처리 실패', error: err.message });
+  }
+});
+
+
+// router.post('/quiz/create', authenticateToken, async (req, res) => {
+//   const quizDb = req.app.get('quizDb');
+//   const Quiz = require('../models/Quiz')(quizDb);
+
+//   try {
+//     const { title, description, questions } = req.body;
+
+//     if (!title || !questions || !Array.isArray(questions) || questions.length === 0) {
+//       return res.status(400).json({ message: '필수 항목 누락' });
+//     }
+
+//     //base64 이미지 검증
+//     for (const q of questions) {
+//       if (q.imageBase64 && !isBase64ImageSafe(q.imageBase64)) {
+//         return res.status(400).json({ message: '지원되지 않는 이미지 형식입니다.' });
+//       }
+//     }
+
+//     const newQuiz = new Quiz({
+//       title,
+//       description,
+//       creatorId: req.user.id, // ✅ JWT에서 추출한 사용자 ID
+//       questions
+//     });
+
+//     await newQuiz.save();
+//     res.status(201).json({ message: '퀴즈 생성 성공', quizId: newQuiz._id });
+//   } catch (err) {
+//     console.error('퀴즈 저장 오류:', err);
+//     res.status(500).json({ message: '서버 오류', error: err.message });
+//   }
+// });
+
 router.get('/quiz/create', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-create.html'));
+});
+
+router.get('/quiz-my-list', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/quiz-my-list.html'))
+});
+
+router.get('/quiz-init', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/quiz-init.html'))
+});
+
+router.get('/quiz-edit', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/quiz-edit.html'))
 });
 
 router.get('/quiz/list', async (req, res) => {

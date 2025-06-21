@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>퀴즈 생성</title>
+</head>
+<body>
+
+    <button onclick="location.href='/'">메인으로</button>
+
+    <h2>퀴즈 생성</h2>
+    <input type="text" id="title" placeholder="퀴즈 제목">
+    <textarea id="description" placeholder="퀴즈 설명"></textarea>
+    <button onclick="createQuiz()">퀴즈 만들기</button>
+
+    <script>
+    async function createQuiz() {
+    const title = document.getElementById('title').value;
+    const description = document.getElementById('description').value;
+    const token = localStorage.getItem('token');
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+    const res = await fetch('/quiz/init', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+         },
+        body: JSON.stringify({ title, description })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        window.location.href = `/quiz-edit.html?quizId=${data.quizId}`;
+    } else {
+        alert('퀴즈 생성 실패: ' + data.message);
+    }
+    }
+    </script>
+    
+</body>
+</html>

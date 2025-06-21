@@ -26,6 +26,10 @@ const quizSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  isComplete: {
+  type: Boolean,
+  default: false,
+  },
 });
 
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);
