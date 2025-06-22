@@ -30,6 +30,10 @@ const quizSchema = new Schema({
   type: Boolean,
   default: false,
   },
+  completedGameCount: { 
+  type: Number,
+  default: 0
+  },
 });
 
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);

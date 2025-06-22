@@ -244,6 +244,13 @@ module.exports = (io, app) => {
   if (session.currentQuestionIndex >= quiz.questions.length) {
     session.isActive = false;
     await session.save();
+
+    //퀴즈 완료수 증가
+    await Quiz.findByIdAndUpdate(
+      session.quizId,
+      { $inc: { completedGameCount: 1 } }
+    );
+
     io.to(sessionId).emit('end', { message: '퀴즈 종료!' });
     return;
   }
