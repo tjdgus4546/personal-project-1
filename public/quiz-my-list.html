@@ -6,42 +6,70 @@
 </head>
 <body>
 
+<button onclick="location.href='/'">메인으로</button>
+<button onclick="location.href='/quiz/my-list'">나의 퀴즈</button>
+
 <h2>나의 퀴즈</h2>
 <ul id="quizList"></ul>
 
 <script>
   const token = localStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
   if (!token) {
     alert('로그인이 필요합니다.');
     location.href = '/login.html';
   }
 
-  fetch('/quiz/my-list', {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  })
-  .then(res => res.json())
-  .then(data => {
-    const ul = document.getElementById('quizList');
-    if (data.length === 0) {
-      ul.innerHTML = '<li>퀴즈가 없습니다.</li>';
-      return;
-    }
+  fetch('/api/quiz/my-list', { headers })
+    .then(res => res.json())
+    .then(data => {
+      const ul = document.getElementById('quizList');
+      if (data.length === 0) return ul.innerHTML = '<li>퀴즈가 없습니다.</li>';
 
-    data.forEach(quiz => {
-      const li = document.createElement('li');
-      const link = document.createElement('a');
-      link.href = `/quiz/edit.html?quizId=${quiz._id}`;
-      link.textContent = `${quiz.title} (${quiz.questions.length}문제${quiz.isComplete ? ', 완료됨' : ', 작성중'})`;
-      li.appendChild(link);
-      ul.appendChild(li);
+      data.forEach(quiz => {
+        const li = document.createElement('li');
+
+        const title = document.createElement('span');
+        title.textContent = `${quiz.title} (${quiz.questions.length}문제${quiz.isComplete ? ', 완료됨' : ', 작성중'})`;
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '수정';
+        editBtn.onclick = () => {
+          const newTitle = prompt('새 제목:', quiz.title);
+          const newDesc = prompt('새 설명:', quiz.description || '');
+          if (!newTitle) return alert('제목은 필수입니다.');
+
+          fetch(`/api/quiz/${quiz._id}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ title: newTitle, description: newDesc })
+          }).then(r => r.json()).then(result => {
+            if (result.message) alert(result.message);
+            location.reload();
+          });
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '삭제';
+        deleteBtn.onclick = () => {
+          if (confirm('이 퀴즈를 정말 삭제하시겠습니까?')) {
+            fetch(`/api/quiz/${quiz._id}`, { method: 'DELETE', headers })
+              .then(res => res.json())
+              .then(result => {
+                alert(result.message);
+                location.reload();
+              });
+          }
+        };
+
+        const editLink = document.createElement('a');
+        editLink.href = `/quiz/edit?quizId=${quiz._id}`;
+        editLink.textContent = '[문제 추가/편집]';
+
+        li.append(title, ' ', editLink, ' ', editBtn, ' ', deleteBtn);
+        ul.appendChild(li);
+      });
     });
-  })
-  .catch(err => {
-    alert('퀴즈 목록을 불러올 수 없습니다.');
-    console.error(err);
-  });
 </script>
     
 </body>

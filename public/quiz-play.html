@@ -18,7 +18,7 @@
     const username = localStorage.getItem('username') || '익명';
 
     // 퀴즈 정보 로딩
-    fetch(`/quiz/${quizId}`)
+    fetch(`/api/quiz/${quizId}`)
       .then(res => res.json())
       .then(quiz => {
         document.getElementById('quizTitle').textContent = quiz.title;

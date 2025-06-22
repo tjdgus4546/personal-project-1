@@ -23,7 +23,7 @@
         return;
       }
 
-    const res = await fetch('/quiz/init', {
+    const res = await fetch('/api/quiz/init', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -34,8 +34,8 @@
 
     const data = await res.json();
     if (res.ok) {
-        window.location.href = `/quiz-edit.html?quizId=${data.quizId}`;
-    } else {
+        window.location.href = `/quiz/edit?quizId=${data.quizId}`;
+    } else {s
         alert('퀴즈 생성 실패: ' + data.message);
     }
     }

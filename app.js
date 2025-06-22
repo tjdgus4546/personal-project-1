@@ -5,6 +5,8 @@ const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
+const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
+
 
 const app = express();
 const http = require('http');
@@ -23,11 +25,15 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('userDb', userDb);  // User DB를 전역에서 사용 가능하도록 설정
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
+  
+  const quizApiRoutes = quizApiRoutesFactory(quizDb);
+  
   // 미들웨어 설정
   app.use('/auth', authRoutes);
   // 라우트 설정
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
+  app.use('/api', quizApiRoutes);
   app.use('/game', gameRoutes);
 
   app.get('/', (req, res) => {

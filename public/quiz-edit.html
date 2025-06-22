@@ -7,7 +7,8 @@
 <body>
 
     <button onclick="location.href='/'">메인으로</button>
-    <button onclick="location.href='/quiz-init'">퀴즈 편집</button>
+    <button onclick="location.href='/quiz/init'">퀴즈 생성</button>
+    <button onclick="location.href='/quiz/my-list'">나의 퀴즈</button>
 
     <h2>문제 편집</h2>
     <div id="questionForm">
@@ -34,7 +35,7 @@
         return;
       }
 
-    const res = await fetch(`/quiz/${quizId}/add-question`, {
+    const res = await fetch(`/api/quiz/${quizId}/add-question`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -53,7 +54,7 @@
     }
 
     async function loadQuestions() {
-    const res = await fetch(`/quiz/${quizId}`);
+    const res = await fetch(`/api/quiz/${quizId}`);
     const data = await res.json();
     const list = document.getElementById('questionList');
     list.innerHTML = '';
@@ -70,7 +71,7 @@
         alert('로그인이 필요합니다.');
         return;
       }
-    const res = await fetch(`/quiz/${quizId}/complete`, { 
+    const res = await fetch(`/api/quiz/${quizId}/complete`, { 
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
      });
