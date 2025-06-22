@@ -19,11 +19,26 @@
     </div>
 
     <ul id="questionList"></ul>
-    <button onclick="markQuizComplete()">퀴즈 완성</button>
+    <button onclick="markQuizComplete()">퀴즈 공개</button>
+    <button onclick="markQuizInComplete()">퀴즈 비공개</button>
+
+    <ul id="questionList"></ul>
+
+    <!-- 커스텀 모달 -->
+    <div id="editModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -30%); background:#fff; border:1px solid #888; padding:20px; z-index:1000; border-radius:8px; box-shadow:0 4px 24px #0002;">
+        <h3>문제 수정</h3>
+        <input type="text" id="modalText" placeholder="문제 내용"><br>
+        <input type="text" id="modalAnswer" placeholder="정답"><br>
+        <input type="number" id="modalTime" placeholder="제한 시간(초)"><br>
+        <button id="saveEditBtn">수정</button>
+        <button onclick="closeEditModal()">취소</button>
+    </div>
+    <div id="modalBackdrop" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0003;z-index:999;"></div>
 
     <script>
     const urlParams = new URLSearchParams(location.search);
     const quizId = urlParams.get('quizId');
+    let editingQuestionId = null;
 
     async function addQuestion() {
     const text = document.getElementById('text').value;
@@ -53,6 +68,41 @@
     }
     }
 
+    //문제 수정 모달창
+    function openEditModal(q) {
+    editingQuestionId = q._id;
+    document.getElementById('modalText').value = q.text;
+    document.getElementById('modalAnswer').value = q.answer;
+    document.getElementById('modalTime').value = q.timeLimit || 90;
+    document.getElementById('editModal').style.display = '';
+    document.getElementById('modalBackdrop').style.display = '';
+    }
+    function closeEditModal() {
+        editingQuestionId = null;
+        document.getElementById('editModal').style.display = 'none';
+        document.getElementById('modalBackdrop').style.display = 'none';
+    }
+    document.getElementById('saveEditBtn').onclick = async function() {
+        const text = document.getElementById('modalText').value;
+        const answer = document.getElementById('modalAnswer').value;
+        const timeLimit = parseInt(document.getElementById('modalTime').value) || 90;
+        const token = localStorage.getItem('token');
+        if (!text || !answer) return alert('모든 항목을 입력하세요.');
+
+        const res = await fetch(`/api/quiz/${quizId}/question/${editingQuestionId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ text, answer, timeLimit })
+        });
+        const data = await res.json();
+        alert(data.message);
+        closeEditModal();
+        loadQuestions();
+    };
+
     async function loadQuestions() {
     const res = await fetch(`/api/quiz/${quizId}`);
     const data = await res.json();
@@ -60,7 +110,30 @@
     list.innerHTML = '';
     data.questions.forEach(q => {
         const li = document.createElement('li');
-        li.textContent = `${q.order}. ${q.text} (제한시간: ${q.timeLimit || 90}초)`;
+        li.textContent = `${q.order}. ${q.text} (제한시간: ${q.timeLimit || 90}초) `;
+
+        // 삭제 버튼
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '삭제';
+        delBtn.onclick = async () => {
+        if (confirm('정말 삭제할까요?')) {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/quiz/${quizId}/question/${q._id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            alert(data.message);
+            loadQuestions();
+        }
+        };
+
+        // 수정 버튼
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '수정';
+        editBtn.onclick = () => openEditModal(q);
+        li.appendChild(editBtn);
+        li.appendChild(delBtn);
         list.appendChild(li);
     });
     }
@@ -76,10 +149,26 @@
         headers: { 'Authorization': `Bearer ${token}` }
      });
     if (res.ok) {
-        alert('퀴즈가 완성되었습니다!');
-        window.location.href = '/quiz/list-page';
+        alert('퀴즈가 공개되었습니다!');
     } else {
-        alert('완성 실패');
+        alert('공개 실패');
+    }
+    }
+
+    async function markQuizInComplete() {
+    const token = localStorage.getItem('token');
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+    const res = await fetch(`/api/quiz/${quizId}/incomplete`, { 
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+     });
+    if (res.ok) {
+        alert('퀴즈가 비공개되었습니다!');
+    } else {
+        alert('비공개 실패');
     }
     }
 

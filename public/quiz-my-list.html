@@ -33,7 +33,7 @@
         title.textContent = `${quiz.title} (${quiz.questions.length}문제${quiz.isComplete ? ', 완료됨' : ', 작성중'})`;
 
         const editBtn = document.createElement('button');
-        editBtn.textContent = '수정';
+        editBtn.textContent = '제목수정';
         editBtn.onclick = () => {
           const newTitle = prompt('새 제목:', quiz.title);
           const newDesc = prompt('새 설명:', quiz.description || '');
@@ -50,7 +50,7 @@
         };
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = '삭제';
+        deleteBtn.textContent = '퀴즈삭제';
         deleteBtn.onclick = () => {
           if (confirm('이 퀴즈를 정말 삭제하시겠습니까?')) {
             fetch(`/api/quiz/${quiz._id}`, { method: 'DELETE', headers })
@@ -64,7 +64,7 @@
 
         const editLink = document.createElement('a');
         editLink.href = `/quiz/edit?quizId=${quiz._id}`;
-        editLink.textContent = '[문제 추가/편집]';
+        editLink.textContent = '[문제 편집]';
 
         li.append(title, ' ', editLink, ' ', editBtn, ' ', deleteBtn);
         ul.appendChild(li);

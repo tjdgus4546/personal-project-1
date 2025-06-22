@@ -93,7 +93,60 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
   }
 });
 
-//퀴즈 작성 완료
+// 문제 삭제
+router.delete('/quiz/:quizId/question/:questionId', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const quiz = await Quiz.findById(req.params.quizId);
+    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const originalLength = quiz.questions.length;
+    quiz.questions = quiz.questions.filter(q => q._id.toString() !== req.params.questionId);
+
+    // order 값 다시 정렬 (선택)
+    quiz.questions.forEach((q, idx) => { q.order = idx + 1; });
+
+    if (quiz.questions.length === originalLength) {
+      return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
+    }
+    await quiz.save();
+
+    res.json({ message: '문제 삭제 성공' });
+  } catch (err) {
+    res.status(500).json({ message: '문제 삭제 실패', error: err.message });
+  }
+});
+
+//문제 수정
+router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const quiz = await Quiz.findById(req.params.quizId);
+    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const question = quiz.questions.id(req.params.questionId);
+    if (!question) return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
+
+    // 수정할 필드만 바꿈
+    if (req.body.text !== undefined) question.text = req.body.text;
+    if (req.body.answer !== undefined) question.answer = req.body.answer;
+    if (req.body.timeLimit !== undefined) question.timeLimit = req.body.timeLimit;
+
+    await quiz.save();
+
+    res.json({ message: '문제 수정 완료' });
+  } catch (err) {
+    res.status(500).json({ message: '문제 수정 실패', error: err.message });
+  }
+});
+
+//퀴즈 작성 완료(공개)
 router.post('/quiz/:id/complete', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
@@ -103,6 +156,24 @@ router.post('/quiz/:id/complete', authenticateToken, async (req, res) => {
     if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
 
     quiz.isComplete = true;
+    await quiz.save();
+
+    res.json({ message: '퀴즈가 완료되었습니다.' });
+  } catch (err) {
+    res.status(500).json({ message: '퀴즈 완료 처리 실패', error: err.message });
+  }
+});
+
+//퀴즈 비공개
+router.put('/quiz/:id/incomplete', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+
+    quiz.isComplete = false;
     await quiz.save();
 
     res.json({ message: '퀴즈가 완료되었습니다.' });
