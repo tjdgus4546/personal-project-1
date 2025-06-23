@@ -28,8 +28,11 @@
     <div id="questionBox"></div>
 
     <div id="chatLog"></div>
-    <input type="text" id="chatInput" placeholder="정답을 입력하세요1">
-    <button onclick="sendMessage()">전송</button>
+
+    <form id="chatForm" onsubmit="event.preventDefault(); sendMessage();">
+      <input type="text" id="chatInput" placeholder="메세지 입력">
+      <button onclick="sendMessage()">전송</button>
+    </form>
 
     <h2>현재 점수판</h2>
     <ul id="scoreboard"></ul>
