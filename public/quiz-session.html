@@ -74,6 +74,7 @@
     .then(data => {
       questions = data.quiz.questions;
       currentIndex = data.currentQuestionIndex;
+      host = data.host;
       const inviteCode = data.inviteCode || '없음';
       document.getElementById('inviteCode').textContent = inviteCode;
       const board = document.getElementById('scoreboard');
@@ -90,6 +91,10 @@
         // 이미 게임 중이라면 바로 게임화면으로 전환
         lobbySection.classList.add('hidden');
         gameSection.classList.remove('hidden');
+        voteSkipBtn.classList.remove('hidden');
+        if (username === data.host) { // host 정보를 백엔드에서 내려줘야 함
+          forceSkipBtn.classList.remove('hidden');
+        }
         showQuestion();
       }
     });
