@@ -4,8 +4,6 @@ module.exports = (io, app) => {
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
 
-  const timers = {}; // 세션별 타이머 저장
-
   io.on('connection', (socket) => {
 
     socket.on('joinSession', async ({ sessionId, username }) => {
@@ -165,7 +163,7 @@ module.exports = (io, app) => {
       const voteRatio = session.skipVotes.length / totalPlayers;
 
       if (voteRatio >= 0.3) {
-        await goToNextQuestion(sessionId, io, app);
+        await revealAnswer(sessionId, io, app)();
       }
     }
   });
@@ -175,7 +173,23 @@ module.exports = (io, app) => {
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
 
-    await goToNextQuestion(sessionId, io, app);
+    // 이미 정답 공개 중이면 무시
+    if (session.revealedAt) {
+      const elapsed = (Date.now() - new Date(session.revealedAt).getTime()) / 1000;
+      if (elapsed < 5) return; // 아직 5초 안 지났으면 중복 실행 방지
+    }
+
+    // 정답 공개
+    const quiz = await Quiz.findById(session.quizId).lean();
+    const question = quiz.questions[session.currentQuestionIndex];
+    session.revealedAt = new Date(); // 이게 핵심!
+    await session.save();
+
+    io.to(sessionId).emit('answerReveal', {
+      answer: question.answer,
+      index: session.currentQuestionIndex,
+      revealedAt: session.revealedAt
+    });
   });
 
 
@@ -193,8 +207,6 @@ module.exports = (io, app) => {
       answer: question.answer,
       index
     });
-
-
   });
 
   // 정답공개후 다음 문제로 넘기기
@@ -207,34 +219,28 @@ module.exports = (io, app) => {
   
   });
 
+  // 문제 종료 후 정답 공개
+  function revealAnswer(sessionId, io, app) {
+    return async () => {
+      const session = await GameSession.findById(sessionId);
+      if (!session || !session.isActive) return;
 
-  //초수계산
-  // async function startQuestionTimer(sessionId, io, app) {
-  
-  // const quizDb = app.get('quizDb');
-  // const GameSession = require('../models/GameSession')(quizDb);
-  // const Quiz = require('../models/Quiz')(quizDb);
+      const quiz = await Quiz.findById(session.quizId).lean();
+      const question = quiz.questions[session.currentQuestionIndex];
 
-  // const session = await GameSession.findById(sessionId);
-  // if (!session || !session.isActive) return;
-  
-  // const quiz = await Quiz.findById(session.quizId).lean();
-  // const currentQuestion = quiz.questions[session.currentQuestionIndex];
-  // const timeLimit = currentQuestion.timeLimit || 90;
-    
-  // const interval = setTimeout(async () => {
-  //   //정답공개 5초
-  //    io.to(sessionId).emit('reveal-answer', {
-  //     answer: currentQuestion.answer,
-  //     order: session.currentQuestionIndex + 1
-  //    });
-  //    setTimeout(() => {
-  //      goToNextQuestion(sessionId, io, app);
-  //    }, 5000);
-  // }, timeLimit* 1000);
+      const revealedAt = new Date();
 
-  // timers[sessionId] = interval;
-  // }
+      session.revealedAt = revealedAt;
+      await session.save();
+
+      io.to(sessionId).emit('answerReveal', {
+        answer: question.answer,
+        index: session.currentQuestionIndex,
+        revealedAt,
+      });
+    };
+  }
+
 
   //문제 타이머 함수
   async function goToNextQuestion(sessionId, io, app) {
@@ -273,8 +279,6 @@ module.exports = (io, app) => {
     index: session.currentQuestionIndex,
     questionStartAt: session.questionStartAt,
   });
-}
-
-
+};
 
 };

@@ -16,6 +16,7 @@ const gameSessionSchema = new Schema({
   currentQuestionIndex: { type: Number, default: 0 },
   startedAt: { type: Date, default: Date.now },
   questionStartAt: { type: Date, default: null },
+  revealedAt: { type: Date, default: null },
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
   isStarted: { type: Boolean, default: false },

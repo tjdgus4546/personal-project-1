@@ -83,10 +83,11 @@
     .then(data => {
       questions = data.quiz.questions;
       currentIndex = data.currentQuestionIndex;
-      questionStartAt  = new Date(data.questionStartAt);
+      questionStartAt = new Date(data.questionStartAt);
       host = data.host;
       const inviteCode = data.inviteCode || '없음';
       document.getElementById('inviteCode').textContent = inviteCode;
+
       const board = document.getElementById('scoreboard');
       board.innerHTML = '';
       data.players
@@ -98,14 +99,45 @@
         });
 
       if (data.isStarted) {
-        // 이미 게임 중이라면 바로 게임화면으로 전환
         lobbySection.classList.add('hidden');
         gameSection.classList.remove('hidden');
         voteSkipBtn.classList.remove('hidden');
         if (username === data.host) {
           forceSkipBtn.classList.remove('hidden');
         }
-        showQuestion();
+
+        // ✅ 정답이 이미 공개된 상태라면
+        if (data.revealedAt) {
+          const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
+          const wait = Math.max(0, 5 - elapsed);
+
+          const answer = questions[currentIndex]?.answer;
+          if (answer) {
+            const p = document.createElement('p');
+            p.textContent = `✅ 정답 공개: ${answer}`;
+            p.style.color = 'green';
+            document.getElementById('questionBox').appendChild(p);
+          }
+
+          window.__isRevealingAnswer = true;
+
+          // 5초가 안 지났다면, 남은 시간 후 다음 문제로
+          if (wait > 0) {
+            setTimeout(() => {
+              window.__isRevealingAnswer = false;
+              if (isHost()) {
+                socket.emit('nextQuestion', { sessionId, username });
+              }
+            }, wait * 1000);
+          } else {
+            // 이미 5초 지났으면 바로 다음 문제로 넘겨
+            if (isHost()) {
+              socket.emit('nextQuestion', { sessionId, username });
+            }
+          }
+        } else {
+          showQuestion(); // 정답 공개 중이 아니면 그냥 문제 표시
+        }
       }
     });
 
@@ -227,25 +259,34 @@
     socket.on('end', ({ message }) => {
         alert(message || '퀴즈가 종료되었습니다!');
         });
-  
-  socket.on('answerReveal', ({ answer, index }) => {
-    const box = document.getElementById('questionBox');
-    const p = document.createElement('p');
-    p.style.color = 'green';
-    p.textContent = `✅ 정답 공개: ${answer}`;
-    box.appendChild(p);
 
-    // ✅ reveal 상태 표시
-    window.__isRevealingAnswer = true;
+    socket.on('answerReveal', ({ answer, index, revealedAt }) => {
+      showAnswer(answer); // UI 표시
 
-    // 5초 후 해제
-    setTimeout(() => {
-      if (isHost()) {
-      socket.emit('nextQuestion', { sessionId, username });
-      }
-      window.__isRevealingAnswer = false;
-    }, 5000);
-  });
+      const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
+      const waitTime = Math.max(0, 5 - elapsed);
+
+      setTimeout(() => {
+        if (isHost()) {
+          socket.emit('nextQuestion', { sessionId, username });
+        }
+      }, waitTime * 1000);
+    });
+
+    function showAnswer(answer) {
+      const box = document.getElementById('questionBox');
+      const p = document.createElement('p');
+      p.style.color = 'green';
+      p.textContent = `✅ 정답 공개: ${answer}`;
+      box.appendChild(p);
+
+      window.__isRevealingAnswer = true;
+
+      // 필요하다면 5초 후 상태 해제
+      setTimeout(() => {
+        window.__isRevealingAnswer = false;
+      }, 5000);
+    };
       
     function showQuestion() {
     const box = document.getElementById('questionBox');
