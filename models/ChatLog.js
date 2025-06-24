@@ -9,7 +9,8 @@ const messageSchema = new Schema({
 
 const chatSchema = new Schema({
   sessionId: { type: Schema.Types.ObjectId, required: true, unique: true },
-  messages: [messageSchema]
+  messages: [messageSchema],
+  createdAt: { type: Date, default: Date.now, index: { expires: '12h' } },
 });
 
 module.exports = (quizDb) => quizDb.model('ChatLog', chatSchema, 'chat_logs');

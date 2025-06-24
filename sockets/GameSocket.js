@@ -254,6 +254,7 @@ module.exports = (io, app) => {
   // 모든 문제를 완료한 경우
   if (session.currentQuestionIndex >= quiz.questions.length) {
     session.isActive = false;
+    session.endedAt = new Date()
     await session.save();
 
     // 완료된 게임 수 증가

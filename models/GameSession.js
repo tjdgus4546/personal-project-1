@@ -21,6 +21,7 @@ const gameSessionSchema = new Schema({
   isStarted: { type: Boolean, default: false },
   host: { type: String, required: true },
   skipVotes: {type: [String], default: []},
+  endedAt: { type: Date, default: null, index: { expires: '6h' } },
 });
 
 module.exports = (quizDb) => quizDb.model('GameSession', gameSessionSchema, 'game_sessions');
