@@ -187,10 +187,11 @@
 
       if (!message) return;
 
-      const correctAnswer = questions[currentIndex].answer.trim().toLowerCase();
+      const correctAnswer = questions[currentIndex].answer.trim().toLowerCase().replace(/\s+/g, '');
+      const userInput = message.trim().toLowerCase().replace(/\s+/g, '');
       const chatLog = document.getElementById('chatLog');
 
-      if (message.toLowerCase() === correctAnswer) {
+      if (userInput === correctAnswer) {
         // 정답일 경우
         socket.emit('correct', { sessionId, username });
       } else {
