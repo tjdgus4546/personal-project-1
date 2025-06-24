@@ -58,22 +58,26 @@ module.exports = (io, app) => {
         });
       });
     
-      socket.on('startGame', async ({ sessionId, username }) => {
-        const session = await GameSession.findById(sessionId);
-        if (!session || session.isStarted) return;
+    socket.on('startGame', async ({ sessionId, username }) => {
+      const session = await GameSession.findById(sessionId);
+      if (!session || session.isStarted) return;
         
-        if (session.host !== username) return; // 방장만 시작 가능
+      if (session.host !== username) return; // 방장만 시작 가능
         
-        session.isStarted = true;
-        session.isActive = true;
-        session.currentQuestionIndex = 0; // 첫 문제 준비
-        await session.save();
+      session.isStarted = true;
+      session.isActive = true;
+      session.questionStartAt = new Date();
+      session.currentQuestionIndex = 0; // 첫 문제 준비
+      await session.save();
         
-        const quiz = await Quiz.findById(session.quizId).lean();
+      const quiz = await Quiz.findById(session.quizId).lean();
 
-        io.to(sessionId).emit('game-started', { quiz, host: session.host }); // 클라이언트에서 UI 전환
+      io.to(sessionId).emit('game-started', {
+        quiz,
+        host: session.host,
+        questionStartAt: session.questionStartAt,
+      }); // 클라이언트에서 UI 전환
 
-        startQuestionTimer(sessionId, io, app); // 타이머 시작
     });
 
     // 일반 채팅은 DB에 로그 저장
@@ -174,52 +178,63 @@ module.exports = (io, app) => {
     await goToNextQuestion(sessionId, io, app);
   });
 
-  socket.on('forceSkip', async ({ sessionId, username }) => {
+
+  socket.on('revealAnswer', async ({ sessionId }) => {
+    const session = await GameSession.findById(sessionId).lean();
+    if (!session) return;
+
+    const quiz = await Quiz.findById(session.quizId).lean();
+    const index = session.currentQuestionIndex;
+    const question = quiz.questions[index];
+    if (!question) return;
+
+    // 모든 참가자에게 정답 전송
+    io.to(sessionId).emit('answerReveal', {
+      answer: question.answer,
+      index
+    });
+
+
+  });
+
+  // 정답공개후 다음 문제로 넘기기
+  socket.on('nextQuestion', async ({ sessionId, username }) => {
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
 
-    const quiz = await Quiz.findById(session.quizId).lean();
-    session.currentQuestionIndex += 1;
-    session.skipVotes = []; // reset
-
-    if (session.currentQuestionIndex >= quiz.questions.length) {
-        session.isActive = false;
-        await session.save();
-
-        io.to(sessionId).emit('end', { message: '퀴즈 종료!' });
-        clearInterval(interval);
-        delete timers[sessionId];
-      } else {
-        await session.save();
-        io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
-      }
-    await session.save();
-
-    io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
+    await goToNextQuestion(sessionId, io, app);
+  });
+  
   });
 
-  });
 
   //초수계산
-  async function startQuestionTimer(sessionId, io, app) {
+  // async function startQuestionTimer(sessionId, io, app) {
   
-  const quizDb = app.get('quizDb');
-  const GameSession = require('../models/GameSession')(quizDb);
-  const Quiz = require('../models/Quiz')(quizDb);
+  // const quizDb = app.get('quizDb');
+  // const GameSession = require('../models/GameSession')(quizDb);
+  // const Quiz = require('../models/Quiz')(quizDb);
 
-  const session = await GameSession.findById(sessionId);
-  if (!session || !session.isActive) return;
+  // const session = await GameSession.findById(sessionId);
+  // if (!session || !session.isActive) return;
   
-  const quiz = await Quiz.findById(session.quizId).lean();
-  const currentQuestion = quiz.questions[session.currentQuestionIndex];
-  const timeLimit = currentQuestion.timeLimit || 90;
+  // const quiz = await Quiz.findById(session.quizId).lean();
+  // const currentQuestion = quiz.questions[session.currentQuestionIndex];
+  // const timeLimit = currentQuestion.timeLimit || 90;
     
-  const interval = setTimeout(async () => {
-    goToNextQuestion(sessionId, io, app); // 바로 호출만
-  }, timeLimit* 1000);
+  // const interval = setTimeout(async () => {
+  //   //정답공개 5초
+  //    io.to(sessionId).emit('reveal-answer', {
+  //     answer: currentQuestion.answer,
+  //     order: session.currentQuestionIndex + 1
+  //    });
+  //    setTimeout(() => {
+  //      goToNextQuestion(sessionId, io, app);
+  //    }, 5000);
+  // }, timeLimit* 1000);
 
-  timers[sessionId] = interval;
-  }
+  // timers[sessionId] = interval;
+  // }
 
   //문제 타이머 함수
   async function goToNextQuestion(sessionId, io, app) {
@@ -232,20 +247,16 @@ module.exports = (io, app) => {
 
   const quiz = await Quiz.findById(session.quizId).lean();
 
-  // 기존 타이머 종료
-  if (timers[sessionId]) {
-    clearInterval(timers[sessionId]);
-    delete timers[sessionId];
-  }
-
   session.currentQuestionIndex += 1;
   session.skipVotes = [];
+  session.questionStartAt = new Date();
 
+  // 모든 문제를 완료한 경우
   if (session.currentQuestionIndex >= quiz.questions.length) {
     session.isActive = false;
     await session.save();
 
-    //퀴즈 완료수 증가
+    // 완료된 게임 수 증가
     await Quiz.findByIdAndUpdate(
       session.quizId,
       { $inc: { completedGameCount: 1 } }
@@ -256,11 +267,13 @@ module.exports = (io, app) => {
   }
 
   await session.save();
-  io.to(sessionId).emit('next', { index: session.currentQuestionIndex });
 
-  // 새 타이머 시작
-  startQuestionTimer(sessionId, io, app);
+  io.to(sessionId).emit('next', {
+    index: session.currentQuestionIndex,
+    questionStartAt: session.questionStartAt,
+  });
 }
+
 
 
 };

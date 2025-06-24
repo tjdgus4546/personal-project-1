@@ -25,6 +25,7 @@
 
   <!-- ✅ 게임 화면 -->
   <div id="gameSection" class="hidden">
+    <p id="countdown">남은 시간: </p>
     <div id="questionBox"></div>
 
     <div id="chatLog"></div>
@@ -40,9 +41,20 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    let questions = [];
+    let currentIndex = 0;
+    let questionTimer = null;
+    let host = null;
+    let questionStartAt  = null;
+    let countdownInterval = null;
+
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('id');
     const username = localStorage.getItem('username') || '익명';
+
+    function isHost() {
+      return username === host;
+    }
 
     const lobbySection = document.getElementById('lobbySection');
     const gameSection = document.getElementById('gameSection');
@@ -50,9 +62,6 @@
     const playerList = document.getElementById('playerList');
     const voteSkipBtn = document.getElementById('voteSkipBtn');
     const forceSkipBtn = document.getElementById('forceSkipBtn');
-
-    let questions = [];
-    let currentIndex = 0;
 
     //스코어 표시부분
     socket.on('scoreboard', ({ players }) => {
@@ -74,6 +83,7 @@
     .then(data => {
       questions = data.quiz.questions;
       currentIndex = data.currentQuestionIndex;
+      questionStartAt  = new Date(data.questionStartAt);
       host = data.host;
       const inviteCode = data.inviteCode || '없음';
       document.getElementById('inviteCode').textContent = inviteCode;
@@ -92,7 +102,7 @@
         lobbySection.classList.add('hidden');
         gameSection.classList.remove('hidden');
         voteSkipBtn.classList.remove('hidden');
-        if (username === data.host) { // host 정보를 백엔드에서 내려줘야 함
+        if (username === data.host) {
           forceSkipBtn.classList.remove('hidden');
         }
         showQuestion();
@@ -135,9 +145,10 @@
     });
 
     // 게임 시작됨
-    socket.on('game-started', ({ quiz, host }) => {
+    socket.on('game-started', ({ quiz, host, questionStartAt: startAt }) => {
       questions = quiz.questions;
       currentIndex = 0;
+      questionStartAt = new Date(startAt);
 
       lobbySection.classList.add('hidden');
       gameSection.classList.remove('hidden');
@@ -160,13 +171,16 @@
     });
   
     //문제 넘기기
-    socket.on('next', ({ index }) => {
+    socket.on('next', ({ index, questionStartAt: startTime }) => {
       currentIndex = index;
+      questionStartAt  = new Date(startTime); 
       showQuestion();
     });
 
     //메세지 입력시 정답인지 일반채팅인지 판별
     function sendMessage() {
+      if (window.__isRevealingAnswer) return; // 정답공개 중 정답인증 차단
+
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
       input.value = '';
@@ -212,8 +226,27 @@
     socket.on('end', ({ message }) => {
         alert(message || '퀴즈가 종료되었습니다!');
         });
+  
+  socket.on('answerReveal', ({ answer, index }) => {
+    const box = document.getElementById('questionBox');
+    const p = document.createElement('p');
+    p.style.color = 'green';
+    p.textContent = `✅ 정답 공개: ${answer}`;
+    box.appendChild(p);
 
-  function showQuestion() {
+    // ✅ reveal 상태 표시
+    window.__isRevealingAnswer = true;
+
+    // 5초 후 해제
+    setTimeout(() => {
+      if (isHost()) {
+      socket.emit('nextQuestion', { sessionId, username });
+      }
+      window.__isRevealingAnswer = false;
+    }, 5000);
+  });
+      
+    function showQuestion() {
     const box = document.getElementById('questionBox');
     const question = questions[currentIndex];
 
@@ -225,12 +258,10 @@
     let html = `<h2>문제 #${currentIndex + 1}</h2>`;
     html += `<p>${question.text}</p>`;
 
-    // 이미지가 있다면 표시
     if (question.imageBase64) {
       html += `<img src="${question.imageBase64}" alt="문제 이미지" style="max-width: 300px;">`;
     }
 
-    // YouTube 링크가 있다면 iframe으로 표시
     if (question.youtubeUrl) {
       html += `<div style="margin-top: 10px;">
                 <iframe width="560" height="315"
@@ -240,7 +271,35 @@
     }
 
     box.innerHTML = html;
+
+    // 기존 타이머 제거
+    if (questionTimer) clearTimeout(questionTimer);
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    const timeLimit = question.timeLimit || 90;
+
+    // ✅ 정확한 시간 계산 (한 번만 new Date 사용)
+    const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
+    let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
+
+    const countdownEl = document.getElementById('countdown');
+    if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
+
+    countdownInterval = setInterval(() => {
+      remaining--;
+      if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+      }
+    }, 1000);
+
+    questionTimer = setTimeout(() => {
+      if (isHost()) {
+        socket.emit('revealAnswer', { sessionId });
+      }
+    }, remaining * 1000);
   }
+
 
   </script>
 </body>

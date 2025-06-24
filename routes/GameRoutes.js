@@ -42,6 +42,7 @@ router.post('/start', async (req, res) => {
       quizId,
       players: [{ username }],
       startedAt: new Date(),
+      questionStartAt: null,
       isActive: true,
       currentQuestionIndex: 0,
       inviteCode,
