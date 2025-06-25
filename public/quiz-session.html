@@ -11,6 +11,7 @@
   <button id="outBtn" onclick="location.href='/'">나가기</button>
   <button id="forceSkipBtn" class="hidden">강제스킵</button>
   <button id="voteSkipBtn" class="hidden">스킵투표</button>
+  <p id="skipStatus">스킵 투표: 0 / 0</p>
     
   <h1>실시간 퀴즈 세션</h1>
 
@@ -54,6 +55,16 @@
 
     function isHost() {
       return username === host;
+    }
+
+    async function updateSkipStatus() {
+      const res = await fetch(`/game/session/${sessionId}`);
+      const data = await res.json();
+
+      const skipStatus = document.getElementById('skipStatus');
+      const votedCount = data.skipVotes?.length || 0;
+      const totalPlayers = data.players?.length || 0;
+      skipStatus.textContent = `스킵 투표: ${votedCount} / ${totalPlayers}`;
     }
 
     const lobbySection = document.getElementById('lobbySection');
@@ -193,8 +204,9 @@
     });
     
     //스킵투표
-    voteSkipBtn.addEventListener('click', () => {
+    voteSkipBtn.addEventListener('click', async () => {
       socket.emit('voteSkip', { sessionId, username });
+      await updateSkipStatus();
     });
 
     //방장 강제스킵
@@ -206,7 +218,16 @@
     socket.on('next', ({ index, questionStartAt: startTime }) => {
       currentIndex = index;
       questionStartAt  = new Date(startTime); 
+      skipStatus.textContent = `스킵 투표: 0 / ${playerList.children.length}`;
       showQuestion();
+    });
+
+    // 투표한 인원 공개
+    socket.on('skipVoteUpdate', ({ votes, total }) => {
+      const el = document.getElementById('skipStatus');
+      if (el) {
+        el.textContent = `스킵 투표: ${votes}/${total}`;
+      }
     });
 
     //메세지 입력시 정답인지 일반채팅인지 판별

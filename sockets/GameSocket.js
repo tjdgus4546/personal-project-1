@@ -161,10 +161,15 @@ module.exports = (io, app) => {
       session.skipVotes.push(username);
       await session.save();
 
+      io.to(sessionId).emit('skipVoteUpdate', {
+        total: session.players.length,
+        votes: session.skipVotes.length
+      });
+
       const totalPlayers = session.players.length;
       const voteRatio = session.skipVotes.length / totalPlayers;
 
-      if (voteRatio >= 0.3) {
+      if (voteRatio >= 0.5) {
         await revealAnswer(sessionId, io, app)();
       }
     }
@@ -184,7 +189,7 @@ module.exports = (io, app) => {
     if (!session) return;
 
     if (session.revealedAt) return;
-    
+
     const quiz = await Quiz.findById(session.quizId).lean();
     const index = session.currentQuestionIndex;
     const question = quiz.questions[index];
