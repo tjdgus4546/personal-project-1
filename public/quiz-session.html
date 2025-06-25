@@ -211,8 +211,6 @@
 
     //메세지 입력시 정답인지 일반채팅인지 판별
     function sendMessage() {
-      if (window.__isRevealingAnswer) return; // 정답공개 중 정답인증 차단
-
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
       input.value = '';
@@ -224,9 +222,8 @@
       const userInput = message.replace(/\s+/g, '').toLowerCase();
       
       const isCorrect = answers.includes(userInput);
-      console.log('현재 문제:', questions[currentIndex]);
 
-      if (isCorrect) {
+      if (!window.__isRevealingAnswer && isCorrect) {
         socket.emit('correct', { sessionId, username });
       } else {
         socket.emit('chatMessage', { sessionId, username, message });
