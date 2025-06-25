@@ -104,7 +104,8 @@
 
             // 로그아웃 버튼 클릭 이벤트
             logoutBtn.addEventListener('click', () => {
-                localStorage.removeItem('token'); // 토큰 삭제
+                localStorage.removeItem('token');
+                localStorage.removeItem('username');
                 alert('로그아웃 되었습니다.');
                 window.location.reload(); // 페이지 새로고침으로 상태 갱신
             });
