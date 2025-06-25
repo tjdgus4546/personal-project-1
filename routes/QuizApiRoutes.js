@@ -53,9 +53,9 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   try {
-    const { text, answer, imageBase64, youtubeUrl, timeLimit } = req.body;
+    const { text, answers, imageBase64, youtubeUrl, timeLimit } = req.body;
 
-    if (!text || !answer) {
+    if (!text || !answers || answers.length === 0) {
       return res.status(400).json({ message: '질문과 정답은 필수입니다.' });
     }
 
@@ -74,9 +74,13 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       parsedTimeLimit = 90;
     }
 
+    const rawAnswers = Array.isArray(answers)
+      ? answers
+      : answers.split(',').map(a => a.trim()).filter(Boolean);
+
     const newQuestion = {
       text,
-      answer,
+      answers: rawAnswers,
       imageBase64: imageBase64?.trim() || null,
       youtubeUrl: youtubeUrl?.trim() || null,
       order,
@@ -124,20 +128,29 @@ router.delete('/quiz/:quizId/question/:questionId', authenticateToken, async (re
 router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
-
+  
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
     if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
-
+    
     const question = quiz.questions.id(req.params.questionId);
     if (!question) return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
-
+    
     // 수정할 필드만 바꿈
     if (req.body.text !== undefined) question.text = req.body.text;
-    if (req.body.answer !== undefined) question.answer = req.body.answer;
-    if (req.body.timeLimit !== undefined) question.timeLimit = req.body.timeLimit;
+    if (req.body.answers !== undefined) {
+      const rawAnswers = Array.isArray(req.body.answers)
+      ? req.body.answers
+      : req.body.answers.split(',').map(a => a.trim()).filter(Boolean);
+      
+      question.answers = rawAnswers;
+    }
 
+    if (req.body.timeLimit !== undefined) {
+      let parsed = parseInt(req.body.timeLimit, 10);
+      question.timeLimit = (isNaN(parsed) || parsed < 10 || parsed > 180) ? 90 : parsed;
+    }
     await quiz.save();
 
     res.json({ message: '문제 수정 완료' });

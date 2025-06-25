@@ -5,7 +5,7 @@ const questionSchema = new Schema({
   text: { type: String, required: true },
   imageBase64: { type: String },
   youtubeUrl: { type: String },
-  answer: { type: String, required: true },
+  answers: { type: [String], required: true },
   order: { type: Number, required: true },
   timeLimit: {type: Number, default: 90 , min: 5, max: 180 },
 });

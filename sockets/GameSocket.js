@@ -74,7 +74,9 @@ module.exports = (io, app) => {
         quiz,
         host: session.host,
         questionStartAt: session.questionStartAt,
-      }); // 클라이언트에서 UI 전환
+        }
+
+      ); // 클라이언트에서 UI 전환
 
     });
 
@@ -173,39 +175,29 @@ module.exports = (io, app) => {
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
 
-    // 이미 정답 공개 중이면 무시
-    if (session.revealedAt) {
-      const elapsed = (Date.now() - new Date(session.revealedAt).getTime()) / 1000;
-      if (elapsed < 5) return; // 아직 5초 안 지났으면 중복 실행 방지
-    }
-
-    // 정답 공개
-    const quiz = await Quiz.findById(session.quizId).lean();
-    const question = quiz.questions[session.currentQuestionIndex];
-    session.revealedAt = new Date(); // 이게 핵심!
-    await session.save();
-
-    io.to(sessionId).emit('answerReveal', {
-      answer: question.answer,
-      index: session.currentQuestionIndex,
-      revealedAt: session.revealedAt
-    });
+    await revealAnswer(sessionId, io, app)();
   });
 
 
   socket.on('revealAnswer', async ({ sessionId }) => {
-    const session = await GameSession.findById(sessionId).lean();
+    const session = await GameSession.findById(sessionId);
     if (!session) return;
 
+    if (session.revealedAt) return;
+    
     const quiz = await Quiz.findById(session.quizId).lean();
     const index = session.currentQuestionIndex;
     const question = quiz.questions[index];
     if (!question) return;
 
+    session.revealedAt = new Date();
+    await session.save();
+
     // 모든 참가자에게 정답 전송
     io.to(sessionId).emit('answerReveal', {
-      answer: question.answer,
-      index
+      answers: question.answers,
+      index,
+      revealedAt: session.revealedAt
     });
   });
 
@@ -225,6 +217,9 @@ module.exports = (io, app) => {
       const session = await GameSession.findById(sessionId);
       if (!session || !session.isActive) return;
 
+      // 중복투표 방지
+      if (session.revealedAt) return;
+
       const quiz = await Quiz.findById(session.quizId).lean();
       const question = quiz.questions[session.currentQuestionIndex];
 
@@ -234,13 +229,12 @@ module.exports = (io, app) => {
       await session.save();
 
       io.to(sessionId).emit('answerReveal', {
-        answer: question.answer,
+        answers: question.answers,
         index: session.currentQuestionIndex,
         revealedAt,
       });
     };
   }
-
 
   //문제 타이머 함수
   async function goToNextQuestion(sessionId, io, app) {
@@ -253,6 +247,7 @@ module.exports = (io, app) => {
 
   const quiz = await Quiz.findById(session.quizId).lean();
 
+  session.revealedAt = null;
   session.currentQuestionIndex += 1;
   session.skipVotes = [];
   session.questionStartAt = new Date();

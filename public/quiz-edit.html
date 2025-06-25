@@ -42,7 +42,8 @@
 
     async function addQuestion() {
     const text = document.getElementById('text').value;
-    const answer = document.getElementById('answer').value;
+    const rawAnswers = document.getElementById('answer').value;
+    const answers = rawAnswers.split(',').map(a => a.trim()).filter(a => a);
     const timeLimit = parseInt(document.getElementById('timeLimit').value) || 90;
     const token = localStorage.getItem('token');
       if (!token) {
@@ -56,7 +57,7 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
          },
-        body: JSON.stringify({ text, answer, timeLimit })
+        body: JSON.stringify({ text, answers, timeLimit })
     });
 
     const data = await res.json();
@@ -72,7 +73,7 @@
     function openEditModal(q) {
     editingQuestionId = q._id;
     document.getElementById('modalText').value = q.text;
-    document.getElementById('modalAnswer').value = q.answer;
+    document.getElementById('modalAnswer').value = Array.isArray(q.answers) ? q.answers.join(', ') : q.answers;
     document.getElementById('modalTime').value = q.timeLimit || 90;
     document.getElementById('editModal').style.display = '';
     document.getElementById('modalBackdrop').style.display = '';
@@ -84,10 +85,11 @@
     }
     document.getElementById('saveEditBtn').onclick = async function() {
         const text = document.getElementById('modalText').value;
-        const answer = document.getElementById('modalAnswer').value;
+        const rawAnswers = document.getElementById('modalAnswer').value;
+        const answers = rawAnswers.split(',').map(a => a.trim()).filter(a => a);
         const timeLimit = parseInt(document.getElementById('modalTime').value) || 90;
         const token = localStorage.getItem('token');
-        if (!text || !answer) return alert('모든 항목을 입력하세요.');
+        if (!text || answers.length === 0) return alert('모든 항목을 입력하세요.');
 
         const res = await fetch(`/api/quiz/${quizId}/question/${editingQuestionId}`, {
             method: 'PUT',
@@ -95,7 +97,7 @@
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
             },
-            body: JSON.stringify({ text, answer, timeLimit })
+            body: JSON.stringify({ text, answers, timeLimit })
         });
         const data = await res.json();
         alert(data.message);

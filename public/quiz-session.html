@@ -111,10 +111,10 @@
           const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
           const wait = Math.max(0, 5 - elapsed);
 
-          const answer = questions[currentIndex]?.answer;
-          if (answer) {
+          const answers = questions[currentIndex]?.answers;
+          if (answers) {
             const p = document.createElement('p');
-            p.textContent = `✅ 정답 공개: ${answer}`;
+            p.textContent = `✅ 정답 공개: ${answers}`;
             p.style.color = 'green';
             document.getElementById('questionBox').appendChild(p);
           }
@@ -219,21 +219,23 @@
 
       if (!message) return;
 
-      const correctAnswer = questions[currentIndex].answer.trim().toLowerCase().replace(/\s+/g, '');
-      const userInput = message.trim().toLowerCase().replace(/\s+/g, '');
-      const chatLog = document.getElementById('chatLog');
+      const rawAnswers = questions[currentIndex].answers || []; // 배열
+      const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
+      const userInput = message.replace(/\s+/g, '').toLowerCase();
+      
+      const isCorrect = answers.includes(userInput);
+      console.log('현재 문제:', questions[currentIndex]);
 
-      if (userInput === correctAnswer) {
-        // 정답일 경우
+      if (isCorrect) {
         socket.emit('correct', { sessionId, username });
       } else {
-        // 일반 채팅일 경우 DB에 저장 요청
         socket.emit('chatMessage', { sessionId, username, message });
         const p = document.createElement('p');
         p.innerHTML = `${username}: ${message}`;
         document.getElementById('chatLog').appendChild(p);
       }
     }
+
 
     //정답시 중복 방지하여 출력한다
     socket.on('correct', ({ username }) => {
@@ -260,8 +262,8 @@
         alert(message || '퀴즈가 종료되었습니다!');
         });
 
-    socket.on('answerReveal', ({ answer, index, revealedAt }) => {
-      showAnswer(answer); // UI 표시
+    socket.on('answerReveal', ({ answers, index, revealedAt }) => {
+      showAnswer(answers); // UI 표시
 
       const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
       const waitTime = Math.max(0, 5 - elapsed);
@@ -273,11 +275,11 @@
       }, waitTime * 1000);
     });
 
-    function showAnswer(answer) {
+    function showAnswer(answers) {
       const box = document.getElementById('questionBox');
       const p = document.createElement('p');
       p.style.color = 'green';
-      p.textContent = `✅ 정답 공개: ${answer}`;
+      p.textContent = `✅ 정답 공개: ${answers}`;
       box.appendChild(p);
 
       window.__isRevealingAnswer = true;
@@ -286,7 +288,7 @@
       setTimeout(() => {
         window.__isRevealingAnswer = false;
       }, 5000);
-    };
+    }
       
     function showQuestion() {
     const box = document.getElementById('questionBox');
