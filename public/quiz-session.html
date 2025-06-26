@@ -128,9 +128,8 @@
 
         // ✅ 정답이 이미 공개된 상태라면
         if (data.revealedAt) {
-          const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
-          const wait = Math.max(0, 5 - elapsed);
-
+          showQuestion({ silent: true });
+          
           const answers = questions[currentIndex]?.answers;
           if (answers) {
             const p = document.createElement('p');
@@ -138,8 +137,11 @@
             p.style.color = 'green';
             document.getElementById('questionBox').appendChild(p);
           }
-
+          
           window.__isRevealingAnswer = true;
+          
+          const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
+          const wait = Math.max(0, 5 - elapsed);
 
           // 5초가 안 지났다면, 남은 시간 후 다음 문제로
           if (wait > 0) {
@@ -321,7 +323,7 @@
       }, 5000);
     }
       
-    function showQuestion() {
+    function showQuestion({ silent = false } = {}) {
     const box = document.getElementById('questionBox');
     const question = questions[currentIndex];
 
@@ -346,6 +348,8 @@
     }
 
     box.innerHTML = html;
+
+    if (silent) return;
 
     // 기존 타이머 제거
     if (questionTimer) clearTimeout(questionTimer);
