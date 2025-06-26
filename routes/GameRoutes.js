@@ -2,10 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const { ObjectId } = require('mongoose').Types;
-const path = require('path');
 
 // 세션 정보 조회
 router.get('/session/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ message: '잘못된 세션 ID 형식' });
+  }
+
   const quizDb = req.app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
@@ -30,6 +34,10 @@ router.post('/start', async (req, res) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   const { quizId, username } = req.body;
+
+  if (!ObjectId.isValid(quizId)) {
+    return res.status(400).json({ message: '잘못된 퀴즈 ID 형식입니다.' });
+  }
 
   try {
     const quiz = await Quiz.findById(quizId);

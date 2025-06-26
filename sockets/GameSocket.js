@@ -3,10 +3,12 @@ module.exports = (io, app) => {
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
+  const { ObjectId } = require('mongoose').Types;
 
   io.on('connection', (socket) => {
 
     socket.on('joinSession', async ({ sessionId, username }) => {
+      if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
 
@@ -39,7 +41,7 @@ module.exports = (io, app) => {
         message: `${username} 입장`
       });
 
-      // ✅ 점수판 전송 (최신 session 상태 기준)
+      // 점수판 전송 (최신 session 상태 기준)
       const latestSession = await GameSession.findById(sessionId); // 최신화
       io.to(sessionId).emit('scoreboard', {
         players: latestSession.players.map(p => ({
@@ -57,6 +59,7 @@ module.exports = (io, app) => {
       });
     
     socket.on('startGame', async ({ sessionId, username }) => {
+      if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session || session.isStarted) return;
         
@@ -106,6 +109,7 @@ module.exports = (io, app) => {
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
     socket.on('correct', async ({ sessionId, username }) => {
+      if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session || !session.isActive) return;
 
@@ -154,6 +158,7 @@ module.exports = (io, app) => {
 
   // 스킵투표
   socket.on('voteSkip', async ({ sessionId, username }) => {
+    if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
     if (!session || !session.isActive) return;
 
@@ -177,6 +182,7 @@ module.exports = (io, app) => {
 
   // //방장 강제스킵
   socket.on('forceSkip', async ({ sessionId, username }) => {
+    if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
 
@@ -185,6 +191,7 @@ module.exports = (io, app) => {
 
 
   socket.on('revealAnswer', async ({ sessionId }) => {
+    if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
     if (!session) return;
 
@@ -208,6 +215,7 @@ module.exports = (io, app) => {
 
   // 정답공개후 다음 문제로 넘기기
   socket.on('nextQuestion', async ({ sessionId, username }) => {
+    if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
 
@@ -219,6 +227,7 @@ module.exports = (io, app) => {
   // 문제 종료 후 정답 공개
   function revealAnswer(sessionId, io, app) {
     return async () => {
+      if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session || !session.isActive) return;
 
@@ -247,6 +256,7 @@ module.exports = (io, app) => {
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
 
+  if (!ObjectId.isValid(sessionId)) return;
   const session = await GameSession.findById(sessionId);
   if (!session) return;
 

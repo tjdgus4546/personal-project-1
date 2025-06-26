@@ -90,8 +90,17 @@
 
     //새로고침시 원래 상태 유지
     fetch(`/game/session/${sessionId}`)
-    .then(res => res.json())
+    .then(async res => {
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alert(data?.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
+        location.href = '/';
+        return;
+      }
+      return res.json();
+    })
     .then(data => {
+      if (!data) return;
       questions = data.quiz.questions;
       currentIndex = data.currentQuestionIndex;
       questionStartAt = new Date(data.questionStartAt);
@@ -150,6 +159,10 @@
           showQuestion(); // 정답 공개 중이 아니면 그냥 문제 표시
         }
       }
+    }).catch(err => {
+      alert('세션 정보를 불러오는 중 오류가 발생했습니다.');
+      console.error('세션 로딩 실패:', err);
+      window.location.href = '/';  // 또는 오류 페이지로
     });
 
     // 세션 입장
