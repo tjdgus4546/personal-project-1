@@ -217,7 +217,27 @@
       };
       showQuestion();
     });
-    
+
+    // 새로운 호스트선정
+    socket.on('host-updated', ({ host: newHost }) => {
+      if (newHost === '__NONE__') {
+        host = null;
+        // 버튼 모두 숨기기
+        forceSkipBtn.classList.add('hidden');
+        startBtn?.classList.add('hidden');
+        return;
+      }
+
+      host = newHost;
+      if (username === host) {
+        forceSkipBtn.classList.remove('hidden');
+        startBtn?.classList.remove('hidden');
+      } else {
+        forceSkipBtn.classList.add('hidden');
+        startBtn?.classList.add('hidden');
+      }
+    });
+
     //스킵투표
     voteSkipBtn.addEventListener('click', async () => {
       socket.emit('voteSkip', { sessionId, username });

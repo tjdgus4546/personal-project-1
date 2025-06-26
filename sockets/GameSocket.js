@@ -8,6 +8,8 @@ module.exports = (io, app) => {
   io.on('connection', (socket) => {
 
     socket.on('joinSession', async ({ sessionId, username }) => {
+      socket.sessionId = sessionId;
+      socket.username = username;
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
@@ -27,7 +29,7 @@ module.exports = (io, app) => {
       }
 
       // 방장 지정 (세션 생성자) → 제일 먼저 들어온 사람을 host로 지정
-      if (!session.host) {
+      if (!session.host || session.host === '__NONE__') {
         session.host = username;
         updated = true;
       }
@@ -57,6 +59,62 @@ module.exports = (io, app) => {
         isStarted: session.isStarted || false
         });
       });
+
+    socket.on('disconnect', async () => {
+      const { sessionId, username } = socket;
+      if (!sessionId || !username) return;
+
+      const quizDb = app.get('quizDb');
+      const GameSession = require('../models/GameSession')(quizDb);
+
+      const session = await GameSession.findById(sessionId);
+      if (!session) return;
+
+      // 🔻 해당 유저 제거
+      session.players = session.players.filter(p => p.username !== username);
+      session.markModified('players');
+
+      // 🔻 host였으면 새로 지정
+      if (session.host === username) {
+        if (session.players.length > 0) {
+          session.host = session.players[0].username;
+        } else {
+          session.host = '__NONE__';
+        }
+      }
+
+      await session.save();
+
+      // 🔻 공통: 퇴장 메시지
+      io.to(sessionId).emit('chat', {
+        user: 'system',
+        message: `${username} 퇴장`
+      });
+
+      // 🔻 분기 처리
+      if (session.isStarted) {
+        // ✅ 게임 중: 점수판 갱신
+        io.to(sessionId).emit('scoreboard', {
+          players: session.players.map(p => ({
+            username: p.username,
+            score: p.score
+          }))
+        });
+
+        io.to(sessionId).emit('host-updated', {
+          host: session.host
+        });
+
+      } else {
+        // ✅ 대기 상태: 대기룸 갱신
+        io.to(sessionId).emit('waiting-room', {
+          host: session.host,
+          players: session.players.map(p => p.username),
+          isStarted: false
+        });
+      }
+    });
+
     
     socket.on('startGame', async ({ sessionId, username }) => {
       if (!ObjectId.isValid(sessionId)) return;
