@@ -11,6 +11,8 @@ module.exports = (io, app) => {
       socket.join(sessionId);
       socket.sessionId = sessionId;
       socket.username = username;
+      socket.firstCorrectUser = null;
+
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
@@ -177,52 +179,56 @@ module.exports = (io, app) => {
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
     socket.on('correct', async ({ sessionId, username }) => {
-      if (!ObjectId.isValid(sessionId)) return;
-      const session = await GameSession.findById(sessionId);
-      if (!session || !session.isActive) return;
+    if (!ObjectId.isValid(sessionId)) return;
+    const session = await GameSession.findById(sessionId);
+    if (!session || !session.isActive) return;
 
-      const player = session.players.find(p => p.username === username);
-      const qIndex = String(session.currentQuestionIndex);
-      if (!player || player.answered?.[qIndex]) return;
+    const player = session.players.find(p => p.username === username);
+    if (!player) return;
 
-        if (player.answered?.[qIndex]) {
-        // 이미 정답 맞춘 경우: 메시지 안 보내거나 isNew: false
-        return; // 또는 아래처럼 보내고 클라이언트에서 무시하게
-        // socket.emit('correct-ack', { isNew: false });
-      }
+    const qIndex = String(session.currentQuestionIndex);
+    if (player.answered?.[qIndex]) return; //
 
-      await ChatLog.findOneAndUpdate(
-        { sessionId },
-        {
-          $push: {
-            messages: {
-              username,
-              message: `${username}님이 정답을 맞혔습니다! 🎉`,
-              createdAt: new Date()
-            }
-          }
-        },
-        { upsert: true, new: true }
-      );
+    if (!app.firstCorrectUsers) {
+      app.firstCorrectUsers = {};
+    }
 
-      // 정답인정
+    const isFirst = !app.firstCorrectUsers[sessionId];
+    if (isFirst) {
+      app.firstCorrectUsers[sessionId] = username;
+      player.score += 2;
+    } else {
       player.score += 1;
-      player.answered[qIndex] = true;
-      session.markModified('players');
-      await session.save();
+    }
 
-      io.to(sessionId).emit('correct', { username });
-      io.to(sessionId).emit('scoreboard', {
-        players: session.players.map(p => ({
-          username: p.username,
-          score: p.score
-        }))
-      });
+    // 정답 기록
+    player.answered[qIndex] = true;
+    session.markModified('players');
+
+    await ChatLog.findOneAndUpdate(
+      { sessionId },
+      {
+        $push: {
+          messages: {
+            username,
+            message: `${username}님이 정답을 맞혔습니다! 🎉`,
+            createdAt: new Date()
+          }
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    await session.save();
+
+    io.to(sessionId).emit('correct', { username });
+    io.to(sessionId).emit('scoreboard', {
+      players: session.players.map(p => ({
+        username: p.username,
+        score: p.score
+      }))
     });
-
-    socket.on('disconnect', () => {
-
-    });
+  });
 
   // 스킵투표
   socket.on('voteSkip', async ({ sessionId, username }) => {
@@ -286,6 +292,10 @@ module.exports = (io, app) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
     if (!session || session.host !== username) return;
+
+    if (app.firstCorrectUsers) {
+      delete app.firstCorrectUsers[sessionId];
+    }
 
     await goToNextQuestion(sessionId, io, app);
   });
