@@ -195,7 +195,8 @@
       .catch(err => console.error('채팅 기록 불러오기 실패:', err));
 
     // 대기실 수신
-    socket.on('waiting-room', ({ host, players, isStarted }) => {
+    socket.on('waiting-room', ({ host: newHost, players, isStarted }) => {
+      host = newHost;
       playerList.innerHTML = '';
       players.forEach(name => {
         const li = document.createElement('li');
@@ -214,7 +215,8 @@
     });
 
     // 게임 시작됨
-    socket.on('game-started', ({ quiz, host, questionStartAt: startAt }) => {
+    socket.on('game-started', ({ quiz, host: newHost, questionStartAt: startAt }) => {
+      host = newHost;
       questions = quiz.questions;
       currentIndex = 0;
       questionStartAt = new Date(startAt);
@@ -229,6 +231,7 @@
       showQuestion();
     });
 
+    console.log('✅ host-updated 리스너 연결됨');
     // 새로운 호스트선정
     socket.on('host-updated', ({ host: newHost }) => {
       if (newHost === '__NONE__') {
@@ -238,8 +241,10 @@
         startBtn?.classList.add('hidden');
         return;
       }
-
+      console.log('✅ host-updated 수신:', newHost);
       host = newHost;
+      console.log('내 이름:', username, '호스트:', host);
+
       if (username === host) {
         forceSkipBtn.classList.remove('hidden');
         startBtn?.classList.remove('hidden');
@@ -271,7 +276,7 @@
     socket.on('skipVoteUpdate', ({ votes, total }) => {
       const el = document.getElementById('skipStatus');
       if (el) {
-        el.textContent = `스킵 투표: ${votes}/${total}`;
+        el.textContent = `스킵 투표: ${votes} / ${total}`;
       }
     });
 

@@ -8,13 +8,12 @@ module.exports = (io, app) => {
   io.on('connection', (socket) => {
 
     socket.on('joinSession', async ({ sessionId, username }) => {
+      socket.join(sessionId);
       socket.sessionId = sessionId;
       socket.username = username;
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
-
-      socket.join(sessionId);
 
       //세션에 플레이어가 있는지 체크후 없으면 세션에 플레이어 추가
       let updated = false;
@@ -60,10 +59,15 @@ module.exports = (io, app) => {
 
       // 대기 상태 알림
       io.to(sessionId).emit('waiting-room', {
-        host: session.host,
+        host: session.host || '__NONE__',
         players: session.players.map(p => p.username),
         isStarted: session.isStarted || false
         });
+
+      socket.emit('host-updated', {
+        host: session.host || '__NONE__'
+      });
+
       });
 
     socket.on('disconnect', async () => {
@@ -108,13 +112,13 @@ module.exports = (io, app) => {
         });
 
         io.to(sessionId).emit('host-updated', {
-          host: session.host
+          host: session.host || '__NONE__'
         });
 
       } else {
         // ✅ 대기 상태: 대기룸 갱신
         io.to(sessionId).emit('waiting-room', {
-          host: session.host,
+          host: session.host || '__NONE__',
           players: session.players.map(p => p.username),
           isStarted: false
         });
@@ -139,7 +143,7 @@ module.exports = (io, app) => {
 
       io.to(sessionId).emit('game-started', {
         quiz,
-        host: session.host,
+        host: session.host || '__NONE__',
         questionStartAt: session.questionStartAt,
         }
 
