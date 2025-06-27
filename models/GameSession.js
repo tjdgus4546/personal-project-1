@@ -25,4 +25,6 @@ const gameSessionSchema = new Schema({
   endedAt: { type: Date, default: null, index: { expires: '6h' } },
 });
 
-module.exports = (quizDb) => quizDb.model('GameSession', gameSessionSchema, 'game_sessions');
+module.exports = (quizDb) => {
+  return quizDb.models.GameSession || quizDb.model('GameSession', gameSessionSchema, 'game_sessions');
+};

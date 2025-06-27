@@ -57,105 +57,58 @@
       return username === host;
     }
 
-    async function updateSkipStatus() {
-      const res = await fetch(`/game/session/${sessionId}`);
-      const data = await res.json();
+    // ✅ 데이터 로딩 전용 함수
+    async function loadSessionData() {
+      try {
+        const res = await fetch(`/game/session/${sessionId}`);
 
-      const skipStatus = document.getElementById('skipStatus');
-      const votedCount = data.skipVotes?.length || 0;
-      const totalPlayers = data.players?.length || 0;
-      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${playerList.children.length}`;
-    }
-
-    const lobbySection = document.getElementById('lobbySection');
-    const gameSection = document.getElementById('gameSection');
-    const startBtn = document.getElementById('startBtn');
-    const playerList = document.getElementById('playerList');
-    const voteSkipBtn = document.getElementById('voteSkipBtn');
-    const forceSkipBtn = document.getElementById('forceSkipBtn');
-
-    //스코어 표시부분
-    socket.on('scoreboard', ({ players }) => {
-      const board = document.getElementById('scoreboard');
-      board.innerHTML = ''; // 초기화
-      players
-        .sort((a, b) => b.score - a.score) // 점수순 정렬
-        .forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = `${p.username}: ${p.score}점`;
-          board.appendChild(li);
-        });
-    });
-
-    socket.on('voteSkipUpdate', ({ votes, total }) => {
-      const el = document.getElementById('skipStatus');
-      if (el) {
-        el.textContent = `스킵 투표: ${votes} / ${total}`;
-      }
-    });
-
-
-    //새로고침시 원래 상태 유지
-    fetch(`/game/session/${sessionId}`)
-    .then(async res => {
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(data?.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
-        location.href = '/';
-        return;
-      }
-      return res.json();
-    })
-    .then(data => {
-      if (!data) return;
-      questions = data.quiz.questions;
-      currentIndex = data.currentQuestionIndex;
-      questionStartAt = new Date(data.questionStartAt);
-      host = data.host;
-      const inviteCode = data.inviteCode || '없음';
-      document.getElementById('inviteCode').textContent = inviteCode;
-
-      const votedCount = data.skipVotes?.length || 0;
-      const totalPlayers = data.players?.length || 0;
-      document.getElementById('skipStatus').textContent = `스킵 투표: ${votedCount} / ${totalPlayers}`;
-
-      const board = document.getElementById('scoreboard');
-      board.innerHTML = '';
-      data.players
-        .sort((a, b) => b.score - a.score)
-        .forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = `${p.username}: ${p.score}점`;
-          board.appendChild(li);
-        });
-
-      if (data.isStarted) {
-        lobbySection.classList.add('hidden');
-        gameSection.classList.remove('hidden');
-        voteSkipBtn.classList.remove('hidden');
-        if (username === data.host) {
-          forceSkipBtn.classList.remove('hidden');
+        // 응답 상태 확인
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || '세션 정보를 불러오는 데 실패했습니다.');
         }
 
-        // ✅ 정답이 이미 공개된 상태라면
-        if (data.revealedAt) {
-          showQuestion({ silent: true });
-          
-          const answers = questions[currentIndex]?.answers;
-          if (answers) {
-            const p = document.createElement('p');
-            p.textContent = `✅ 정답 공개: ${answers}`;
-            p.style.color = 'green';
-            document.getElementById('questionBox').appendChild(p);
-          }
-          
-          window.__isRevealingAnswer = true;
-          
-          const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
-          const wait = Math.max(0, 5 - elapsed);
+        const data = await res.json();
 
-          // 5초가 안 지났다면, 남은 시간 후 다음 문제로
-          if (wait > 0) {
+        // 필수 데이터 유효성 검사
+        if (!data || !data.quiz || !Array.isArray(data.players)) {
+          throw new Error('세션 데이터가 유효하지 않습니다.');
+        }
+
+        // 상태 초기화
+        questions = data.quiz.questions;
+        currentIndex = data.currentQuestionIndex;
+        questionStartAt = new Date(data.questionStartAt);
+        host = data.host;
+        document.getElementById('inviteCode').textContent = data.inviteCode || '없음';
+
+        // 점수판 및 투표 상태 렌더링
+        renderScoreboard(data.players);
+        renderSkipStatus(data.skipVotes?.length || 0, data.players?.length || 0);
+
+        if (data.isStarted) {
+          lobbySection.classList.add('hidden');
+          gameSection.classList.remove('hidden');
+          voteSkipBtn.classList.remove('hidden');
+          if (username === host) {
+            forceSkipBtn.classList.remove('hidden');
+          }
+
+          // 정답 공개 상태면 UI 복원
+          if (data.revealedAt) {
+            showQuestion({ silent: true });
+
+            const answers = questions[currentIndex]?.answers;
+            if (answers) {
+              const p = document.createElement('p');
+              p.textContent = `✅ 정답 공개: ${answers}`;
+              p.style.color = 'green';
+              document.getElementById('questionBox').appendChild(p);
+            }
+
+            window.__isRevealingAnswer = true;
+            const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
+            const wait = Math.max(0, 5 - elapsed);
             setTimeout(() => {
               window.__isRevealingAnswer = false;
               if (isHost()) {
@@ -163,23 +116,51 @@
               }
             }, wait * 1000);
           } else {
-            // 이미 5초 지났으면 바로 다음 문제로 넘겨
-            if (isHost()) {
-              socket.emit('nextQuestion', { sessionId, username });
-            }
+            showQuestion();
           }
-        } else {
-          showQuestion(); // 정답 공개 중이 아니면 그냥 문제 표시
         }
+
+      } catch (err) {
+        console.error('❌ 세션 로딩 실패:', err);
+        alert(err.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
+        location.href = '/';
       }
-    }).catch(err => {
-      alert('세션 정보를 불러오는 중 오류가 발생했습니다.');
-      console.error('세션 로딩 실패:', err);
-      window.location.href = '/';  // 또는 오류 페이지로
-    });
+    }
+
+
+    // ✅ 점수판 렌더링 함수
+    function renderScoreboard(players) {
+      const board = document.getElementById('scoreboard');
+      board.innerHTML = '';
+      players.sort((a, b) => b.score - a.score).forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = `${p.username}: ${p.score}점`;
+        board.appendChild(li);
+      });
+    }
+
+    // ✅ 스킵 투표 상태 렌더링
+    function renderSkipStatus(voted, total) {
+      document.getElementById('skipStatus').textContent = `스킵 투표: ${voted} / ${total}`;
+    }
 
     // 세션 입장
     socket.emit('joinSession', { sessionId, username });
+
+    socket.on('session-ready', () => {
+      loadSessionData(); // <--- 초기화 전용 함수로 분리
+    });
+    
+    socket.on('scoreboard', ({ players }) => renderScoreboard(players));
+
+    socket.on('voteSkipUpdate', ({ votes, total }) => renderSkipStatus(votes, total));
+
+    const lobbySection = document.getElementById('lobbySection');
+    const gameSection = document.getElementById('gameSection');
+    const startBtn = document.getElementById('startBtn');
+    const playerList = document.getElementById('playerList');
+    const voteSkipBtn = document.getElementById('voteSkipBtn');
+    const forceSkipBtn = document.getElementById('forceSkipBtn');
     
     // 채팅 기록 불러오기
     fetch(`/game/chat/${sessionId}`)
@@ -231,7 +212,6 @@
       showQuestion();
     });
 
-    console.log('✅ host-updated 리스너 연결됨');
     // 새로운 호스트선정
     socket.on('host-updated', ({ host: newHost }) => {
       if (newHost === '__NONE__') {
@@ -241,9 +221,7 @@
         startBtn?.classList.add('hidden');
         return;
       }
-      console.log('✅ host-updated 수신:', newHost);
       host = newHost;
-      console.log('내 이름:', username, '호스트:', host);
 
       if (username === host) {
         forceSkipBtn.classList.remove('hidden');
@@ -265,10 +243,10 @@
     });
   
     //문제 넘기기
-    socket.on('next', ({ index, questionStartAt: startTime }) => {
+    socket.on('next', ({ index, questionStartAt: startTime, totalPlayers }) => {
       currentIndex = index;
       questionStartAt  = new Date(startTime); 
-      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${playerList.children.length}`;
+      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${totalPlayers}`;
       showQuestion();
     });
 
@@ -311,19 +289,6 @@
       const p = document.createElement('p');
       p.innerHTML = `${username}: ${username}님이 정답을 맞혔습니다! 🎉`;
       chatLog.appendChild(p);
-    });
-
-    // 서버에서 점수판 업데이트만 받으면 됨
-    socket.on('scoreboard', ({ players }) => {
-      const board = document.getElementById('scoreboard');
-      board.innerHTML = '';
-      players
-        .sort((a, b) => b.score - a.score)
-        .forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = `${p.username}: ${p.score}점`;
-          board.appendChild(li);
-        });
     });
 
     socket.on('end', ({ message }) => {

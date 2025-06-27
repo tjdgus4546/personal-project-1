@@ -8,19 +8,18 @@ module.exports = (io, app) => {
   io.on('connection', (socket) => {
 
     socket.on('joinSession', async ({ sessionId, username }) => {
-      socket.join(sessionId);
-      socket.sessionId = sessionId;
-      socket.username = username;
-      socket.firstCorrectUser = null;
+      const quizDb = app.get('quizDb');
+      const GameSession = require('../models/GameSession')(quizDb);
 
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
 
-      //세션에 플레이어가 있는지 체크후 없으면 세션에 플레이어 추가
       let updated = false;
-      const alreadyJoined = session.players.some(p => p.username === username);
-      if (!alreadyJoined) {
+
+      // 이미 참가한 유저인지 확인
+      const existing = session.players.find(p => p.username === username);
+      if (!existing) {
         session.players.push({
           username,
           score: 0,
@@ -38,6 +37,11 @@ module.exports = (io, app) => {
       if (updated) {
         await session.save();
       }
+
+      socket.join(sessionId);
+      socket.sessionId = sessionId;
+      socket.username = username;
+      socket.firstCorrectUser = null;
 
       io.to(sessionId).emit('chat', {
         user: 'system',
@@ -72,6 +76,8 @@ module.exports = (io, app) => {
 
       });
 
+    socket.emit('session-ready');
+
     socket.on('disconnect', async () => {
       const { sessionId, username } = socket;
       if (!sessionId || !username) return;
@@ -79,53 +85,65 @@ module.exports = (io, app) => {
       const quizDb = app.get('quizDb');
       const GameSession = require('../models/GameSession')(quizDb);
 
-      const session = await GameSession.findById(sessionId);
-      if (!session) return;
+      // 3초 후에도 같은 사용자가 다시 접속해 있지 않다면 제거
+      setTimeout(async () => {
+        const socketsInRoom = await io.in(sessionId).fetchSockets();
+        const stillConnected = socketsInRoom.some(s => s.username === username);
 
-      // 🔻 해당 유저 제거
-      session.players = session.players.filter(p => p.username !== username);
-      session.markModified('players');
-
-      // 🔻 host였으면 새로 지정
-      if (session.host === username) {
-        if (session.players.length > 0) {
-          session.host = session.players[0].username;
-        } else {
-          session.host = '__NONE__';
+        if (stillConnected) {
+          return;
         }
-      }
 
-      await session.save();
+        const session = await GameSession.findById(sessionId);
+        if (!session) return;
 
-      // 🔻 공통: 퇴장 메시지
-      io.to(sessionId).emit('chat', {
-        user: 'system',
-        message: `${username} 퇴장`
-      });
+        // 🔻 해당 유저 제거
+        session.players = session.players.filter(p => p.username !== username);
+        session.markModified('players');
 
-      // 🔻 분기 처리
-      if (session.isStarted) {
-        // ✅ 게임 중: 점수판 갱신
-        io.to(sessionId).emit('scoreboard', {
-          players: session.players.map(p => ({
-            username: p.username,
-            score: p.score
-          }))
+        // 🔻 host였으면 새로 지정
+        if (session.host === username) {
+          if (session.players.length > 0) {
+            session.host = session.players[0].username;
+          } else {
+            session.host = '__NONE__';
+          }
+        }
+
+        await session.save();
+
+        // 🔻 공통: 퇴장 메시지
+        io.to(sessionId).emit('chat', {
+          user: 'system',
+          message: `${username} 퇴장`
         });
 
-        io.to(sessionId).emit('host-updated', {
-          host: session.host || '__NONE__'
-        });
+        // 🔻 분기 처리
+        if (session.isStarted) {
+          // ✅ 게임 중: 점수판 갱신
+          io.to(sessionId).emit('scoreboard', {
+            players: session.players.map(p => ({
+              username: p.username,
+              score: p.score
+            }))
+          });
 
-      } else {
-        // ✅ 대기 상태: 대기룸 갱신
-        io.to(sessionId).emit('waiting-room', {
-          host: session.host || '__NONE__',
-          players: session.players.map(p => p.username),
-          isStarted: false
-        });
-      }
+          io.to(sessionId).emit('host-updated', {
+            host: session.host || '__NONE__'
+          });
+
+        } else {
+          // ✅ 대기 상태: 대기룸 갱신
+          io.to(sessionId).emit('waiting-room', {
+            host: session.host || '__NONE__',
+            players: session.players.map(p => p.username),
+            isStarted: false
+          });
+        }
+
+      }, 3000); // 3초 후에도 접속 안 되어 있으면 제거
     });
+
 
     
     socket.on('startGame', async ({ sessionId, username }) => {
@@ -183,7 +201,11 @@ module.exports = (io, app) => {
     const session = await GameSession.findById(sessionId);
     if (!session || !session.isActive) return;
 
-    const player = session.players.find(p => p.username === username);
+    const playerIndex = session.players.findIndex(p => p.username === username);
+    if (playerIndex === -1) return;
+
+    const player = session.players[playerIndex];
+
     if (!player) return;
 
     const qIndex = String(session.currentQuestionIndex);
@@ -202,8 +224,11 @@ module.exports = (io, app) => {
     }
 
     // 정답 기록
-    player.answered[qIndex] = true;
+
+    // player.answered[qIndex] = true;
+    session.set(`players.${playerIndex}.answered.${qIndex}`, true);
     session.markModified('players');
+    await session.save();
 
     await ChatLog.findOneAndUpdate(
       { sessionId },
@@ -218,8 +243,6 @@ module.exports = (io, app) => {
       },
       { upsert: true, new: true }
     );
-
-    await session.save();
 
     io.to(sessionId).emit('correct', { username });
     io.to(sessionId).emit('scoreboard', {
@@ -366,6 +389,7 @@ module.exports = (io, app) => {
   io.to(sessionId).emit('next', {
     index: session.currentQuestionIndex,
     questionStartAt: session.questionStartAt,
+    totalPlayers: session.players.length,
   });
 };
 
