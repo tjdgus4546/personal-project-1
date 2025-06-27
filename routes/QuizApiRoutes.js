@@ -70,7 +70,7 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
     const order = quiz.questions.length + 1;
 
     let parsedTimeLimit = parseInt(timeLimit, 10);
-    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 10 || parsedTimeLimit > 180) {
+    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 5 || parsedTimeLimit > 180) {
       parsedTimeLimit = 90;
     }
 
@@ -149,7 +149,7 @@ router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, 
 
     if (req.body.timeLimit !== undefined) {
       let parsed = parseInt(req.body.timeLimit, 10);
-      question.timeLimit = (isNaN(parsed) || parsed < 10 || parsed > 180) ? 90 : parsed;
+      question.timeLimit = (isNaN(parsed) || parsed < 5 || parsed > 180) ? 90 : parsed;
     }
     await quiz.save();
 

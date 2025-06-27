@@ -17,8 +17,8 @@ const io = new Server(server);        // 소켓 서버 생성
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ✅ MongoDB 연결
 connectDB().then(({ userDb, quizDb }) => {
