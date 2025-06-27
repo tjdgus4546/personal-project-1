@@ -64,7 +64,7 @@
       const skipStatus = document.getElementById('skipStatus');
       const votedCount = data.skipVotes?.length || 0;
       const totalPlayers = data.players?.length || 0;
-      skipStatus.textContent = `스킵 투표: ${votedCount} / ${totalPlayers}`;
+      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${playerList.children.length}`;
     }
 
     const lobbySection = document.getElementById('lobbySection');
@@ -76,7 +76,6 @@
 
     //스코어 표시부분
     socket.on('scoreboard', ({ players }) => {
-
       const board = document.getElementById('scoreboard');
       board.innerHTML = ''; // 초기화
       players
@@ -87,6 +86,14 @@
           board.appendChild(li);
         });
     });
+
+    socket.on('voteSkipUpdate', ({ votes, total }) => {
+      const el = document.getElementById('skipStatus');
+      if (el) {
+        el.textContent = `스킵 투표: ${votes} / ${total}`;
+      }
+    });
+
 
     //새로고침시 원래 상태 유지
     fetch(`/game/session/${sessionId}`)
@@ -107,6 +114,10 @@
       host = data.host;
       const inviteCode = data.inviteCode || '없음';
       document.getElementById('inviteCode').textContent = inviteCode;
+
+      const votedCount = data.skipVotes?.length || 0;
+      const totalPlayers = data.players?.length || 0;
+      document.getElementById('skipStatus').textContent = `스킵 투표: ${votedCount} / ${totalPlayers}`;
 
       const board = document.getElementById('scoreboard');
       board.innerHTML = '';
@@ -241,7 +252,6 @@
     //스킵투표
     voteSkipBtn.addEventListener('click', async () => {
       socket.emit('voteSkip', { sessionId, username });
-      await updateSkipStatus();
     });
 
     //방장 강제스킵
@@ -253,7 +263,7 @@
     socket.on('next', ({ index, questionStartAt: startTime }) => {
       currentIndex = index;
       questionStartAt  = new Date(startTime); 
-      skipStatus.textContent = `스킵 투표: 0 / ${playerList.children.length}`;
+      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${playerList.children.length}`;
       showQuestion();
     });
 

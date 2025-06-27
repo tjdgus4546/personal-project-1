@@ -52,6 +52,12 @@ module.exports = (io, app) => {
         }))
       });
 
+      // 스킵투표 인원수 공개
+      io.to(sessionId).emit('voteSkipUpdate', {
+        votes: session.skipVotes.length,
+        total: session.players.length
+      });
+
       // 대기 상태 알림
       io.to(sessionId).emit('waiting-room', {
         host: session.host,
