@@ -51,10 +51,13 @@
 
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('id');
-    const username = localStorage.getItem('username') || '익명';
+    const token = localStorage.getItem('token');
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const username = localStorage.getItem('username');
+    const userId = localStorage.getItem('userId'); 
 
     function isHost() {
-      return username === host;
+      return userId === host;
     }
 
     // ✅ 데이터 로딩 전용 함수
@@ -112,7 +115,7 @@
             setTimeout(() => {
               window.__isRevealingAnswer = false;
               if (isHost()) {
-                socket.emit('nextQuestion', { sessionId, username });
+                socket.emit('nextQuestion', { sessionId, userId });
               }
             }, wait * 1000);
           } else {
@@ -145,7 +148,7 @@
     }
 
     // 세션 입장
-    socket.emit('joinSession', { sessionId, username });
+    socket.emit('joinSession', { sessionId, userId, username });
 
     socket.on('session-ready', () => {
       loadSessionData(); // <--- 초기화 전용 함수로 분리
@@ -320,9 +323,12 @@
       // 필요하다면 5초 후 상태 해제
       setTimeout(() => {
         window.__isRevealingAnswer = false;
+        if (isHost()) {
+          socket.emit('nextQuestion', { sessionId, userId }); // 또는 username
+        }
       }, 5000);
     }
-      
+
     function showQuestion({ silent = false } = {}) {
     const box = document.getElementById('questionBox');
     const question = questions[currentIndex];

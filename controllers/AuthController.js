@@ -57,7 +57,8 @@ const login = async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
-      username: user.username
+      username: user.username,
+      userId: user._id
     });
   } catch (err) {
     res.status(500).json({ message: '서버 오류', error: err.message });

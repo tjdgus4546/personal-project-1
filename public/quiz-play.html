@@ -16,6 +16,7 @@
   <script>
     const quizId = new URLSearchParams(window.location.search).get('id');
     const username = localStorage.getItem('username') || '익명';
+    const userId = localStorage.getItem('userId');
 
     // 퀴즈 정보 로딩
     fetch(`/api/quiz/${quizId}`)
@@ -34,7 +35,7 @@
       fetch('/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quizId, username })
+        body: JSON.stringify({ quizId, username, userId })
       })
       .then(res => res.json())
       .then(data => {

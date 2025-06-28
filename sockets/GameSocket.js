@@ -7,30 +7,39 @@ module.exports = (io, app) => {
 
   io.on('connection', (socket) => {
 
-    socket.on('joinSession', async ({ sessionId, username }) => {
+    socket.on('joinSession', async ({ sessionId, userId, username }) => {
       const quizDb = app.get('quizDb');
       const GameSession = require('../models/GameSession')(quizDb);
-
+      
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session) return;
-
+      
       let updated = false;
-
-      // 이미 참가한 유저인지 확인
-      const existing = session.players.find(p => p.username === username);
-      if (!existing) {
+      let player = session.players.find(p => p.userId.toString() === userId.toString());
+      
+      if (!player) {
         session.players.push({
+          userId,
           username,
           score: 0,
-          answered: {}
+          answered: {},
+          connected: true,
+          lastSeen: new Date(),
+          socketId: socket.id,
         });
         updated = true;
+      } else {
+        // 재접속 시 갱신
+        player.connected = true;
+        player.lastSeen = new Date();
+        player.socketId = socket.id;
+        updated = true;
       }
-
+      
       // 방장 지정 (세션 생성자) → 제일 먼저 들어온 사람을 host로 지정
-      if (!session.host || session.host === '__NONE__') {
-        session.host = username;
+      if (!session.host || session.host.toString() === '__NONE__') {
+        session.host = userId;
         updated = true;
       }
 
@@ -38,9 +47,15 @@ module.exports = (io, app) => {
         await session.save();
       }
 
+      const hostUser = session.players.find(p => {
+        if (!session.host) return false;
+        return p.userId.toString() === session.host.toString();
+      });
+      
       socket.join(sessionId);
       socket.sessionId = sessionId;
       socket.username = username;
+      socket.userId = userId;
       socket.firstCorrectUser = null;
 
       io.to(sessionId).emit('chat', {
@@ -65,13 +80,13 @@ module.exports = (io, app) => {
 
       // 대기 상태 알림
       io.to(sessionId).emit('waiting-room', {
-        host: session.host || '__NONE__',
+        host: hostUser?.username || '__NONE__',
         players: session.players.map(p => p.username),
         isStarted: session.isStarted || false
         });
 
       socket.emit('host-updated', {
-        host: session.host || '__NONE__'
+        host: hostUser.username || '__NONE__'
       });
 
       });
@@ -79,7 +94,7 @@ module.exports = (io, app) => {
     socket.emit('session-ready');
 
     socket.on('disconnect', async () => {
-      const { sessionId, username } = socket;
+      const { sessionId, username, userId } = socket;
       if (!sessionId || !username) return;
 
       const quizDb = app.get('quizDb');
@@ -88,7 +103,7 @@ module.exports = (io, app) => {
       // 3초 후에도 같은 사용자가 다시 접속해 있지 않다면 제거
       setTimeout(async () => {
         const socketsInRoom = await io.in(sessionId).fetchSockets();
-        const stillConnected = socketsInRoom.some(s => s.username === username);
+        const stillConnected = socketsInRoom.some(s => s.userId  === userId);
 
         if (stillConnected) {
           return;
@@ -98,16 +113,18 @@ module.exports = (io, app) => {
         if (!session) return;
 
         // 🔻 해당 유저 제거
-        session.players = session.players.filter(p => p.username !== username);
-        session.markModified('players');
+        const player = session.players.find(p => p.userId === userId);
+        if (player) {
+          player.connected = false;
+          player.lastSeen = new Date();
+          player.socketId = null;
+          session.markModified('players');
+        }
 
         // 🔻 host였으면 새로 지정
-        if (session.host === username) {
-          if (session.players.length > 0) {
-            session.host = session.players[0].username;
-          } else {
-            session.host = '__NONE__';
-          }
+        if (session.host.toString() === socket.username) {
+          const nextHost = session.players.find(p => p.connected);
+          session.host = nextHost ? nextHost.username : '__NONE__';
         }
 
         await session.save();
@@ -129,13 +146,13 @@ module.exports = (io, app) => {
           });
 
           io.to(sessionId).emit('host-updated', {
-            host: session.host || '__NONE__'
+            host: session.host.toString() || '__NONE__'
           });
 
         } else {
           // ✅ 대기 상태: 대기룸 갱신
           io.to(sessionId).emit('waiting-room', {
-            host: session.host || '__NONE__',
+            host: session.host.toString() || '__NONE__',
             players: session.players.map(p => p.username),
             isStarted: false
           });
@@ -146,12 +163,12 @@ module.exports = (io, app) => {
 
 
     
-    socket.on('startGame', async ({ sessionId, username }) => {
+    socket.on('startGame', async ({ sessionId, userId }) => {
       if (!ObjectId.isValid(sessionId)) return;
       const session = await GameSession.findById(sessionId);
       if (!session || session.isStarted) return;
         
-      if (session.host !== username) return; // 방장만 시작 가능
+      if (session.host?.toString() !== socket.userId) return; // 방장만 시작 가능
         
       session.isStarted = true;
       session.isActive = true;
@@ -278,10 +295,10 @@ module.exports = (io, app) => {
   });
 
   // //방장 강제스킵
-  socket.on('forceSkip', async ({ sessionId, username }) => {
+  socket.on('forceSkip', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
-    if (!session || session.host !== username) return;
+    if (!session || session.host?.toString() !== socket.userId) return;
 
     await revealAnswer(sessionId, io, app)();
   });
@@ -311,10 +328,10 @@ module.exports = (io, app) => {
   });
 
   // 정답공개후 다음 문제로 넘기기
-  socket.on('nextQuestion', async ({ sessionId, username }) => {
+  socket.on('nextQuestion', async ({ sessionId, userId }) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await GameSession.findById(sessionId);
-    if (!session || session.host !== username) return;
+    if (!session || session.host?.toString() !== userId) return;
 
     if (app.firstCorrectUsers) {
       delete app.firstCorrectUsers[sessionId];

@@ -2,14 +2,14 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const playerSchema = new Schema({
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   username: String,
   score: { type: Number, default: 0 },
-  answered: {
-    type: Schema.Types.Mixed,
-    default: {}
-  }
+  answered: { type: Schema.Types.Mixed, default: {} },
+  connected: { type: Boolean, default: true },
+  lastSeen: { type: Date, default: Date.now },
+  socketId: { type: String, default: null },
 });
-
 const gameSessionSchema = new Schema({
   quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
   players: [playerSchema],
@@ -20,7 +20,7 @@ const gameSessionSchema = new Schema({
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
   isStarted: { type: Boolean, default: false },
-  host: { type: String, required: true },
+  host: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   skipVotes: {type: [String], default: []},
   endedAt: { type: Date, default: null, index: { expires: '6h' } },
 });
