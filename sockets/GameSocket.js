@@ -3,6 +3,8 @@ module.exports = (io, app) => {
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
+  const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
+  const { safeFindQuizById } = require('../utils/quizHelpers');
   const { ObjectId } = require('mongoose').Types;
 
   io.on('connection', (socket) => {
@@ -12,7 +14,8 @@ module.exports = (io, app) => {
       const GameSession = require('../models/GameSession')(quizDb);
       
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await GameSession.findById(sessionId);
+      
+      const session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
       
       let updated = false;
@@ -44,7 +47,11 @@ module.exports = (io, app) => {
       }
 
       if (updated) {
-        await session.save();
+        const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('❌ 세션 저장 중 에러 발생 - joinSession');
+          return;
+        }
       }
 
       const hostUser = session.players.find(p => {
@@ -64,7 +71,14 @@ module.exports = (io, app) => {
       });
 
       // 점수판 전송 (최신 session 상태 기준)
-      const latestSession = await GameSession.findById(sessionId); // 최신화
+      let latestSession;
+      try {
+        latestSession = await GameSession.findById(sessionId);
+      } catch (err) {
+        console.error('❌ joinSession DB 조회 실패2:', err.message)
+      }
+      if (!latestSession) return;
+
       io.to(sessionId).emit('scoreboard', {
         players: latestSession.players.map(p => ({
           username: p.username,
@@ -80,13 +94,16 @@ module.exports = (io, app) => {
 
       // 대기 상태 알림
       io.to(sessionId).emit('waiting-room', {
-        host: hostUser?.username || '__NONE__',
-        players: session.players.map(p => p.username),
+        host: session.host?.toString() || '__NONE__',
+        players: session.players.map(p => ({
+          username: p.username,
+          userId: p.userId.toString(),
+        })),
         isStarted: session.isStarted || false
-        });
+      });
 
       socket.emit('host-updated', {
-        host: hostUser.username || '__NONE__'
+        host: hostUser?.username || '__NONE__'
       });
 
       });
@@ -102,18 +119,27 @@ module.exports = (io, app) => {
 
       // 3초 후에도 같은 사용자가 다시 접속해 있지 않다면 제거
       setTimeout(async () => {
-        const socketsInRoom = await io.in(sessionId).fetchSockets();
+        let socketsInRoom;
+        try {
+          socketsInRoom = await io.in(sessionId).fetchSockets();
+        } catch (err) {
+          console.error('❌ joinSession DB 조회 실패2:', err.message)
+        }
+        
         const stillConnected = socketsInRoom.some(s => s.userId  === userId);
 
         if (stillConnected) {
           return;
         }
 
-        const session = await GameSession.findById(sessionId);
-        if (!session) return;
+        let session = await safeFindSessionById(GameSession, sessionId);
+        if (!session) {
+          console.error('❌ 세션 저장 중 에러 발생 - disconnect');
+          return;
+        }
 
         // 🔻 해당 유저 제거
-        const player = session.players.find(p => p.userId === userId);
+        const player = session.players.find(p => p.userId.toString() === userId.toString());
         if (player) {
           player.connected = false;
           player.lastSeen = new Date();
@@ -122,12 +148,16 @@ module.exports = (io, app) => {
         }
 
         // 🔻 host였으면 새로 지정
-        if (session.host.toString() === socket.username) {
+        if (session.host?.toString() === userId.toString()) {
           const nextHost = session.players.find(p => p.connected);
-          session.host = nextHost ? nextHost.username : '__NONE__';
+          session.host = nextHost ? new ObjectId(nextHost.userId) : null;
         }
 
-        await session.save();
+        const success2 = await safeSaveSession(session);
+        if (!success2) {
+          console.error('❌ 세션 저장 중 에러 발생 - disconnect2');
+          return;
+        }
 
         // 🔻 공통: 퇴장 메시지
         io.to(sessionId).emit('chat', {
@@ -146,14 +176,14 @@ module.exports = (io, app) => {
           });
 
           io.to(sessionId).emit('host-updated', {
-            host: session.host.toString() || '__NONE__'
+            host: session.host?.toString() || '__NONE__'
           });
 
         } else {
           // ✅ 대기 상태: 대기룸 갱신
           io.to(sessionId).emit('waiting-room', {
-            host: session.host.toString() || '__NONE__',
-            players: session.players.map(p => p.username),
+            host: session.host?.toString() || '__NONE__',
+            players: session.players.map(p => ({ username: p.username, userId: p.userId.toString() })),
             isStarted: false
           });
         }
@@ -165,7 +195,7 @@ module.exports = (io, app) => {
     
     socket.on('startGame', async ({ sessionId, userId }) => {
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await GameSession.findById(sessionId);
+      const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || session.isStarted) return;
         
       if (session.host?.toString() !== socket.userId) return; // 방장만 시작 가능
@@ -174,13 +204,17 @@ module.exports = (io, app) => {
       session.isActive = true;
       session.questionStartAt = new Date();
       session.currentQuestionIndex = 0; // 첫 문제 준비
-      await session.save();
+      const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('❌ 세션 저장 중 에러 발생 - startGame');
+          return;
+        }
         
-      const quiz = await Quiz.findById(session.quizId).lean();
+      const quiz = await safeFindQuizById(Quiz, session.quizId);
 
       io.to(sessionId).emit('game-started', {
         quiz,
-        host: session.host || '__NONE__',
+        host: session.host?.toString() || '__NONE__',
         questionStartAt: session.questionStartAt,
         }
 
@@ -192,21 +226,25 @@ module.exports = (io, app) => {
     socket.on('chatMessage', async ({ sessionId, username, message }) => {
       if (!message?.trim()) return;
 
+      try {
         const ChatLog = require('../models/ChatLog')(quizDb);
-
-      await ChatLog.updateOne(
-        { sessionId },
-        {
-          $push: {
-            messages: {
-              username,
-              message,
-              createdAt: new Date()
+        
+        await ChatLog.updateOne(
+          { sessionId },
+          {
+            $push: {
+              messages: {
+                username,
+                message,
+                createdAt: new Date()
+              }
             }
-          }
-        },
-        { upsert: true }
-      );
+          },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('❌ 채팅 로그 저장 실패:', err.message)
+      }
 
       // 모든 유저에게 브로드캐스트
       io.to(sessionId).emit('chat', { user: username, message });
@@ -215,7 +253,7 @@ module.exports = (io, app) => {
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
     socket.on('correct', async ({ sessionId, username }) => {
     if (!ObjectId.isValid(sessionId)) return;
-    const session = await GameSession.findById(sessionId);
+    const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || !session.isActive) return;
 
     const playerIndex = session.players.findIndex(p => p.username === username);
@@ -245,21 +283,29 @@ module.exports = (io, app) => {
     // player.answered[qIndex] = true;
     session.set(`players.${playerIndex}.answered.${qIndex}`, true);
     session.markModified('players');
-    await session.save();
+    const success = await safeSaveSession(session);
+      if (!success) {
+        console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
+        return;
+      }
 
-    await ChatLog.findOneAndUpdate(
-      { sessionId },
-      {
-        $push: {
-          messages: {
-            username,
-            message: `${username}님이 정답을 맞혔습니다! 🎉`,
-            createdAt: new Date()
-          }
-        }
-      },
-      { upsert: true, new: true }
-    );
+    try {
+        await ChatLog.findOneAndUpdate(
+          { sessionId },
+          {
+            $push: {
+              messages: {
+                username,
+                message: `${username}님이 정답을 맞혔습니다! 🎉`,
+                createdAt: new Date()
+              }
+            }
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.error('❌ 정답 채팅 로그 저장 실패:', err.message);
+      }
 
     io.to(sessionId).emit('correct', { username });
     io.to(sessionId).emit('scoreboard', {
@@ -273,12 +319,16 @@ module.exports = (io, app) => {
   // 스킵투표
   socket.on('voteSkip', async ({ sessionId, username }) => {
     if (!ObjectId.isValid(sessionId)) return;
-    const session = await GameSession.findById(sessionId);
+    const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || !session.isActive) return;
 
     if (!session.skipVotes.includes(username)) {
       session.skipVotes.push(username);
-      await session.save();
+      const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('❌ 세션 저장 중 에러 발생 - voteSkip');
+          return;
+        }
 
       io.to(sessionId).emit('skipVoteUpdate', {
         total: session.players.length,
@@ -297,7 +347,7 @@ module.exports = (io, app) => {
   // //방장 강제스킵
   socket.on('forceSkip', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
-    const session = await GameSession.findById(sessionId);
+    const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || session.host?.toString() !== socket.userId) return;
 
     await revealAnswer(sessionId, io, app)();
@@ -306,18 +356,22 @@ module.exports = (io, app) => {
 
   socket.on('revealAnswer', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
-    const session = await GameSession.findById(sessionId);
+    const session = await safeFindSessionById(GameSession, sessionId);
     if (!session) return;
 
     if (session.revealedAt) return;
 
-    const quiz = await Quiz.findById(session.quizId).lean();
+    const quiz = await safeFindQuizById(Quiz, session.quizId);
     const index = session.currentQuestionIndex;
     const question = quiz.questions[index];
-    if (!question) return;
+    if (!quiz || !quiz.questions || !quiz.questions[index]) return;
 
     session.revealedAt = new Date();
-    await session.save();
+    const success = await safeSaveSession(session);
+      if (!success) {
+        console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
+        return;
+      }
 
     // 모든 참가자에게 정답 전송
     io.to(sessionId).emit('answerReveal', {
@@ -330,7 +384,7 @@ module.exports = (io, app) => {
   // 정답공개후 다음 문제로 넘기기
   socket.on('nextQuestion', async ({ sessionId, userId }) => {
     if (!ObjectId.isValid(sessionId)) return;
-    const session = await GameSession.findById(sessionId);
+    const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || session.host?.toString() !== userId) return;
 
     if (app.firstCorrectUsers) {
@@ -346,19 +400,23 @@ module.exports = (io, app) => {
   function revealAnswer(sessionId, io, app) {
     return async () => {
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await GameSession.findById(sessionId);
+      const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || !session.isActive) return;
 
       // 중복투표 방지
       if (session.revealedAt) return;
 
-      const quiz = await Quiz.findById(session.quizId).lean();
+      const quiz = await safeFindQuizById(Quiz, session.quizId);
       const question = quiz.questions[session.currentQuestionIndex];
 
       const revealedAt = new Date();
 
       session.revealedAt = revealedAt;
-      await session.save();
+      const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
+          return;
+        }
 
       io.to(sessionId).emit('answerReveal', {
         answers: question.answers,
@@ -375,10 +433,10 @@ module.exports = (io, app) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   if (!ObjectId.isValid(sessionId)) return;
-  const session = await GameSession.findById(sessionId);
+  const session = await safeFindSessionById(GameSession, sessionId);
   if (!session) return;
 
-  const quiz = await Quiz.findById(session.quizId).lean();
+  const quiz = await safeFindQuizById(Quiz, session.quizId);
 
   session.revealedAt = null;
   session.currentQuestionIndex += 1;
@@ -389,7 +447,11 @@ module.exports = (io, app) => {
   if (session.currentQuestionIndex >= quiz.questions.length) {
     session.isActive = false;
     session.endedAt = new Date()
-    await session.save();
+    const success = await safeSaveSession(session);
+      if (!success) {
+        console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion');
+        return;
+      }
 
     // 완료된 게임 수 증가
     await Quiz.findByIdAndUpdate(
@@ -401,7 +463,11 @@ module.exports = (io, app) => {
     return;
   }
 
-  await session.save();
+    const success = await safeSaveSession(session);
+      if (!success) {
+        console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion2');
+        return;
+      }
 
   io.to(sessionId).emit('next', {
     index: session.currentQuestionIndex,

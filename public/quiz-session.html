@@ -182,18 +182,18 @@
     socket.on('waiting-room', ({ host: newHost, players, isStarted }) => {
       host = newHost;
       playerList.innerHTML = '';
-      players.forEach(name => {
+      players.forEach(({ username }) => {
         const li = document.createElement('li');
-        li.textContent = name;
+        li.textContent = username;
         playerList.appendChild(li);
       });
 
-      // 방장인 경우 시작 버튼 보이기
-      if (username === host && !isStarted) {
+      // 🔥 userId 기준 비교
+      if (userId === host && !isStarted) {
         startBtn.classList.remove('hidden');
         startBtn.onclick = () => {
-          socket.emit('startGame', { sessionId, username });
-          startBtn.disabled = true; // 중복 클릭 방지
+          socket.emit('startGame', { sessionId, userId });
+          startBtn.disabled = true;
         };
       }
     });

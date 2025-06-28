@@ -10,6 +10,7 @@ const playerSchema = new Schema({
   lastSeen: { type: Date, default: Date.now },
   socketId: { type: String, default: null },
 });
+
 const gameSessionSchema = new Schema({
   quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
   players: [playerSchema],
@@ -20,7 +21,7 @@ const gameSessionSchema = new Schema({
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
   isStarted: { type: Boolean, default: false },
-  host: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  host: { type: Schema.Types.ObjectId, ref: 'User' },
   skipVotes: {type: [String], default: []},
   endedAt: { type: Date, default: null, index: { expires: '6h' } },
 });
