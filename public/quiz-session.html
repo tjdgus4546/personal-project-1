@@ -146,6 +146,7 @@
 
       // 점수 기준 정렬
       players
+        .filter(p => p.connected)
         .slice() // 원본 배열 훼손 방지
         .sort((a, b) => b.score - a.score)
         .forEach(p => {
@@ -221,11 +222,13 @@
       host = newHost;
       
       playerList.innerHTML = '';
-      players.forEach(({ username }) => {
-        const li = document.createElement('li');
-        li.textContent = username;
-        playerList.appendChild(li);
-      });
+      players
+        .filter(p => p.connected)
+        .forEach(({ username }) => {
+          const li = document.createElement('li');
+          li.textContent = username;
+          playerList.appendChild(li);
+        });
 
       // 🔥 userId 기준 비교
       if (userId === host && !isStarted) {

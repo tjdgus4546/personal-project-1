@@ -79,15 +79,20 @@ module.exports = (io, app) => {
         data: {
           players: session.players.map(p => ({
             username: p.username,
-            score: p.score
+            score: p.score,
+            connected: p.connected
           }))
         }
       });
 
+      const connectedCount = session.players.filter(p => p.connected).length;
       // 스킵투표 인원수 공개
       io.to(sessionId).emit('voteSkipUpdate', {
-        votes: session.skipVotes.length,
-        total: session.players.length
+        success: true,
+        data: {
+          votes: session.skipVotes.length,
+          total: connectedCount
+        }
       });
 
       // 대기 상태 알림
@@ -99,6 +104,7 @@ module.exports = (io, app) => {
           players: session.players.map(p => ({
             username: p.username,
             userId: p.userId.toString(),
+            connected: p.connected
           })),
           isStarted: session.isStarted || false
         }
@@ -144,7 +150,7 @@ module.exports = (io, app) => {
           return;
         }
 
-        // 🔻 해당 유저 제거
+        // 해당 유저 제거
         const player = session.players.find(p => p.userId.toString() === userId.toString());
         if (player) {
           player.connected = false;
@@ -153,7 +159,7 @@ module.exports = (io, app) => {
           session.markModified('players');
         }
 
-        // 🔻 host였으면 새로 지정
+        // host였으면 새로 지정
         if (session.host?.toString() === userId.toString()) {
           const nextHost = session.players.find(p => p.connected);
           session.host = nextHost ? new ObjectId(nextHost.userId) : null;
@@ -165,29 +171,51 @@ module.exports = (io, app) => {
           return;
         }
 
-        // 🔻 분기 처리
+        const connectedCount = session.players.filter(p => p.connected).length;
+
+        // 분기 처리
         if (session.isStarted) {
-          // ✅ 게임 중: 점수판 갱신
+          // 게임 중: 점수판 갱신
           io.to(sessionId).emit('scoreboard', {
             success: true,
             data: {
               players: session.players.map(p => ({
                 username: p.username,
-                score: p.score
+                score: p.score,
+                connected: p.connected
               }))
             }
           });
 
           io.to(sessionId).emit('host-updated', {
-            host: session.host?.toString() || '__NONE__'
+            success: true,
+            data: {
+              host: session.host?.toString() || '__NONE__'
+            }
+          });
+
+          io.to(sessionId).emit('voteSkipUpdate', {
+            success: true,
+            data: {
+              votes: session.skipVotes.length,
+              total: connectedCount
+            }
           });
 
         } else {
-          // ✅ 대기 상태: 대기룸 갱신
+          // 대기 상태: 대기룸 갱신
           io.to(sessionId).emit('waiting-room', {
-            host: session.host?.toString() || '__NONE__',
-            players: session.players.map(p => ({ username: p.username, userId: p.userId.toString() })),
-            isStarted: false
+            success: true,
+            type: 'waiting-room',
+            data: {
+              host: session.host?.toString() || '__NONE__',
+              players: session.players.map(p => ({
+                username: p.username,
+                userId: p.userId.toString(),
+                connected: p.connected
+              })),
+              isStarted: session.isStarted || false
+            }
           });
         }
 
@@ -326,7 +354,8 @@ module.exports = (io, app) => {
       data: {
         players: session.players.map(p => ({
           username: p.username,
-          score: p.score
+          score: p.score,
+          connected: p.connected
         }))
       }
     });
@@ -346,11 +375,13 @@ module.exports = (io, app) => {
           return;
         }
 
+      const connectedCount = session.players.filter(p => p.connected).length; 
+
       io.to(sessionId).emit('voteSkipUpdate', {
         success: true,
         data: {
           votes: session.skipVotes.length,
-          total: session.players.length
+          total: connectedCount
         }
       });
 
