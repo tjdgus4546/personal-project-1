@@ -247,6 +247,7 @@ module.exports = (io, app) => {
       } catch (err) {
         console.error('❌ 채팅 로그 저장 실패:', err.message)
       }
+      io.to(sessionId).emit('chat', { user: username, message });
     });
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트

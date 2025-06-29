@@ -337,11 +337,15 @@
         socket.emit('correct', { sessionId, username });
       } else {
         socket.emit('chatMessage', { sessionId, username, message });
-        const p = document.createElement('p');
-        p.innerHTML = `${username}: ${message}`;
-        document.getElementById('chatLog').appendChild(p);
       }
     }
+
+    socket.on('chat', ({ user, message }) => {
+      const chatLog = document.getElementById('chatLog');
+      const p = document.createElement('p');
+      p.innerHTML = `${user}: ${message}`;
+      chatLog.appendChild(p);
+    });
 
     //정답시 중복 방지하여 출력한다
     socket.on('correct', ({ success, data, message }) => {
