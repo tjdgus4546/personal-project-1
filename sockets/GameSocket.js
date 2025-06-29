@@ -65,11 +65,6 @@ module.exports = (io, app) => {
       socket.userId = userId;
       socket.firstCorrectUser = null;
 
-      io.to(sessionId).emit('chat', {
-        user: 'system',
-        message: `${username} 입장`
-      });
-
       // 점수판 전송 (최신 session 상태 기준)
       let latestSession;
       try {
@@ -80,10 +75,13 @@ module.exports = (io, app) => {
       if (!latestSession) return;
 
       io.to(sessionId).emit('scoreboard', {
-        players: latestSession.players.map(p => ({
-          username: p.username,
-          score: p.score
-        }))
+        success: true,
+        data: {
+          players: session.players.map(p => ({
+            username: p.username,
+            score: p.score
+          }))
+        }
       });
 
       // 스킵투표 인원수 공개
@@ -94,16 +92,24 @@ module.exports = (io, app) => {
 
       // 대기 상태 알림
       io.to(sessionId).emit('waiting-room', {
-        host: session.host?.toString() || '__NONE__',
-        players: session.players.map(p => ({
-          username: p.username,
-          userId: p.userId.toString(),
-        })),
-        isStarted: session.isStarted || false
+        success: true,
+        type: 'waiting-room',
+        data: {
+          host: session.host?.toString() || '__NONE__',
+          players: session.players.map(p => ({
+            username: p.username,
+            userId: p.userId.toString(),
+          })),
+          isStarted: session.isStarted || false
+        }
       });
 
       socket.emit('host-updated', {
-        host: hostUser?.username || '__NONE__'
+        success: true,
+        type: 'host-updated',
+        data: {
+        host: hostUser?.userId?.toString() || '__NONE__'
+        }
       });
 
       });
@@ -159,20 +165,17 @@ module.exports = (io, app) => {
           return;
         }
 
-        // 🔻 공통: 퇴장 메시지
-        io.to(sessionId).emit('chat', {
-          user: 'system',
-          message: `${username} 퇴장`
-        });
-
         // 🔻 분기 처리
         if (session.isStarted) {
           // ✅ 게임 중: 점수판 갱신
           io.to(sessionId).emit('scoreboard', {
-            players: session.players.map(p => ({
-              username: p.username,
-              score: p.score
-            }))
+            success: true,
+            data: {
+              players: session.players.map(p => ({
+                username: p.username,
+                score: p.score
+              }))
+            }
           });
 
           io.to(sessionId).emit('host-updated', {
@@ -191,8 +194,6 @@ module.exports = (io, app) => {
       }, 3000); // 3초 후에도 접속 안 되어 있으면 제거
     });
 
-
-    
     socket.on('startGame', async ({ sessionId, userId }) => {
       if (!ObjectId.isValid(sessionId)) return;
       const session = await safeFindSessionById(GameSession, sessionId);
@@ -213,12 +214,13 @@ module.exports = (io, app) => {
       const quiz = await safeFindQuizById(Quiz, session.quizId);
 
       io.to(sessionId).emit('game-started', {
-        quiz,
-        host: session.host?.toString() || '__NONE__',
-        questionStartAt: session.questionStartAt,
+        success: true,
+        data: {
+          quiz,
+          host: session.host?.toString() || '__NONE__',
+          questionStartAt: session.questionStartAt
         }
-
-      ); // 클라이언트에서 UI 전환
+      });
 
     });
 
@@ -245,9 +247,6 @@ module.exports = (io, app) => {
       } catch (err) {
         console.error('❌ 채팅 로그 저장 실패:', err.message)
       }
-
-      // 모든 유저에게 브로드캐스트
-      io.to(sessionId).emit('chat', { user: username, message });
     });
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
@@ -278,7 +277,16 @@ module.exports = (io, app) => {
       player.score += 1;
     }
 
-    // 정답 기록
+    session.correctUsers = session.correctUsers || {};
+    if (!session.correctUsers[qIndex]) {
+      session.correctUsers[qIndex] = [];
+    }
+    if (!session.correctUsers[qIndex].includes(username)) {
+      session.correctUsers[qIndex].push(username);
+    } else {
+    }
+
+    session.markModified('correctUsers');
 
     // player.answered[qIndex] = true;
     session.set(`players.${playerIndex}.answered.${qIndex}`, true);
@@ -307,12 +315,19 @@ module.exports = (io, app) => {
         console.error('❌ 정답 채팅 로그 저장 실패:', err.message);
       }
 
-    io.to(sessionId).emit('correct', { username });
+    io.to(sessionId).emit('correct', {
+      success: true,
+      data: { username }
+    });
+
     io.to(sessionId).emit('scoreboard', {
-      players: session.players.map(p => ({
-        username: p.username,
-        score: p.score
-      }))
+      success: true,
+      data: {
+        players: session.players.map(p => ({
+          username: p.username,
+          score: p.score
+        }))
+      }
     });
   });
 
@@ -331,8 +346,11 @@ module.exports = (io, app) => {
         }
 
       io.to(sessionId).emit('skipVoteUpdate', {
-        total: session.players.length,
-        votes: session.skipVotes.length
+        success: true,
+        data: {
+          votes: session.skipVotes.length,
+          total: session.players.length
+        }
       });
 
       const totalPlayers = session.players.length;
@@ -375,9 +393,12 @@ module.exports = (io, app) => {
 
     // 모든 참가자에게 정답 전송
     io.to(sessionId).emit('answerReveal', {
-      answers: question.answers,
-      index,
-      revealedAt: session.revealedAt
+      success: true,
+      data: {
+        answers: question.answers,
+        index,
+        revealedAt: session.revealedAt
+      }
     });
   });
 
@@ -419,9 +440,12 @@ module.exports = (io, app) => {
         }
 
       io.to(sessionId).emit('answerReveal', {
-        answers: question.answers,
-        index: session.currentQuestionIndex,
-        revealedAt,
+        success: true,
+        data: {
+          answers: question.answers,
+          index: session.currentQuestionIndex,
+          revealedAt,
+        }
       });
     };
   }
@@ -459,7 +483,10 @@ module.exports = (io, app) => {
       { $inc: { completedGameCount: 1 } }
     );
 
-    io.to(sessionId).emit('end', { message: '퀴즈 종료!' });
+    io.to(sessionId).emit('end', {
+      success: true,
+      message: '퀴즈 종료!'
+    });
     return;
   }
 
@@ -470,9 +497,12 @@ module.exports = (io, app) => {
       }
 
   io.to(sessionId).emit('next', {
-    index: session.currentQuestionIndex,
-    questionStartAt: session.questionStartAt,
-    totalPlayers: session.players.length,
+    success: true,
+    data: {
+      index: session.currentQuestionIndex,
+      questionStartAt: session.questionStartAt,
+      totalPlayers: session.players.length,
+    }
   });
 };
 

@@ -19,6 +19,13 @@ router.get('/session/:id', async (req, res) => {
     if (!session) return res.status(404).json({ message: '세션 없음' });
 
     const quiz = await Quiz.findById(session.quizId).lean();
+    if (!quiz) return res.status(404).json({ message: '퀴즈 없음' });
+
+    const correctUsers = session.correctUsers || {};
+    quiz.questions.forEach((q, i) => {
+      q.correctUsers = correctUsers[i] || [];
+    });
+
     session.quiz = quiz;
 
     res.json(session);

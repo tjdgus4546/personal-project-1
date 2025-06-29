@@ -97,6 +97,14 @@
             forceSkipBtn.classList.remove('hidden');
           }
 
+          const correctUsernames = data.correctUsers?.[currentIndex];
+          if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
+            const correctP = document.createElement('p');
+            correctP.textContent = `🎯 정답자: ${correctUsernames.join(', ')}`;
+            correctP.style.color = 'blue';
+            document.getElementById('questionBox').appendChild(correctP);
+          }
+
           // 정답 공개 상태면 UI 복원
           if (data.revealedAt) {
             showQuestion({ silent: true });
@@ -154,7 +162,19 @@
       loadSessionData(); // <--- 초기화 전용 함수로 분리
     });
     
-    socket.on('scoreboard', ({ players }) => renderScoreboard(players));
+    socket.on('scoreboard', ({ success, message, data }) => {
+      if (!success) {
+        console.error('❌ 점수판 로딩 실패:', message);
+        return;
+      }
+      const { players } = data;
+      scoreboard.innerHTML = '';
+      players.forEach(({ username, score }) => {
+        const li = document.createElement('li');
+        li.textContent = `${username}: ${score}점`;
+        scoreboard.appendChild(li);
+      });
+    });
 
     socket.on('voteSkipUpdate', ({ votes, total }) => renderSkipStatus(votes, total));
 
@@ -179,8 +199,17 @@
       .catch(err => console.error('채팅 기록 불러오기 실패:', err));
 
     // 대기실 수신
-    socket.on('waiting-room', ({ host: newHost, players, isStarted }) => {
+    socket.on('waiting-room', ({ success, data, message }) => {
+
+      if (!success) {
+        console.error('❌ 대기실 로딩 실패:', message || '알 수 없는 오류');
+        return;
+      }
+
+      const { host: newHost, players, isStarted } = data;
+
       host = newHost;
+      
       playerList.innerHTML = '';
       players.forEach(({ username }) => {
         const li = document.createElement('li');
@@ -195,11 +224,25 @@
           socket.emit('startGame', { sessionId, userId });
           startBtn.disabled = true;
         };
+      } else {
+        startBtn?.classList.add('hidden');
       }
     });
 
     // 게임 시작됨
-    socket.on('game-started', ({ quiz, host: newHost, questionStartAt: startAt }) => {
+    socket.on('game-started', ({ success, data, message }) => {
+        if (!success) {
+          console.error('❌ 게임 시작 실패:', message);
+          return;
+        }
+
+        const { quiz, host: newHost, questionStartAt: startAt } = data;
+
+        if (!quiz || !Array.isArray(quiz.questions)) {
+          console.error('❌ 잘못된 퀴즈 구조:', quiz);
+          alert('퀴즈 데이터가 손상되었습니다.');
+          return;
+        }
       host = newHost;
       questions = quiz.questions;
       currentIndex = 0;
@@ -216,17 +259,19 @@
     });
 
     // 새로운 호스트선정
-    socket.on('host-updated', ({ host: newHost }) => {
-      if (newHost === '__NONE__') {
-        host = null;
-        // 버튼 모두 숨기기
-        forceSkipBtn.classList.add('hidden');
-        startBtn?.classList.add('hidden');
+    socket.on('host-updated', ({ success, data, message }) => {
+      if (!success) {
+        console.error('❌ 호스트 갱신 실패:', message);
         return;
       }
+
+      const { host: newHost } = data;
       host = newHost;
 
-      if (username === host) {
+      if (host === '__NONE__') {
+        forceSkipBtn.classList.add('hidden');
+        startBtn?.classList.add('hidden');
+      } else if (userId === host) {
         forceSkipBtn.classList.remove('hidden');
         startBtn?.classList.remove('hidden');
       } else {
@@ -246,15 +291,28 @@
     });
   
     //문제 넘기기
-    socket.on('next', ({ index, questionStartAt: startTime, totalPlayers }) => {
+    socket.on('next', ({ success, data, message }) => {
+      if (!success) {
+        console.error('❌ 다음 문제 전송 실패:', message);
+        return;
+      }
+
+      const { index, questionStartAt: startAt, totalPlayers } = data;
+
       currentIndex = index;
-      questionStartAt  = new Date(startTime); 
+      questionStartAt  = new Date(startAt); 
       document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${totalPlayers}`;
       showQuestion();
     });
 
     // 투표한 인원 공개
-    socket.on('skipVoteUpdate', ({ votes, total }) => {
+    socket.on('skipVoteUpdate', ({ success, data, message }) => {
+      if (!success) {
+        console.error('❌ 스킵 투표 갱신 실패:', message);
+        return;
+      }
+
+      const { votes, total } = data;
       const el = document.getElementById('skipStatus');
       if (el) {
         el.textContent = `스킵 투표: ${votes} / ${total}`;
@@ -285,21 +343,39 @@
       }
     }
 
-
     //정답시 중복 방지하여 출력한다
-    socket.on('correct', ({ username }) => {
+    socket.on('correct', ({ success, data, message }) => {
+      if (!success) {
+        console.error('❌ 정답 수신 실패:', message);
+        return;
+      }
+
+      const { username } = data;
+      showCorrectUser(username);
       const chatLog = document.getElementById('chatLog');
       const p = document.createElement('p');
       p.innerHTML = `${username}: ${username}님이 정답을 맞혔습니다! 🎉`;
       chatLog.appendChild(p);
     });
 
-    socket.on('end', ({ message }) => {
+    socket.on('end', ({ success, message }) => {
+        if (!success) {
+          console.error('❌ 퀴즈 종료 오류:', message);
+          return;
+        }
+
         alert(message || '퀴즈가 종료되었습니다!');
         });
 
-    socket.on('answerReveal', ({ answers, index, revealedAt }) => {
-      showAnswer(answers); // UI 표시
+    socket.on('answerReveal', ({ success, data, message }) => {
+      if (!success) {
+        console.error('❌ 정답 공개 실패:', message);
+        return;
+      }
+
+      const { answers, index, revealedAt } = data;
+
+      showAnswer(answers);
 
       const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
       const waitTime = Math.max(0, 5 - elapsed);
@@ -310,6 +386,29 @@
         }
       }, waitTime * 1000);
     });
+
+    function showCorrectUser(username) {
+      const box = document.getElementById('questionBox');
+      let correctP = document.getElementById('correctUser');
+
+      if (!correctP) {
+        correctP = document.createElement('p');
+        correctP.id = 'correctUser';
+        correctP.style.color = 'blue';
+        box.appendChild(correctP);
+      }
+
+      // 기존 텍스트 파싱
+      let current = correctP.textContent.replace('🎯 정답자: ', '').split(',').map(s => s.trim()).filter(Boolean);
+
+      // 중복 추가 방지
+      if (!current.includes(username)) {
+        current.push(username);
+      }
+
+      correctP.textContent = `🎯 정답자: ${current.join(', ')}`;
+    }
+
 
     function showAnswer(answers) {
       const box = document.getElementById('questionBox');
@@ -354,6 +453,18 @@
     }
 
     box.innerHTML = html;
+
+    const correctUsernames = questions[currentIndex]?.correctUsers;
+      if (correctUsernames && correctUsernames.length > 0) {
+        let correctP = document.getElementById('correctUser');
+        if (!correctP) {
+          correctP = document.createElement('p');
+          correctP.id = 'correctUser';
+          correctP.style.color = 'blue';
+          box.appendChild(correctP);
+        }
+        correctP.textContent = `🎯 정답자: ${correctUsernames.join(', ')}`;
+      }
 
     if (silent) return;
 

@@ -15,6 +15,7 @@ const gameSessionSchema = new Schema({
   quizId: { type: Schema.Types.ObjectId, ref: 'Quiz' },
   players: [playerSchema],
   currentQuestionIndex: { type: Number, default: 0 },
+  correctUsers: {type: Schema.Types.Mixed, default: {}},
   startedAt: { type: Date, default: Date.now },
   questionStartAt: { type: Date, default: null },
   revealedAt: { type: Date, default: null },
