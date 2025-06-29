@@ -250,6 +250,16 @@ module.exports = (io, app) => {
         }
       });
 
+      const connectedCount = session.players.filter(p => p.connected).length;
+
+      io.to(sessionId).emit('voteSkipUpdate', {
+        success: true,
+        data: {
+          votes: session.skipVotes.length,
+          total: connectedCount
+        }
+      });
+
     });
 
     // 일반 채팅은 DB에 로그 저장

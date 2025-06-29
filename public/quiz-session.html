@@ -93,7 +93,7 @@
           lobbySection.classList.add('hidden');
           gameSection.classList.remove('hidden');
           voteSkipBtn.classList.remove('hidden');
-          if (username === host) {
+          if (userId === host) {
             forceSkipBtn.classList.remove('hidden');
           }
 
@@ -237,8 +237,10 @@
           socket.emit('startGame', { sessionId, userId });
           startBtn.disabled = true;
         };
+        forceSkipBtn.classList.add('hidden');
       } else {
         startBtn?.classList.add('hidden');
+        forceSkipBtn.classList.add('hidden');
       }
     });
 
@@ -249,6 +251,8 @@
           return;
         }
 
+        loadSessionData();
+
         const { quiz, host: newHost, questionStartAt: startAt } = data;
 
         if (!quiz || !Array.isArray(quiz.questions)) {
@@ -256,7 +260,8 @@
           alert('퀴즈 데이터가 손상되었습니다.');
           return;
         }
-      host = newHost;
+      host = data.host;
+      console.log('game-started에서 받은 host:', host);
       questions = quiz.questions;
       currentIndex = 0;
       questionStartAt = new Date(startAt);
@@ -265,7 +270,7 @@
       gameSection.classList.remove('hidden');
       voteSkipBtn.classList.remove('hidden');
       
-        if (username === host) {
+        if (userId === host) {
           forceSkipBtn.classList.remove('hidden');
       };
       showQuestion();
@@ -279,14 +284,27 @@
       }
 
       const { host: newHost } = data;
-      host = newHost;
+      host = data.host;
+
+      const isGameStarted = !gameSection.classList.contains('hidden');
 
       if (host === '__NONE__') {
         forceSkipBtn.classList.add('hidden');
         startBtn?.classList.add('hidden');
       } else if (userId === host) {
-        forceSkipBtn.classList.remove('hidden');
-        startBtn?.classList.remove('hidden');
+
+        if (isGameStarted) {
+          forceSkipBtn.classList.remove('hidden');
+        } else {
+          forceSkipBtn.classList.add('hidden'); // ✅ 대기실이면 숨기기
+        }
+
+        if (!isGameStarted) {
+          startBtn?.classList.remove('hidden');
+        } else {
+          startBtn?.classList.add('hidden');
+        }
+
       } else {
         forceSkipBtn.classList.add('hidden');
         startBtn?.classList.add('hidden');
