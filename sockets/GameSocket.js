@@ -346,7 +346,7 @@ module.exports = (io, app) => {
           return;
         }
 
-      io.to(sessionId).emit('skipVoteUpdate', {
+      io.to(sessionId).emit('voteSkipUpdate', {
         success: true,
         data: {
           votes: session.skipVotes.length,

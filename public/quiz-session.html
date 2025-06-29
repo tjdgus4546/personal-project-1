@@ -143,11 +143,16 @@
     function renderScoreboard(players) {
       const board = document.getElementById('scoreboard');
       board.innerHTML = '';
-      players.sort((a, b) => b.score - a.score).forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = `${p.username}: ${p.score}점`;
-        board.appendChild(li);
-      });
+
+      // 점수 기준 정렬
+      players
+        .slice() // 원본 배열 훼손 방지
+        .sort((a, b) => b.score - a.score)
+        .forEach(p => {
+          const li = document.createElement('li');
+          li.textContent = `${p.username}: ${p.score}점`;
+          board.appendChild(li);
+        });
     }
 
     // ✅ 스킵 투표 상태 렌더링
@@ -167,16 +172,21 @@
         console.error('❌ 점수판 로딩 실패:', message);
         return;
       }
-      const { players } = data;
-      scoreboard.innerHTML = '';
-      players.forEach(({ username, score }) => {
-        const li = document.createElement('li');
-        li.textContent = `${username}: ${score}점`;
-        scoreboard.appendChild(li);
-      });
+      renderScoreboard(data.players);
     });
 
-    socket.on('voteSkipUpdate', ({ votes, total }) => renderSkipStatus(votes, total));
+    socket.on('voteSkipUpdate', ({ success, data, votes, total }) => {
+      if (success === false && data === undefined) {
+        // joinSession에서 오는 경우
+        renderSkipStatus(votes, total);
+      } else {
+        // vote 이벤트에서 오는 경우
+        const el = document.getElementById('skipStatus');
+        if (el && data) {
+          el.textContent = `스킵 투표: ${data.votes} / ${data.total}`;
+        }
+      }
+    });
 
     const lobbySection = document.getElementById('lobbySection');
     const gameSection = document.getElementById('gameSection');
@@ -303,20 +313,6 @@
       questionStartAt  = new Date(startAt); 
       document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${totalPlayers}`;
       showQuestion();
-    });
-
-    // 투표한 인원 공개
-    socket.on('skipVoteUpdate', ({ success, data, message }) => {
-      if (!success) {
-        console.error('❌ 스킵 투표 갱신 실패:', message);
-        return;
-      }
-
-      const { votes, total } = data;
-      const el = document.getElementById('skipStatus');
-      if (el) {
-        el.textContent = `스킵 투표: ${votes} / ${total}`;
-      }
     });
 
     //메세지 입력시 정답인지 일반채팅인지 판별
