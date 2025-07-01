@@ -117,6 +117,16 @@
               document.getElementById('questionBox').appendChild(p);
             }
 
+            const answerImage = questions[currentIndex]?.answerImageBase64;
+            if (answerImage) {
+              const img = document.createElement('img');
+              img.src = answerImage;
+              img.alt = '정답 이미지';
+              img.style.maxWidth = '300px';
+              img.style.marginTop = '10px';
+              document.getElementById('questionBox').appendChild(img);
+            }
+
             window.__isRevealingAnswer = true;
             const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
             const wait = Math.max(0, 5 - elapsed);
@@ -394,31 +404,13 @@
         return;
       }
 
-      const { answers, answerImage, index, revealedAt } = data;
+      const { answers, answerImage, revealedAt } = data;
 
-      if (answerImage) {
-        try{
-          const img = document.createElement('img');
-          img.src = answerImage;
-          img.alt = '정답 이미지';
-          img.style.maxWidth = '300px';
-          img.style.marginTop = '10px';
-          document.getElementById('questionBox').appendChild(img);
-        } catch {
-          console.error('❌ 정답 이미지 렌더링 실패:', err)
-        }
-      }
-
-      showAnswer(answers);
-
-      const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
-      const waitTime = Math.max(0, 5 - elapsed);
-
-      setTimeout(() => {
-        if (isHost()) {
-          socket.emit('nextQuestion', { sessionId, username });
-        }
-      }, waitTime * 1000);
+      showAnswer({
+        answers,
+        answerImageBase64: answerImage,
+        revealedAt
+      });
     });
 
     function showCorrectUser(username) {
@@ -443,23 +435,42 @@
       correctP.textContent = `🎯 정답자: ${current.join(', ')}`;
     }
 
-
-    function showAnswer(answers) {
+    function showAnswer({ answers, answerImageBase64, revealedAt }) {
       const box = document.getElementById('questionBox');
-      const p = document.createElement('p');
-      p.style.color = 'green';
-      p.textContent = `✅ 정답 공개: ${answers}`;
-      box.appendChild(p);
+
+      // 정답 텍스트
+      if (answers) {
+        const p = document.createElement('p');
+        p.style.color = 'green';
+        p.textContent = `✅ 정답 공개: ${answers}`;
+        box.appendChild(p);
+      }
+
+      // 정답 이미지
+      if (answerImageBase64) {
+        try {
+          const img = document.createElement('img');
+          img.src = answerImageBase64;
+          img.alt = '정답 이미지';
+          img.style.maxWidth = '300px';
+          img.style.marginTop = '10px';
+          box.appendChild(img);
+        } catch (err) {
+          console.error('❌ 정답 이미지 렌더링 실패:', err);
+        }
+      }
 
       window.__isRevealingAnswer = true;
 
-      // 필요하다면 5초 후 상태 해제
+      const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
+      const waitTime = Math.max(0, 5 - elapsed);
+
       setTimeout(() => {
         window.__isRevealingAnswer = false;
         if (isHost()) {
-          socket.emit('nextQuestion', { sessionId, userId }); // 또는 username
+          socket.emit('nextQuestion', { sessionId, userId });
         }
-      }, 5000);
+      }, waitTime * 1000);
     }
 
     function showQuestion({ silent = false } = {}) {
