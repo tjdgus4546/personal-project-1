@@ -438,6 +438,7 @@ module.exports = (io, app) => {
       success: true,
       data: {
         answers: question.answers,
+        answerImage: question.answerImageBase64,
         index,
         revealedAt: session.revealedAt
       }
@@ -485,6 +486,7 @@ module.exports = (io, app) => {
         success: true,
         data: {
           answers: question.answers,
+          answerImage: question.answerImageBase64,
           index: session.currentQuestionIndex,
           revealedAt,
         }

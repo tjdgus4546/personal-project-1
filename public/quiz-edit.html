@@ -15,7 +15,8 @@
     <input type="text" id="text" placeholder="문제 내용"><br>
     <input type="text" id="answer" placeholder="정답"><br>
     <input type="number" id="timeLimit" placeholder="제한 시간 (초)"><br>
-    <input type="file" id="imageInput" accept="image/*"><br>
+    <input type="file" id="imageInput" accept="image/*" placeholder="문제 이미지"><br>
+    <input type="file" id="answerImageInput" accept="image/*" placeholder="정답 이미지"><br>
     <input type="text" id="youtubeUrl" placeholder="유튜브 링크"><br>
     <button onclick="addQuestion()">문제 추가</button>
     </div>
@@ -49,6 +50,7 @@
     const timeLimit = parseInt(document.getElementById('timeLimit').value) || 90;
     const youtubeUrl = document.getElementById('youtubeUrl').value?.trim();
     const imageFile = document.getElementById('imageInput').files[0];
+    const answerImageFile = document.getElementById('answerImageInput').files[0];
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -57,14 +59,23 @@
     }
 
     let imageBase64 = null;
+    let answerImageBase64 = null;
 
     if (imageFile) {
-    try {
-        imageBase64 = await resizeImageToBase64(imageFile);
-    } catch (err) {
-        alert(err.message); // 6MB 초과 시 경고
-        return;
+        try {
+            imageBase64 = await resizeImageToBase64(imageFile);
+        } catch (err) {
+            alert(err.message);
+            return;
+        }
     }
+    if (answerImageFile) {
+        try {
+            answerImageBase64 = await resizeImageToBase64(answerImageFile);
+        } catch (err) {
+            alert(err.message);
+            return;
+        }
     }
 
     const res = await fetch(`/api/quiz/${quizId}/add-question`, {
@@ -78,7 +89,8 @@
         answers,
         timeLimit,
         youtubeUrl,
-        imageBase64
+        imageBase64,
+        answerImageBase64,
         })
     });
 

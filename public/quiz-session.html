@@ -394,7 +394,20 @@
         return;
       }
 
-      const { answers, index, revealedAt } = data;
+      const { answers, answerImage, index, revealedAt } = data;
+
+      if (answerImage) {
+        try{
+          const img = document.createElement('img');
+          img.src = answerImage;
+          img.alt = '정답 이미지';
+          img.style.maxWidth = '300px';
+          img.style.marginTop = '10px';
+          document.getElementById('questionBox').appendChild(img);
+        } catch {
+          console.error('❌ 정답 이미지 렌더링 실패:', err)
+        }
+      }
 
       showAnswer(answers);
 

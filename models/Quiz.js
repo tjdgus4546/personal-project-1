@@ -6,12 +6,17 @@ const questionSchema = new Schema({
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   answers: { type: [String], required: true },
+  answerImageBase64: { type: String },
   order: { type: Number, required: true },
   timeLimit: {type: Number, default: 90 , min: 5, max: 180 },
 });
 
 const quizSchema = new Schema({
   title: {
+    type: String,
+    required: true,
+  },
+  titleImageBase64: { 
     type: String,
     required: true,
   },

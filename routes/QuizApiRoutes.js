@@ -24,7 +24,7 @@ router.post('/quiz/init', authenticateToken, async (req, res) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   try {
-    const { title, description } = req.body;
+    const { title, description, titleImageBase64 } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: '퀴즈 제목은 필수입니다.' });
@@ -34,6 +34,7 @@ router.post('/quiz/init', authenticateToken, async (req, res) => {
       title,
       description,
       creatorId: req.user.id,
+      titleImageBase64,
       questions: [], // 문제는 비어있음
       isComplete: false // 이후에 추가될 필드 (선택)
     });
@@ -53,7 +54,7 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   try {
-    const { text, answers, imageBase64, youtubeUrl, timeLimit } = req.body;
+    const { text, answers, answerImageBase64, imageBase64, youtubeUrl, timeLimit } = req.body;
 
     if (!text || !answers || answers.length === 0) {
       return res.status(400).json({ message: '질문과 정답은 필수입니다.' });
@@ -82,6 +83,7 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       text,
       answers: rawAnswers,
       imageBase64: imageBase64?.trim() || null,
+      answerImageBase64: answerImageBase64?.trim() || null,
       youtubeUrl: youtubeUrl?.trim() || null,
       order,
       timeLimit: parsedTimeLimit
