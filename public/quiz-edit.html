@@ -7,7 +7,6 @@
 <body>
 
     <button onclick="location.href='/'">메인으로</button>
-    <button onclick="location.href='/quiz/init'">퀴즈 생성</button>
     <button onclick="location.href='/quiz/my-list'">나의 퀴즈</button>
 
     <h2>문제 편집</h2>
@@ -15,9 +14,12 @@
     <input type="text" id="text" placeholder="문제 내용"><br>
     <input type="text" id="answer" placeholder="정답"><br>
     <input type="number" id="timeLimit" placeholder="제한 시간 (초)"><br>
-    <input type="file" id="imageInput" accept="image/*" placeholder="문제 이미지"><br>
-    <input type="file" id="answerImageInput" accept="image/*" placeholder="정답 이미지"><br>
-    <input type="text" id="youtubeUrl" placeholder="유튜브 링크"><br>
+    <h4>문제 이미지</h4>
+    <input type="file" id="imageInput" accept="image/*"><br>
+    <h4>정답 이미지</h4>
+    <input type="file" id="answerImageInput" accept="image/*"><br>
+    <h4>유튜브 문제</h4>
+    <input type="text" id="youtubeUrl"><br>
     <button onclick="addQuestion()">문제 추가</button>
     </div>
 
