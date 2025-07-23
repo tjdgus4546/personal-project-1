@@ -33,7 +33,6 @@
                 localStorage.setItem('token', result.token);
                 localStorage.setItem('username', result.username);
                 localStorage.setItem('userId', result.userId);
-                console.log('userId 저장됨:', localStorage.getItem('userId'));
                 window.location.href = '/';
                 }else {
                     alert(result.message || '로그인 실패');

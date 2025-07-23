@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const questionSchema = new Schema({
-  text: { type: String, required: true },
+  text: { type: String },
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   answers: { type: [String], required: true },

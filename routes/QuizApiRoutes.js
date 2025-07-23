@@ -56,8 +56,12 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
   try {
     const { text, answers, answerImageBase64, imageBase64, youtubeUrl, timeLimit } = req.body;
 
-    if (!text || !answers || answers.length === 0) {
-      return res.status(400).json({ message: '질문과 정답은 필수입니다.' });
+    if (imageBase64 && youtubeUrl) {
+      return res.status(400).json({ message: '이미지와 유튜브는 하나만 선택하세요.' });
+    }
+
+    if (!answers || answers.length === 0) {
+      return res.status(400).json({ message: '정답은 필수입니다.' });
     }
 
     const quiz = await Quiz.findById(req.params.id);
@@ -68,11 +72,12 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
+    const questionText = (text && text.trim()) || quiz.title;
     const order = quiz.questions.length + 1;
 
     let parsedTimeLimit = parseInt(timeLimit, 10);
-    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 5 || parsedTimeLimit > 180) {
-      parsedTimeLimit = 90;
+    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 5 || parsedTimeLimit > 30) {
+      parsedTimeLimit = 15;
     }
 
     const rawAnswers = Array.isArray(answers)
@@ -80,7 +85,7 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       : answers.split(',').map(a => a.trim()).filter(Boolean);
 
     const newQuestion = {
-      text,
+      text: questionText,
       answers: rawAnswers,
       imageBase64: imageBase64?.trim() || null,
       answerImageBase64: answerImageBase64?.trim() || null,

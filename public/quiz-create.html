@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -51,7 +51,7 @@
         <input type="text" name="answer" required><br>
 
         <label>문제 제한 시간 (초, 생략 가능)</label>
-        <input type="number" name="timeLimit" min="10" max="180" placeholder="기본 90초">
+        <input type="number" name="timeLimit" min="10" max="180" placeholder="기본 15초">
 
         <input type="hidden" name="imageBase64">
       `;
@@ -128,7 +128,7 @@
 
       const questions = Array.from(blocks).map((block, index) => {
         const timeLimitInput = block.querySelector('[name="timeLimit"]').value;
-        const timeLimit = timeLimitInput.trim() === '' ? 90 : parseInt(timeLimitInput);
+        const timeLimit = timeLimitInput.trim() === '' ? 15 : parseInt(timeLimitInput);
         
           const answers = block.querySelector('[name="answer"]').value
           .split(',')
@@ -169,4 +169,4 @@
     });
   </script>
 </body>
-</html>
+</html> -->

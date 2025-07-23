@@ -31,8 +31,18 @@
     <div id="editModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -30%); background:#fff; border:1px solid #888; padding:20px; z-index:1000; border-radius:8px; box-shadow:0 4px 24px #0002;">
         <h3>문제 수정</h3>
         <input type="text" id="modalText" placeholder="문제 내용"><br>
-        <input type="text" id="modalAnswer" placeholder="정답"><br>
+        <input type="text" id="modalAnswer" placeholder="정답 (쉼표로 구분)"><br>
         <input type="number" id="modalTime" placeholder="제한 시간(초)"><br>
+
+        <h4>문제 이미지</h4>
+        <input type="file" id="modalImageInput" accept="image/*"><br>
+
+        <h4>정답 공개 이미지</h4>
+        <input type="file" id="modalAnswerImageInput" accept="image/*"><br>
+
+        <h4>유튜브 링크</h4>
+        <input type="text" id="modalYoutubeUrl" placeholder="https://..."><br>
+
         <button id="saveEditBtn">수정</button>
         <button onclick="closeEditModal()">취소</button>
     </div>
@@ -47,7 +57,7 @@
     const text = document.getElementById('text').value;
     const rawAnswers = document.getElementById('answer').value;
     const answers = rawAnswers.split(',').map(a => a.trim()).filter(a => a);
-    const timeLimit = parseInt(document.getElementById('timeLimit').value) || 90;
+    const timeLimit = parseInt(document.getElementById('timeLimit').value) || 15;
     const youtubeUrl = document.getElementById('youtubeUrl').value?.trim();
     const imageFile = document.getElementById('imageInput').files[0];
     const answerImageFile = document.getElementById('answerImageInput').files[0];
@@ -109,7 +119,8 @@
     editingQuestionId = q._id;
     document.getElementById('modalText').value = q.text;
     document.getElementById('modalAnswer').value = Array.isArray(q.answers) ? q.answers.join(', ') : q.answers;
-    document.getElementById('modalTime').value = q.timeLimit || 90;
+    document.getElementById('modalTime').value = q.timeLimit || 15;
+    document.getElementById('modalYoutubeUrl').value = q.youtubeUrl || '';
     document.getElementById('editModal').style.display = '';
     document.getElementById('modalBackdrop').style.display = '';
     }
@@ -118,27 +129,47 @@
         document.getElementById('editModal').style.display = 'none';
         document.getElementById('modalBackdrop').style.display = 'none';
     }
-    document.getElementById('saveEditBtn').onclick = async function() {
-        const text = document.getElementById('modalText').value;
-        const rawAnswers = document.getElementById('modalAnswer').value;
-        const answers = rawAnswers.split(',').map(a => a.trim()).filter(a => a);
-        const timeLimit = parseInt(document.getElementById('modalTime').value) || 90;
-        const token = localStorage.getItem('token');
-        if (!text || answers.length === 0) return alert('모든 항목을 입력하세요.');
+    document.getElementById('saveEditBtn').onclick = async function () {
+    const text = document.getElementById('modalText').value.trim();
+    const rawAnswers = document.getElementById('modalAnswer').value;
+    const answers = rawAnswers.split(',').map(a => a.trim()).filter(a => a);
+    const timeLimit = parseInt(document.getElementById('modalTime').value) || 15;
+    const youtubeUrl = document.getElementById('modalYoutubeUrl').value.trim();
 
-        const res = await fetch(`/api/quiz/${quizId}/question/${editingQuestionId}`, {
-            method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ text, answers, timeLimit })
-        });
-        const data = await res.json();
-        alert(data.message);
-        closeEditModal();
-        loadQuestions();
+    const imageFile = document.getElementById('modalImageInput').files[0];
+    const answerImageFile = document.getElementById('modalAnswerImageInput').files[0];
+
+    let imageBase64 = null;
+    let answerImageBase64 = null;
+
+    if (imageFile) imageBase64 = await resizeImageToBase64(imageFile);
+    if (answerImageFile) answerImageBase64 = await resizeImageToBase64(answerImageFile);
+
+    const token = localStorage.getItem('token');
+    if (answers.length === 0) return alert('정답은 최소 1개 입력하세요.');
+
+    const res = await fetch(`/api/quiz/${quizId}/question/${editingQuestionId}`, {
+        method: 'PUT',
+        headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+        text,
+        answers,
+        timeLimit,
+        youtubeUrl,
+        imageBase64,
+        answerImageBase64
+        })
+    });
+
+    const data = await res.json();
+    alert(data.message);
+    closeEditModal();
+    loadQuestions();
     };
+
 
     // 이미지 압축
     async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
@@ -222,7 +253,7 @@
     list.innerHTML = '';
     data.questions.forEach(q => {
         const li = document.createElement('li');
-        li.textContent = `${q.order}. ${q.text} (제한시간: ${q.timeLimit || 90}초) `;
+        li.textContent = `${q.order}. ${q.text} (제한시간: ${q.timeLimit || 15}초) `;
 
         // 삭제 버튼
         const delBtn = document.createElement('button');
