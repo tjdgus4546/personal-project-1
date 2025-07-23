@@ -158,6 +158,12 @@ router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, 
       let parsed = parseInt(req.body.timeLimit, 10);
       question.timeLimit = (isNaN(parsed) || parsed < 5 || parsed > 180) ? 90 : parsed;
     }
+    if (req.body.imageBase64 !== undefined) {
+      question.imageBase64 = req.body.imageBase64;
+    }
+    if (req.body.answerImageBase64 !== undefined) {
+      question.answerImageBase64 = req.body.answerImageBase64;
+    }
     await quiz.save();
 
     res.json({ message: '문제 수정 완료' });
