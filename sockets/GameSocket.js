@@ -26,6 +26,7 @@ module.exports = (io, app) => {
           userId,
           username,
           score: 0,
+          correctAnswersCount: 0,
           answered: {},
           connected: true,
           lastSeen: new Date(),
@@ -80,6 +81,7 @@ module.exports = (io, app) => {
           players: session.players.map(p => ({
             username: p.username,
             score: p.score,
+            correctAnswersCount: p.correctAnswersCount || 0,
             connected: p.connected
           }))
         }
@@ -182,6 +184,7 @@ module.exports = (io, app) => {
               players: session.players.map(p => ({
                 username: p.username,
                 score: p.score,
+                correctAnswersCount: p.correctAnswersCount || 0,
                 connected: p.connected
               }))
             }
@@ -315,6 +318,7 @@ module.exports = (io, app) => {
     } else {
       player.score += 1;
     }
+    player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
 
     session.correctUsers = session.correctUsers || {};
     if (!session.correctUsers[qIndex]) {
@@ -365,6 +369,7 @@ module.exports = (io, app) => {
         players: session.players.map(p => ({
           username: p.username,
           score: p.score,
+          correctAnswersCount: p.correctAnswersCount || 0,
           connected: p.connected
         }))
       }

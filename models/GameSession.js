@@ -5,6 +5,7 @@ const playerSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   username: String,
   score: { type: Number, default: 0 },
+  correctAnswersCount: { type: Number, default: 0 },
   answered: { type: Schema.Types.Mixed, default: {} },
   connected: { type: Boolean, default: true },
   lastSeen: { type: Date, default: Date.now },

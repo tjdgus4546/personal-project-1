@@ -161,7 +161,7 @@
         .sort((a, b) => b.score - a.score)
         .forEach(p => {
           const li = document.createElement('li');
-          li.textContent = `${p.username}: ${p.score}점`;
+          li.textContent = `${p.username}: ${p.score}점 (맞춘 문제 수 ${p.correctAnswersCount || 0}개)`;
           board.appendChild(li);
         });
     }
