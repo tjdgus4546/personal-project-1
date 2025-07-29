@@ -14,21 +14,18 @@
   <button id="createSession">게임 세션 만들기</button>
 
   <script>
-    // Helper function to handle token refresh and retry
     async function fetchWithAuth(url, options = {}) {
         options.credentials = 'include'; // Ensure cookies are sent
 
         let response = await fetch(url, options);
 
         if (response.status === 401) {
-            // Try to refresh token
             const refreshResponse = await fetch('/auth/refresh', {
                 method: 'POST',
                 credentials: 'include'
             });
 
             if (refreshResponse.ok) {
-                // Token refreshed, retry original request
                 response = await fetch(url, options);
             } else {
                 // Refresh failed, redirect to login
@@ -41,8 +38,6 @@
     }
 
     const quizId = new URLSearchParams(window.location.search).get('id');
-    // const username = localStorage.getItem('username') || '익명'; // REMOVED
-    // const userId = localStorage.getItem('userId'); // REMOVED
 
     // 퀴즈 정보 로딩
     fetchWithAuth(`/api/quiz/${quizId}`) // Changed to fetchWithAuth
@@ -61,14 +56,13 @@
       fetchWithAuth('/game/start', { // Changed to fetchWithAuth
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Removed username and userId from body, assuming server gets it from auth
         body: JSON.stringify({ quizId }) 
       })
       .then(res => res.json())
       .then(data => {
         if (data.sessionId) {
           // 세션 ID를 포함한 URL로 이동
-          window.location.href = `/quiz/session?id=${data.sessionId}`;
+          window.location.href = `/quiz/${data.sessionId}`;
         } else {
           alert('게임 세션 생성 실패');
         }

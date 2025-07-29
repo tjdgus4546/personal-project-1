@@ -31,13 +31,29 @@
     const code = document.getElementById('inviteInput').value.trim();
     if (!code) return alert('초대 코드를 입력하세요');
 
-    const res = await fetch(`/game/invite/${code}`, { credentials: 'include' }); // Added credentials: 'include'
-    const result = await res.json();
+    try {
+        const res = await fetch('/game/join', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-requested-with': 'XMLHttpRequest' // AJAX 요청임을 서버에 알림
+            },
+            body: JSON.stringify({ inviteCode: code }),
+            credentials: 'include'
+        });
 
-    if (res.ok && result.sessionId) {
-        window.location.href = `/quiz/session?id=${result.sessionId}`;
-    } else {
-        alert('초대 코드가 유효하지 않습니다');
+        const result = await res.json();
+
+        if (res.ok) {
+            alert('세션에 참여했습니다! 퀴즈 방으로 이동합니다.');
+            window.location.href = `/quiz/${result.sessionId}`;
+        } else {
+            // 서버에서 보낸 에러 메시지를 표시
+            alert(result.message || '입장에 실패했습니다. 코드를 다시 확인해주세요.');
+        }
+    } catch (err) {
+        console.error('Join session error:', err);
+        alert('입장 중 오류가 발생했습니다.');
     }
     }
     </script>

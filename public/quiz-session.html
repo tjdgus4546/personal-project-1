@@ -76,7 +76,7 @@
     let countdownInterval = null;
 
     const socket = io();
-    const sessionId = new URLSearchParams(window.location.search).get('id');
+    const sessionId = window.location.pathname.split('/').pop();
     let userId = null; // Will be set after successful session data load or from server
     let username = null; // Will be set after successful session data load or from server
 

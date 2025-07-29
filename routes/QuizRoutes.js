@@ -1,7 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../middlewares/AuthMiddleware');
+const { ObjectId } = require('mongoose').Types; // ObjectId 추가
+const jwt = require('jsonwebtoken');
 const path = require('path');
+
+// JWT 인증 미들웨어 (GameRoutes.js와 중복되므로, 별도 파일로 분리하는 것을 권장합니다)
+const authMiddleware = (req, res, next) => {
+  const token = req.cookies.accessToken;
+  if (!token) {
+    return res.status(401).redirect('/login'); // 페이지 요청이므로 로그인 페이지로 리다이렉트
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    // 유효하지 않은 토큰이면 로그인 페이지로
+    return res.status(401).redirect('/login?reason=invalid_token');
+  }
+};
 
 router.get('/quiz/create', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-create.html'));
@@ -39,8 +57,40 @@ router.get('/quiz/play', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
 });
 
-router.get('/quiz/session', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
+// 퀴즈 세션 페이지 라우트
+router.get('/quiz/:sessionId', authMiddleware, async (req, res) => {
+  const { sessionId } = req.params;
+  const { id: userId } = req.user;
+
+  if (!ObjectId.isValid(sessionId)) {
+    return res.status(400).send('Invalid session ID format');
+  }
+
+  const quizDb = req.app.get('quizDb');
+  const GameSession = require('../models/GameSession')(quizDb);
+
+  try {
+    const session = await GameSession.findById(sessionId).lean();
+
+    if (!session) {
+      return res.status(404).send('Session not found');
+    }
+
+    // 인가 로직: 사용자가 이 세션의 호스트이거나 참여자인지 확인
+    const isHost = session.host.toString() === userId;
+    const isParticipant = session.players.some(p => p.userId.toString() === userId);
+
+    if (isHost || isParticipant) {
+      // 허가된 사용자: 퀴즈 세션 페이지를 보냄
+      res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
+    } else {
+      // 허가되지 않은 사용자: 에러 메시지 또는 메인 페이지로 리디렉션
+      res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>초대받은 계정으로 로그인했는지 확인해주세요. <a href="/">홈으로 돌아가기</a></p>');
+    }
+  } catch (err) {
+    console.error('Error authorizing session access:', err);
+    res.status(500).send('Server error while checking session access.');
+  }
 });
 
 module.exports = router;
