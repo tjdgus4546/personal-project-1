@@ -42,6 +42,32 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Helper function to handle token refresh and retry
+    async function fetchWithAuth(url, options = {}) {
+        options.credentials = 'include'; // Ensure cookies are sent
+
+        let response = await fetch(url, options);
+
+        if (response.status === 401) {
+            // Try to refresh token
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (refreshResponse.ok) {
+                // Token refreshed, retry original request
+                response = await fetch(url, options);
+            } else {
+                // Refresh failed, redirect to login
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                return; // Prevent further execution
+            }
+        }
+        return response;
+    }
+
     let questions = [];
     let currentIndex = 0;
     let questionTimer = null;
@@ -51,10 +77,25 @@
 
     const socket = io();
     const sessionId = new URLSearchParams(window.location.search).get('id');
-    const token = localStorage.getItem('token');
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const username = localStorage.getItem('username');
-    const userId = localStorage.getItem('userId'); 
+    let userId = null; // Will be set after successful session data load or from server
+    let username = null; // Will be set after successful session data load or from server
+
+    (async () => {
+      try {
+        const response = await fetchWithAuth('/my-info');
+        if (!response.ok) {
+          throw new Error('Failed to fetch user info');
+        }
+        const userData = await response.json();
+        userId = userData._id;
+        username = userData.username;
+
+        socket.emit('joinSession', { sessionId });
+      } catch (error) {
+        console.error('Error fetching user info:', error);
+        window.location.href = '/login';
+      }
+    })();
 
     function isHost() {
       return userId === host;
@@ -63,7 +104,7 @@
     // ✅ 데이터 로딩 전용 함수
     async function loadSessionData() {
       try {
-        const res = await fetch(`/game/session/${sessionId}`);
+        const res = await fetchWithAuth(`/game/session/${sessionId}`); // Changed to fetchWithAuth
 
         // 응답 상태 확인
         if (!res.ok) {
@@ -172,7 +213,8 @@
     }
 
     // 세션 입장
-    socket.emit('joinSession', { sessionId, userId, username });
+    // socket.emit('joinSession', { sessionId, userId, username }); // userId and username will be derived from server-side auth
+    // socket.emit('joinSession', { sessionId }); // Send only sessionId, server will authenticate
 
     socket.on('session-ready', () => {
       loadSessionData(); // <--- 초기화 전용 함수로 분리
@@ -207,7 +249,7 @@
     const forceSkipBtn = document.getElementById('forceSkipBtn');
     
     // 채팅 기록 불러오기
-    fetch(`/game/chat/${sessionId}`)
+    fetchWithAuth(`/game/chat/${sessionId}`) // Changed to fetchWithAuth
       .then(res => res.json())
       .then(data => {
         const chatLog = document.getElementById('chatLog');
@@ -271,7 +313,6 @@
           return;
         }
       host = data.host;
-      console.log('game-started에서 받은 host:', host);
       questions = quiz.questions;
       currentIndex = 0;
       questionStartAt = new Date(startAt);
@@ -323,12 +364,12 @@
 
     //스킵투표
     voteSkipBtn.addEventListener('click', async () => {
-      socket.emit('voteSkip', { sessionId, username });
+      socket.emit('voteSkip', { sessionId }); // Removed username
     });
 
     //방장 강제스킵
     forceSkipBtn.addEventListener('click', () => {
-      socket.emit('forceSkip', { sessionId, username });
+      socket.emit('forceSkip', { sessionId }); // Removed username
     });
   
     //문제 넘기기
@@ -361,9 +402,9 @@
       const isCorrect = answers.includes(userInput);
 
       if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('correct', { sessionId, username });
+        socket.emit('correct', { sessionId }); // Removed username
       } else {
-        socket.emit('chatMessage', { sessionId, username, message });
+        socket.emit('chatMessage', { sessionId, message }); // Removed username
       }
     }
 

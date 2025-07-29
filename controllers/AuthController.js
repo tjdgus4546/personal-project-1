@@ -50,13 +50,31 @@ const login = async (req, res) => {
       return res.status(400).json({ message: '잘못된 비밀번호입니다.' });
     }
 
-    const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
-      expiresIn: '2h',
+    const accessToken = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
+      expiresIn: '15m', // 액세스 토큰 유효기간: 15분
+    });
+
+    const refreshToken = jwt.sign({ id: user._id }, JWT_SECRET, {
+      expiresIn: '7d', // 리프레시 토큰 유효기간: 7일
+    });
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // 프로덕션 환경에서는 https를 사용해야 합니다.
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15분
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+      path: '/api/auth/refresh' // 리프레시 토큰은 재발급 경로에서만 사용
     });
 
     res.json({
       message: 'Login successful',
-      token,
       username: user.username,
       userId: user._id
     });
@@ -80,4 +98,44 @@ const getUserInfo = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getUserInfo };
+const logout = (req, res) => {
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  res.status(200).json({ message: '로그아웃 성공' });
+};
+
+const refreshToken = async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: '리프레시 토큰이 없습니다.' });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, JWT_SECRET);
+
+    // Optionally, check if the refresh token is in a database and is valid
+    // For now, we'll just assume it's valid if it decodes
+
+    const newAccessToken = jwt.sign({ id: decoded.id, username: decoded.username }, JWT_SECRET, {
+      expiresIn: '15m', // New access token valid for 15 minutes
+    });
+
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15분
+    });
+
+    res.status(200).json({ message: '새로운 액세스 토큰 발급 성공' });
+
+  } catch (err) {
+    console.error('리프레시 토큰 검증 오류:', err.message);
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    res.status(403).json({ message: '유효하지 않은 리프레시 토큰입니다. 다시 로그인해주세요.' });
+  }
+};
+
+module.exports = { signup, login, getUserInfo, logout, refreshToken };

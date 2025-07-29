@@ -1,3 +1,7 @@
+const jwt = require('jsonwebtoken');
+const cookieParser = require('socket.io-cookie-parser');
+const JWT_SECRET = process.env.JWT_SECRET;
+
 module.exports = (io, app) => {
   const quizDb = app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
@@ -7,12 +11,36 @@ module.exports = (io, app) => {
   const { safeFindQuizById } = require('../utils/quizHelpers');
   const { ObjectId } = require('mongoose').Types;
 
+  io.use(cookieParser());
+
+  io.use(async (socket, next) => {
+    const token = socket.request.cookies.accessToken;
+
+    if (!token) {
+      console.warn('Socket.IO: No access token found in cookies.');
+      return next(new Error('Authentication error: No token provided.'));
+    }
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      socket.userId = decoded.id;
+      socket.username = decoded.username;
+      next();
+    } catch (err) {
+      console.error('Socket.IO: JWT verification failed:', err.message);
+      return next(new Error('Authentication error: Invalid token.'));
+    }
+  });
+
   io.on('connection', (socket) => {
 
-    socket.on('joinSession', async ({ sessionId, userId, username }) => {
+    socket.on('joinSession', async ({ sessionId }) => {
       const quizDb = app.get('quizDb');
       const GameSession = require('../models/GameSession')(quizDb);
       
+      const userId = socket.userId;
+      const username = socket.username;
+
       if (!ObjectId.isValid(sessionId)) return;
       
       const session = await safeFindSessionById(GameSession, sessionId);
@@ -114,7 +142,6 @@ module.exports = (io, app) => {
 
       socket.emit('host-updated', {
         success: true,
-        type: 'host-updated',
         data: {
         host: hostUser?.userId?.toString() || '__NONE__'
         }
@@ -225,7 +252,7 @@ module.exports = (io, app) => {
       }, 3000); // 3초 후에도 접속 안 되어 있으면 제거
     });
 
-    socket.on('startGame', async ({ sessionId, userId }) => {
+    socket.on('startGame', async ({ sessionId }) => {
       if (!ObjectId.isValid(sessionId)) return;
       const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || session.isStarted) return;
@@ -266,8 +293,10 @@ module.exports = (io, app) => {
     });
 
     // 일반 채팅은 DB에 로그 저장
-    socket.on('chatMessage', async ({ sessionId, username, message }) => {
+    socket.on('chatMessage', async ({ sessionId, message }) => {
       if (!message?.trim()) return;
+
+      const username = socket.username;
 
       try {
         const ChatLog = require('../models/ChatLog')(quizDb);
@@ -292,10 +321,12 @@ module.exports = (io, app) => {
     });
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
-    socket.on('correct', async ({ sessionId, username }) => {
+    socket.on('correct', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || !session.isActive) return;
+
+    const username = socket.username;
 
     const playerIndex = session.players.findIndex(p => p.username === username);
     if (playerIndex === -1) return;
@@ -360,7 +391,9 @@ module.exports = (io, app) => {
 
     io.to(sessionId).emit('correct', {
       success: true,
-      data: { username }
+      data: {
+        username
+      }
     });
 
     io.to(sessionId).emit('scoreboard', {
@@ -377,10 +410,12 @@ module.exports = (io, app) => {
   });
 
   // 스킵투표
-  socket.on('voteSkip', async ({ sessionId, username }) => {
+  socket.on('voteSkip', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await safeFindSessionById(GameSession, sessionId);
     if (!session || !session.isActive) return;
+
+    const username = socket.username;
 
     if (!session.skipVotes.includes(username)) {
       session.skipVotes.push(username);
@@ -451,10 +486,10 @@ module.exports = (io, app) => {
   });
 
   // 정답공개후 다음 문제로 넘기기
-  socket.on('nextQuestion', async ({ sessionId, userId }) => {
+  socket.on('nextQuestion', async ({ sessionId }) => {
     if (!ObjectId.isValid(sessionId)) return;
     const session = await safeFindSessionById(GameSession, sessionId);
-    if (!session || session.host?.toString() !== userId) return;
+    if (!session || session.host?.toString() !== socket.userId) return;
 
     if (app.firstCorrectUsers) {
       delete app.firstCorrectUsers[sessionId];

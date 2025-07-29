@@ -13,14 +13,37 @@
 <ul id="quizList"></ul>
 
 <script>
-  const token = localStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  if (!token) {
-    alert('로그인이 필요합니다.');
-    location.href = '/login.html';
+  // Helper function to handle token refresh and retry
+  async function fetchWithAuth(url, options = {}) {
+      options.credentials = 'include'; // Ensure cookies are sent
+
+      let response = await fetch(url, options);
+
+      if (response.status === 401) {
+          // Try to refresh token
+          const refreshResponse = await fetch('/auth/refresh', {
+              method: 'POST',
+              credentials: 'include'
+          });
+
+          if (refreshResponse.ok) {
+              // Token refreshed, retry original request
+              response = await fetch(url, options);
+          } else {
+              // Refresh failed, redirect to login
+              alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+              window.location.href = '/login';
+              return; // Prevent further execution
+          }
+      }
+      return response;
   }
 
-  fetch('/api/quiz/my-list', { headers })
+  // Initial check for login is now handled by fetchWithAuth on the first API call
+  // If the user is not logged in, the first fetchWithAuth call will redirect to login.
+  // No need for explicit localStorage.getItem('token') check here.
+
+  fetchWithAuth('/api/quiz/my-list') // Use fetchWithAuth
     .then(res => res.json())
     .then(data => {
       const ul = document.getElementById('quizList');
@@ -39,9 +62,9 @@
           const newDesc = prompt('새 설명:', quiz.description || '');
           if (!newTitle) return alert('제목은 필수입니다.');
 
-          fetch(`/api/quiz/${quiz._id}`, {
+          fetchWithAuth(`/api/quiz/${quiz._id}`, { // Use fetchWithAuth
             method: 'PUT',
-            headers,
+            headers: { 'Content-Type': 'application/json' }, // Headers still needed for content type
             body: JSON.stringify({ title: newTitle, description: newDesc })
           }).then(r => r.json()).then(result => {
             if (result.message) alert(result.message);
@@ -53,7 +76,7 @@
         deleteBtn.textContent = '퀴즈삭제';
         deleteBtn.onclick = () => {
           if (confirm('이 퀴즈를 정말 삭제하시겠습니까?')) {
-            fetch(`/api/quiz/${quiz._id}`, { method: 'DELETE', headers })
+            fetchWithAuth(`/api/quiz/${quiz._id}`, { method: 'DELETE' }) // Use fetchWithAuth
               .then(res => res.json())
               .then(result => {
                 alert(result.message);

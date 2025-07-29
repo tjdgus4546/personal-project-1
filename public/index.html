@@ -31,7 +31,7 @@
     const code = document.getElementById('inviteInput').value.trim();
     if (!code) return alert('초대 코드를 입력하세요');
 
-    const res = await fetch(`/game/invite/${code}`);
+    const res = await fetch(`/game/invite/${code}`, { credentials: 'include' }); // Added credentials: 'include'
     const result = await res.json();
 
     if (res.ok && result.sessionId) {
@@ -43,16 +43,42 @@
     </script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('token');
+        document.addEventListener('DOMContentLoaded', async () => { // Made async to use await
+            // const token = localStorage.getItem('token'); // REMOVED
             const signupBtn = document.getElementById('signupBtn');
             const loginBtn = document.getElementById('loginBtn');
             const logoutBtn = document.getElementById('logoutBtn');
             const quizListBtn = document.getElementById('quizListBtn');
             const quizCreateBtn = document.getElementById('quizCreateBtn');
             const greeting = document.getElementById('greeting');
+            const inviteSection = document.getElementById('inviteSection'); // Define inviteSection
 
-            if (token) {
+            let isLoggedIn = false; // New variable to track login status
+
+            try {
+                const response = await fetch('/my-info', {
+                    credentials: 'include' // Added credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const user = await response.json();
+                    if (user.username) {
+                        greeting.textContent = `${user.username}님 환영합니다!`;
+                        isLoggedIn = true;
+                    }
+                } else if (response.status === 401 || response.status === 403) {
+                    // Token expired or unauthorized, user is not logged in
+                    console.warn('세션 만료 또는 인증 실패');
+                    // No need to remove from localStorage, as we are using HttpOnly cookies
+                } else {
+                    throw new Error('서버 응답 오류');
+                }
+            } catch (err) {
+                console.error('유저 정보 불러오기 실패:', err);
+                // Assume not logged in if there's an error fetching user info
+            }
+
+            if (isLoggedIn) {
                 // 로그인 상태
                 signupBtn.style.display = 'none';
                 loginBtn.style.display = 'none';
@@ -60,37 +86,6 @@
                 quizListBtn.style.display = 'inline-block';
                 quizCreateBtn.style.display = 'inline-block';
                 inviteSection.style.display = 'block';
-
-                // 사용자 정보 가져오기
-                fetch('/my-info', {
-                    headers: {
-                        'Authorization': 'Bearer ' + token
-                    }
-                })
-                .then(async (response) => {
-                    if(!response.ok) {
-                        if (response.status === 401 || response.status === 403) {
-                            console.warn('토큰 만료 또는 인증 실패 : 자동 로그아웃');
-                            localStorage.removeItem('token');
-                            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
-                            window.location.href = '/login';
-                            return;
-                        } else {
-                            throw new Error('서버 응답 오류');
-                        }
-                    }
-                
-                return response.json();
-            })
-                .then(user => {
-                    if (user.username) {
-                        greeting.textContent = `${user.username}님 환영합니다!`;
-                    }
-                })
-                .catch(err => {
-                    console.error('유저 정보 불러오기 실패:', err);
-                });
-
             } else {
                 // 로그아웃 상태
                 signupBtn.style.display = 'inline-block';
@@ -103,11 +98,25 @@
             }
 
             // 로그아웃 버튼 클릭 이벤트
-            logoutBtn.addEventListener('click', () => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('username');
-                alert('로그아웃 되었습니다.');
-                window.location.reload(); // 페이지 새로고침으로 상태 갱신
+            logoutBtn.addEventListener('click', async () => { // Made async
+                try {
+                    const response = await fetch('/auth/logout', { // Call the new logout endpoint
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        localStorage.removeItem('username'); // Still remove username from localStorage if stored
+                        localStorage.removeItem('userId'); // Still remove userId from localStorage if stored
+                        alert('로그아웃 되었습니다.');
+                        window.location.reload(); // Reload page to update UI
+                    } else {
+                        alert('로그아웃 실패');
+                    }
+                } catch (err) {
+                    console.error('로그아웃 에러:', err);
+                    alert('로그아웃 중 오류가 발생했습니다.');
+                }
             });
         });
     </script>

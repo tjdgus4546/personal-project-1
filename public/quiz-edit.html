@@ -51,6 +51,32 @@
     <div id="modalBackdrop" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0003;z-index:999;"></div>
 
     <script>
+    // Helper function to handle token refresh and retry
+    async function fetchWithAuth(url, options = {}) {
+        options.credentials = 'include'; // Ensure cookies are sent
+
+        let response = await fetch(url, options);
+
+        if (response.status === 401) {
+            // Try to refresh token
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (refreshResponse.ok) {
+                // Token refreshed, retry original request
+                response = await fetch(url, options);
+            } else {
+                // Refresh failed, redirect to login
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                return; // Prevent further execution
+            }
+        }
+        return response;
+    }
+
     const urlParams = new URLSearchParams(location.search);
     const quizId = urlParams.get('quizId');
     let editingQuestionId = null;
@@ -64,11 +90,11 @@
     const imageFile = document.getElementById('imageInput').files[0];
     const answerImageFile = document.getElementById('answerImageInput').files[0];
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert('로그인이 필요합니다.');
-        return;
-    }
+    // const token = localStorage.getItem('token'); // REMOVED
+    // if (!token) { // REMOVED, fetchWithAuth will handle redirect
+    //     alert('로그인이 필요합니다.');
+    //     return;
+    // }
 
     let imageBase64 = null;
     let answerImageBase64 = null;
@@ -90,11 +116,11 @@
         }
     }
 
-    const res = await fetch(`/api/quiz/${quizId}/add-question`, {
+    const res = await fetchWithAuth(`/api/quiz/${quizId}/add-question`, { // Changed to fetchWithAuth
         method: 'POST',
         headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        // 'Authorization': `Bearer ${token}`, // REMOVED
         },
         body: JSON.stringify({
         text,
@@ -147,14 +173,14 @@
     if (imageFile) imageBase64 = await resizeImageToBase64(imageFile);
     if (answerImageFile) answerImageBase64 = await resizeImageToBase64(answerImageFile);
 
-    const token = localStorage.getItem('token');
+    // const token = localStorage.getItem('token'); // REMOVED
     if (answers.length === 0) return alert('정답은 최소 1개 입력하세요.');
 
-    const res = await fetch(`/api/quiz/${quizId}/question/${editingQuestionId}`, {
+    const res = await fetchWithAuth(`/api/quiz/${quizId}/question/${editingQuestionId}`, { // Changed to fetchWithAuth
         method: 'PUT',
         headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        // 'Authorization': `Bearer ${token}`, // REMOVED
         },
         body: JSON.stringify({
         text,
@@ -249,7 +275,7 @@
     }
 
     async function loadQuestions() {
-    const res = await fetch(`/api/quiz/${quizId}`);
+    const res = await fetchWithAuth(`/api/quiz/${quizId}`); // Changed to fetchWithAuth
     const data = await res.json();
     const list = document.getElementById('questionList');
     list.innerHTML = '';
@@ -262,10 +288,10 @@
         delBtn.textContent = '삭제';
         delBtn.onclick = async () => {
         if (confirm('정말 삭제할까요?')) {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`/api/quiz/${quizId}/question/${q._id}`, {
+            // const token = localStorage.getItem('token'); // REMOVED
+            const res = await fetchWithAuth(`/api/quiz/${quizId}/question/${q._id}`, { // Changed to fetchWithAuth
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            // headers: { 'Authorization': `Bearer ${token}` } // REMOVED
             });
             const data = await res.json();
             alert(data.message);
@@ -284,14 +310,14 @@
     }
 
     async function markQuizComplete() {
-    const token = localStorage.getItem('token');
-      if (!token) {
-        alert('로그인이 필요합니다.');
-        return;
-      }
-    const res = await fetch(`/api/quiz/${quizId}/complete`, { 
+    // const token = localStorage.getItem('token'); // REMOVED
+    //   if (!token) { // REMOVED, fetchWithAuth will handle redirect
+    //     alert('로그인이 필요합니다.');
+    //     return;
+    //   }
+    const res = await fetchWithAuth(`/api/quiz/${quizId}/complete`, { // Changed to fetchWithAuth
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        // headers: { 'Authorization': `Bearer ${token}` } // REMOVED
      });
     if (res.ok) {
         alert('퀴즈가 공개되었습니다!');
@@ -301,14 +327,14 @@
     }
 
     async function markQuizInComplete() {
-    const token = localStorage.getItem('token');
-      if (!token) {
-        alert('로그인이 필요합니다.');
-        return;
-      }
-    const res = await fetch(`/api/quiz/${quizId}/incomplete`, { 
+    // const token = localStorage.getItem('token'); // REMOVED
+    //   if (!token) { // REMOVED, fetchWithAuth will handle redirect
+    //     alert('로그인이 필요합니다.');
+    //     return;
+    //   }
+    const res = await fetchWithAuth(`/api/quiz/${quizId}/incomplete`, { // Changed to fetchWithAuth
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
+        // headers: { 'Authorization': `Bearer ${token}` } // REMOVED
      });
     if (res.ok) {
         alert('퀴즈가 비공개되었습니다!');

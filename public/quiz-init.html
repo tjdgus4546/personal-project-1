@@ -17,6 +17,32 @@
     <button onclick="createQuiz()">퀴즈 만들기</button>
 
     <script>
+    // Helper function to handle token refresh and retry
+    async function fetchWithAuth(url, options = {}) {
+        options.credentials = 'include'; // Ensure cookies are sent
+
+        let response = await fetch(url, options);
+
+        if (response.status === 401) {
+            // Try to refresh token
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (refreshResponse.ok) {
+                // Token refreshed, retry original request
+                response = await fetch(url, options);
+            } else {
+                // Refresh failed, redirect to login
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                return; // Prevent further execution
+            }
+        }
+        return response;
+    }
+
     let titleImageBase64 = null;
 
     document.getElementById('titleImageInput').addEventListener('change', async (e) => {
@@ -36,22 +62,22 @@
     async function createQuiz() {
     const title = document.getElementById('title').value;
     const description = document.getElementById('description').value;
-    const token = localStorage.getItem('token');
-      if (!token) {
-        alert('로그인이 필요합니다.');
-        return;
-      }
+    // const token = localStorage.getItem('token'); // REMOVED
+    //   if (!token) { // REMOVED, fetchWithAuth will handle redirect
+    //     alert('로그인이 필요합니다.');
+    //     return;
+    //   }
 
       if (!titleImageBase64) {
         alert('대표 이미지를 업로드하세요.');
         return;
         }
 
-    const res = await fetch('/api/quiz/init', {
+    const res = await fetchWithAuth('/api/quiz/init', { // Changed to fetchWithAuth
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            // 'Authorization': `Bearer ${token}` // REMOVED
          },
         body: JSON.stringify({ title, description, titleImageBase64 })
     });
@@ -59,7 +85,7 @@
     const data = await res.json();
     if (res.ok) {
         window.location.href = `/quiz/edit?quizId=${data.quizId}`;
-    } else {s
+    } else {
         alert('퀴즈 생성 실패: ' + data.message);
     }
     }

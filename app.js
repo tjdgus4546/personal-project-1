@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const cookieParser = require('cookie-parser'); // Add this line
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
+const authenticateToken = require('./middlewares/AuthMiddleware'); // 미들웨어 추가
 const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 
 
@@ -19,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // ✅ MongoDB 연결
 connectDB().then(({ userDb, quizDb }) => {
@@ -34,7 +37,7 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
   app.use('/api', quizApiRoutes);
-  app.use('/game', gameRoutes);
+  app.use('/game', authenticateToken, gameRoutes);
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

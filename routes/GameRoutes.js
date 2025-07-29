@@ -40,17 +40,22 @@ router.post('/start', async (req, res) => {
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
 
-  const { quizId, username, userId } = req.body;
+  const { quizId } = req.body;
+  const { id: userId, username } = req.user;
 
-  if (!ObjectId.isValid(quizId) || !ObjectId.isValid(userId)) {
-    return res.status(400).json({ message: '잘못된 퀴즈 ID 또는 유저 ID 형식입니다.' });
+  if (!ObjectId.isValid(quizId)) {
+
+    return res.status(400).json({ message: 'Invalid Quiz ID format.' });
+  }
+  if (!ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: 'Invalid User ID format.' });
   }
 
   try {
     const quiz = await Quiz.findById(quizId);
-    if (!quiz) return res.status(404).json({ message: '퀴즈 없음' });
+    if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
-    const inviteCode = Math.random().toString(36).substring(2, 8); // 예: "a1b2c3"
+    const inviteCode = Math.random().toString(36).substring(2, 8);
 
     const session = await GameSession.create({
       quizId,
@@ -73,13 +78,13 @@ router.post('/start', async (req, res) => {
     });
 
     res.status(201).json({
-      message: '게임 세션 생성 완료',
+      message: 'Game session created successfully',
       sessionId: session._id,
       inviteCode,
     });
   } catch (err) {
-    console.error('게임 세션 생성 실패:', err);
-    res.status(500).json({ message: '게임 세션 생성 실패', error: err.message });
+    console.error('Failed to create game session:', err);
+    res.status(500).json({ message: 'Failed to create game session', error: err.message });
   }
 });
 

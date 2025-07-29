@@ -10,7 +10,33 @@
   <ul id="quizList"></ul>
     
   <script>
-    fetch('/quiz/list')
+    // Helper function to handle token refresh and retry
+    async function fetchWithAuth(url, options = {}) {
+        options.credentials = 'include'; // Ensure cookies are sent
+
+        let response = await fetch(url, options);
+
+        if (response.status === 401) {
+            // Try to refresh token
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (refreshResponse.ok) {
+                // Token refreshed, retry original request
+                response = await fetch(url, options);
+            } else {
+                // Refresh failed, redirect to login
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                return; // Prevent further execution
+            }
+        }
+        return response;
+    }
+
+    fetchWithAuth('/quiz/list') // Use the new helper function
       .then(res => res.json())
       .then(data => {
         const ul = document.getElementById('quizList');

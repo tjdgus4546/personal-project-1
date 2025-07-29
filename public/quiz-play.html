@@ -14,12 +14,38 @@
   <button id="createSession">게임 세션 만들기</button>
 
   <script>
+    // Helper function to handle token refresh and retry
+    async function fetchWithAuth(url, options = {}) {
+        options.credentials = 'include'; // Ensure cookies are sent
+
+        let response = await fetch(url, options);
+
+        if (response.status === 401) {
+            // Try to refresh token
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (refreshResponse.ok) {
+                // Token refreshed, retry original request
+                response = await fetch(url, options);
+            } else {
+                // Refresh failed, redirect to login
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                return; // Prevent further execution
+            }
+        }
+        return response;
+    }
+
     const quizId = new URLSearchParams(window.location.search).get('id');
-    const username = localStorage.getItem('username') || '익명';
-    const userId = localStorage.getItem('userId');
+    // const username = localStorage.getItem('username') || '익명'; // REMOVED
+    // const userId = localStorage.getItem('userId'); // REMOVED
 
     // 퀴즈 정보 로딩
-    fetch(`/api/quiz/${quizId}`)
+    fetchWithAuth(`/api/quiz/${quizId}`) // Changed to fetchWithAuth
       .then(res => res.json())
       .then(quiz => {
         document.getElementById('quizTitle').textContent = quiz.title;
@@ -32,10 +58,11 @@
 
     // 세션 생성 버튼
     document.getElementById('createSession').addEventListener('click', () => {
-      fetch('/game/start', {
+      fetchWithAuth('/game/start', { // Changed to fetchWithAuth
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quizId, username, userId })
+        // Removed username and userId from body, assuming server gets it from auth
+        body: JSON.stringify({ quizId }) 
       })
       .then(res => res.json())
       .then(data => {

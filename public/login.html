@@ -24,13 +24,14 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(data),
+                    credentials: 'include' // Add this line
                 });
     
                 const result = await response.json();
     
                 if (response.ok) {
-                localStorage.setItem('token', result.token);
+                // localStorage.setItem('token', result.token); // REMOVED
                 localStorage.setItem('username', result.username);
                 localStorage.setItem('userId', result.userId);
                 window.location.href = '/';

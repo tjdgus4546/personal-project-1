@@ -6,8 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // JWT 인증 미들웨어
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = req.cookies.accessToken; // Read token from HttpOnly cookie
 
   if (!token) {
     return res.status(401).json({ message: '토큰이 없습니다.' });
@@ -19,7 +18,9 @@ const authenticateToken = (req, res, next) => {
     next();
   } catch (err) {
     console.error('JWT 인증 오류:', err.message);
-    res.status(403).json({ message: '유효하지 않은 토큰입니다.' });
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    res.status(403).json({ message: '유효하지 않은 토큰입니다. 다시 로그인해주세요.' });
   }
 };
 
