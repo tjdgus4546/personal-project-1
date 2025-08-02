@@ -11,7 +11,7 @@
   <button id="outBtn" onclick="location.href='/'">나가기</button>
   <button id="forceSkipBtn" class="hidden">강제스킵</button>
   <button id="voteSkipBtn" class="hidden">스킵투표</button>
-  <p id="skipStatus">스킵 투표: 0 / 0</p>
+  <p id="skipStatus" class="hidden">스킵 투표: 0 / 0</p>
     
   <h1>실시간 퀴즈 세션</h1>
 
@@ -134,6 +134,7 @@
           lobbySection.classList.add('hidden');
           gameSection.classList.remove('hidden');
           voteSkipBtn.classList.remove('hidden');
+          document.getElementById('skipStatus').classList.remove('hidden');
           if (userId === host) {
             forceSkipBtn.classList.remove('hidden');
           }
@@ -326,6 +327,7 @@
       lobbySection.classList.add('hidden');
       gameSection.classList.remove('hidden');
       voteSkipBtn.classList.remove('hidden');
+      document.getElementById('skipStatus').classList.remove('hidden');
       
         if (userId === host) {
           forceSkipBtn.classList.remove('hidden');
