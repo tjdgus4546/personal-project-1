@@ -17,7 +17,7 @@ const gameSessionSchema = new Schema({
   players: [playerSchema],
   currentQuestionIndex: { type: Number, default: 0 },
   correctUsers: {type: Schema.Types.Mixed, default: {}},
-  startedAt: { type: Date, default: Date.now },
+  startedAt: { type: Date, default: Date.now, index: { expires: '3h' }},
   questionStartAt: { type: Date, default: null },
   revealedAt: { type: Date, default: null },
   isActive: { type: Boolean, default: true },
@@ -25,7 +25,7 @@ const gameSessionSchema = new Schema({
   isStarted: { type: Boolean, default: false },
   host: { type: Schema.Types.ObjectId, ref: 'User' },
   skipVotes: {type: [String], default: []},
-  endedAt: { type: Date, default: null, index: { expires: '6h' } },
+  endedAt: { type: Date, default: null, },
 });
 
 module.exports = (quizDb) => {

@@ -175,7 +175,8 @@ module.exports = (io, app) => {
 
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session) {
-          console.error('❌ 세션 저장 중 에러 발생 - disconnect');
+          // 세션이 TTL 등으로 이미 삭제된 경우, 해당 클라이언트에게 리다이렉트 명령을 보냄
+          socket.emit('forceRedirect', { url: '/' });
           return;
         }
 

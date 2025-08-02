@@ -184,8 +184,14 @@
 
       } catch (err) {
         console.error('❌ 세션 로딩 실패:', err);
-        alert(err.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
-        location.href = '/';
+        // "세션 없음" 오류일 경우, 경고창 없이 바로 리다이렉트
+        if (err.message === '세션 없음') {
+          location.href = '/';
+        } else {
+          // 다른 종류의 오류는 사용자에게 알림
+          alert(err.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
+          location.href = '/';
+        }
       }
     }
 
@@ -513,6 +519,11 @@
         }
       }, waitTime * 1000);
     }
+
+    socket.on('forceRedirect', (data) => {
+      alert('세션이 종료되어 메인 페이지로 이동합니다.');
+      window.location.href = data.url || '/';
+    });
 
     function showQuestion({ silent = false } = {}) {
     const box = document.getElementById('questionBox');

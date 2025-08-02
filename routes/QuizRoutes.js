@@ -57,6 +57,11 @@ router.get('/quiz/play', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
 });
 
+// 세션 만료 페이지 라우트
+router.get('/quiz/session-expired', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/session-expired.html'));
+});
+
 // 퀴즈 세션 페이지 라우트
 router.get('/quiz/:sessionId', authMiddleware, async (req, res) => {
   const { sessionId } = req.params;
@@ -73,7 +78,8 @@ router.get('/quiz/:sessionId', authMiddleware, async (req, res) => {
     const session = await GameSession.findById(sessionId).lean();
 
     if (!session) {
-      return res.status(404).send('Session not found');
+      // 세션이 없으면 세션 만료 페이지로 리다이렉트
+      return res.redirect('/quiz/session-expired');
     }
 
     // 인가 로직: 사용자가 이 세션의 호스트이거나 참여자인지 확인
@@ -85,7 +91,7 @@ router.get('/quiz/:sessionId', authMiddleware, async (req, res) => {
       res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
     } else {
       // 허가되지 않은 사용자: 에러 메시지 또는 메인 페이지로 리디렉션
-      res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>초대받은 계정으로 로그인했는지 확인해주세요. <a href="/">홈으로 돌아가기</a></p>');
+      res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>초대코드로 게임에 입장하시길 바랍니다. <a href="/">홈으로 돌아가기</a></p>');
     }
   } catch (err) {
     console.error('Error authorizing session access:', err);
