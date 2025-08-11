@@ -33,8 +33,30 @@ router.get('/quiz/init', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-init.html'))
 });
 
-router.get('/quiz/edit', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/quiz-edit.html'))
+router.get('/quiz/edit', authMiddleware, async (req, res) => {
+  const { quizId } = req.query;
+  if (!quizId) {
+    return res.status(400).send('<h1>잘못된 접근입니다.</h1><p>퀴즈 ID가 필요합니다. <a href="/">홈으로 돌아가기</a></p>');
+  }
+
+  try {
+    const quizDb = req.app.get('quizDb');
+    const Quiz = require('../models/Quiz')(quizDb);
+    const quiz = await Quiz.findById(quizId);
+
+    if (!quiz) {
+      return res.status(404).send('<h1>퀴즈를 찾을 수 없습니다.</h1><p><a href="/">홈으로 돌아가기</a></p>');
+    }
+
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>자신이 만든 퀴즈만 수정할 수 있습니다. <a href="/">홈으로 돌아가기</a></p>');
+    }
+
+    res.sendFile(path.join(__dirname, '../public/quiz-edit.html'));
+  } catch (error) {
+    console.error('Error in /quiz/edit route:', error);
+    res.status(500).send('<h1>서버 오류</h1><p>페이지를 불러오는 중 문제가 발생했습니다. <a href="/">홈으로 돌아가기</a></p>');
+  }
 });
 
 router.get('/quiz/list', async (req, res) => {

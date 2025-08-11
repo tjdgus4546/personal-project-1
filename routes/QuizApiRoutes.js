@@ -181,6 +181,10 @@ router.post('/quiz/:id/complete', authenticateToken, async (req, res) => {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
 
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
     quiz.isComplete = true;
     await quiz.save();
 
@@ -198,6 +202,10 @@ router.put('/quiz/:id/incomplete', authenticateToken, async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
 
     quiz.isComplete = false;
     await quiz.save();
@@ -246,7 +254,7 @@ router.put('/quiz/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/quiz/:id', async (req, res) => {
+router.get('/quiz/:id', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
 
@@ -254,7 +262,12 @@ router.get('/quiz/:id', async (req, res) => {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
 
-    res.json(quiz); // 전체 문제 포함해서 보냄
+    // 퀴즈가 완료되었거나, 본인이 만든 퀴즈인 경우에만 조회를 허용
+    if (quiz.isComplete || quiz.creatorId.toString() === req.user.id) {
+      res.json(quiz); // 전체 문제 포함해서 보냄
+    } else {
+      res.status(403).json({ message: '권한이 없습니다.' });
+    }
   } catch (err) {
     res.status(500).json({ message: '퀴즈 불러오기 실패', error: err.message });
   }
