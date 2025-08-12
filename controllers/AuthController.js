@@ -70,7 +70,7 @@ const login = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
-      path: '/api/auth/refresh' // 리프레시 토큰은 재발급 경로에서만 사용
+      path: '/auth/refresh' // 리프레시 토큰은 재발급 경로에서만 사용
     });
 
     res.json({
@@ -100,12 +100,20 @@ const getUserInfo = async (req, res) => {
 
 const logout = (req, res) => {
   res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
+  // refreshToken을 삭제할 때, 생성 시 사용했던 path 옵션을 반드시 포함해야 합니다.
+  res.clearCookie('refreshToken', { 
+    path: '/auth/refresh',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
   res.status(200).json({ message: '로그아웃 성공' });
 };
 
 const refreshToken = async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
+  const userDb = req.app.get('userDb');
+  const User = require('../models/User')(userDb);
 
   if (!refreshToken) {
     return res.status(401).json({ message: '리프레시 토큰이 없습니다.' });
@@ -113,11 +121,15 @@ const refreshToken = async (req, res) => {
 
   try {
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
+    const user = await User.findById(decoded.id);
 
-    // Optionally, check if the refresh token is in a database and is valid
-    // For now, we'll just assume it's valid if it decodes
+    if (!user) {
+      res.clearCookie('accessToken');
+      res.clearCookie('refreshToken');
+      return res.status(403).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
 
-    const newAccessToken = jwt.sign({ id: decoded.id, username: decoded.username }, JWT_SECRET, {
+    const newAccessToken = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
       expiresIn: '15m', // New access token valid for 15 minutes
     });
 
