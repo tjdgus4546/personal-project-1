@@ -1,0 +1,4 @@
+퀴즈 플레이 기록 실패 TypeError: User.findById is not a function
+    at addPlayedQuizzes (C:\Users\Lee Seonghyeon\Desktop\workspace\Web\sockets\GameSocket.js:557:31)
+    at Socket.<anonymous> (C:\Users\Lee Seonghyeon\Desktop\workspace\Web\sockets\GameSocket.js:294:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

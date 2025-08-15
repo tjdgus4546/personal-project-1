@@ -304,13 +304,13 @@
     });
 
     // 게임 시작됨
+    // 게임 시작됨
     socket.on('game-started', ({ success, data, message }) => {
         if (!success) {
           console.error('❌ 게임 시작 실패:', message);
+          alert(message || '게임을 시작할 수 없습니다.');
           return;
         }
-
-        loadSessionData();
 
         const { quiz, host: newHost, questionStartAt: startAt } = data;
 
@@ -319,7 +319,8 @@
           alert('퀴즈 데이터가 손상되었습니다.');
           return;
         }
-      host = data.host;
+
+      host = newHost;
       questions = quiz.questions;
       currentIndex = 0;
       questionStartAt = new Date(startAt);
@@ -329,9 +330,10 @@
       voteSkipBtn.classList.remove('hidden');
       document.getElementById('skipStatus').classList.remove('hidden');
       
-        if (userId === host) {
+      if (userId === host) {
           forceSkipBtn.classList.remove('hidden');
       };
+
       showQuestion();
     });
 

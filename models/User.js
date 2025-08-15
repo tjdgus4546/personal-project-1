@@ -27,6 +27,10 @@ const userSchema = new Schema({
       ref: "GameSession",
     },
   ],
+  playedQuizzes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Quiz'
+  }],
 });
 
 module.exports = (userDb) => userDb.model('User', userSchema);

@@ -13,6 +13,7 @@ const handleSocketError = (socket, error, eventName) => {
 
 module.exports = (io, app) => {
   const quizDb = app.get('quizDb');
+  const userDb = app.get('userDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
@@ -291,10 +292,12 @@ module.exports = (io, app) => {
           
         const quiz = await Quiz.findById(session.quizId);
 
+        await addPlayedQuizzes(quiz._id, socket.userId, app);
+
         io.to(sessionId).emit('game-started', {
           success: true,
           data: {
-            quiz,
+            quiz: quiz.toObject(),
             host: session.host?.toString() || '__NONE__',
             questionStartAt: session.questionStartAt
           }
@@ -545,6 +548,35 @@ module.exports = (io, app) => {
   });
   
   });
+
+  async function addPlayedQuizzes(quizId, userId, app) {
+    try {
+      if (!quizId || !userId) return;
+
+      const User = require('../models/User')(userDb);
+
+      // 1. ID를 사용해 사용자 문서를 데이터베이스에서 가져옵니다.
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return;
+      }
+
+      if (user.playedQuizzes && user.playedQuizzes.includes(quizId)) {
+        return;
+      }
+
+      await User.findByIdAndUpdate(
+        userId,
+        { $addToSet: { playedQuizzes: quizId } }
+      );
+
+    } catch (error) {
+      // 데이터베이스의 playedQuizzes 필드가 문자열이면 여전히 이 오류가 발생할 수 있습니다.
+      console.error('퀴즈 플레이 기록 실패', error);
+      throw error; // startGame 핸들러가 오류를 인지하도록 다시 던집니다.
+    }
+  }
 
   // 문제 종료 후 정답 공개
   function revealAnswer(sessionId, io, app) {
