@@ -309,20 +309,15 @@
     });
     }
 
-    async function markQuizComplete() {
-    // const token = localStorage.getItem('token'); // REMOVED
-    //   if (!token) { // REMOVED, fetchWithAuth will handle redirect
-    //     alert('로그인이 필요합니다.');
-    //     return;
-    //   }
-    const res = await fetchWithAuth(`/api/quiz/${quizId}/complete`, { // Changed to fetchWithAuth
+        async function markQuizComplete() {
+    const res = await fetchWithAuth(`/api/quiz/${quizId}/complete`, { 
         method: 'POST',
-        // headers: { 'Authorization': `Bearer ${token}` } // REMOVED
      });
     if (res.ok) {
         alert('퀴즈가 공개되었습니다!');
     } else {
-        alert('공개 실패');
+        const errorData = await res.json();
+        alert(errorData.message || '퀴즈 공개에 실패했습니다.');
     }
     }
 

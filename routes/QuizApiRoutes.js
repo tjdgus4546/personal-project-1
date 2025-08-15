@@ -185,6 +185,10 @@ router.post('/quiz/:id/complete', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
+    if (quiz.questions.length < 10) { 
+      return res.status(400).json({ message: '퀴즈를 공개하려면 최소 10개의 문제가 필요합니다.' });
+    };
+
     quiz.isComplete = true;
     await quiz.save();
 
