@@ -21,6 +21,10 @@ const userSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  profileImage: {
+    type: String,
+    require: true,
+  },
   gameSessions: [
     {
       type: Schema.Types.ObjectId,

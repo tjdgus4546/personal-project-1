@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>마이페이지</title>
+    <style>
+    </style>
+</head>
+<body>
+    <div id="userInfo" class="user-info hidden">
+        <h2>사용자 정보</h2>
+        <p><strong>사용자명:</strong> <span id="username">-</span></p>
+        <p><strong>이메일:</strong> <span id="email">-</span></p>
+        
+        <!-- 추가 정보들 -->
+        <div id="additionalInfo">
+            <!-- 서버에서 받아온 추가 정보들이 여기에 표시됩니다 -->
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="location.href='/'">홈으로</button>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    <script type="module">
+        import { getUserData } from '/js/auth.js';
+            document.addEventListener('DOMContentLoaded', async () => {
+                const userInfo = document.getElementById('userInfo');
+
+                try {
+                    const user = await getUserData();
+                    if (user) {
+                        displayUserInfo(user);
+                        userInfo.classList.remove('hidden');
+                    }
+                } catch (error) {
+
+                }
+            });
+
+        function displayUserInfo(user) {
+            document.getElementById('username').textContent = user.username || '-';
+            document.getElementById('email').textContent = user.email || '-';
+
+            if (user.createdAt) {
+                const joinDate = new Date(user.createdAt).toLocaleDateString('ko-KR');
+                document.getElementById('joinDate').textContent = joinDate;
+            }
+
+        }
+
+    </script>
+</body>
+</html>
