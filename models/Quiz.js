@@ -6,6 +6,7 @@ const questionSchema = new Schema({
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   answers: { type: [String], required: true },
+  incorrectAnswers:{ type: [String] },
   answerImageBase64: { type: String },
   order: { type: Number, required: true },
   timeLimit: {type: Number, default: 90 , min: 5, max: 180 },
