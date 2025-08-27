@@ -31,9 +31,9 @@
 
     <div id="chatLog"></div>
 
-    <form id="chatForm" onsubmit="event.preventDefault(); sendMessage();">
+    <form id="chatForm" onsubmit="event.preventDefault(); currentSendFunction();">
       <input type="text" id="chatInput" placeholder="메세지 입력">
-      <button onclick="sendMessage()">전송</button>
+      <button onclick="currentSendFunction();">전송</button>
     </form>
 
     <h2>현재 점수판</h2>
@@ -41,8 +41,9 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/CorrectUserManager.js"></script>
   <script>
-    // Helper function to handle token refresh and retry
+
     async function fetchWithAuth(url, options = {}) {
         options.credentials = 'include'; // Ensure cookies are sent
 
@@ -68,17 +69,20 @@
         return response;
     }
 
+    let currentSendFunction = sendMessage;
     let questions = [];
     let currentIndex = 0;
     let questionTimer = null;
     let host = null;
     let questionStartAt  = null;
     let countdownInterval = null;
+    let hasAnswered = false;
 
     const socket = io();
     const sessionId = window.location.pathname.split('/').pop();
     let userId = null; // Will be set after successful session data load or from server
     let username = null; // Will be set after successful session data load or from server
+    
 
     (async () => {
       try {
@@ -141,10 +145,7 @@
 
           const correctUsernames = data.correctUsers?.[currentIndex];
           if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
-            const correctP = document.createElement('p');
-            correctP.textContent = `🎯 정답자: ${correctUsernames.join(', ')}`;
-            correctP.style.color = 'blue';
-            document.getElementById('questionBox').appendChild(correctP);
+            CorrectUserManager.restoreFromData(correctUsernames);
           }
 
           // 정답 공개 상태면 UI 복원
@@ -219,10 +220,6 @@
       document.getElementById('skipStatus').textContent = `스킵 투표: ${voted} / ${total}`;
     }
 
-    // 세션 입장
-    // socket.emit('joinSession', { sessionId, userId, username }); // userId and username will be derived from server-side auth
-    // socket.emit('joinSession', { sessionId }); // Send only sessionId, server will authenticate
-
     socket.on('session-ready', () => {
       loadSessionData(); // <--- 초기화 전용 함수로 분리
     });
@@ -233,6 +230,24 @@
         return;
       }
       renderScoreboard(data.players);
+    });
+    
+    socket.on('choiceQuestionScoreboard', ({ success, message, data }) => {
+      if (!success) {
+        console.error('❌ 점수판 로딩 실패:', message);
+        return;
+      }
+      renderScoreboard(data.players);
+
+      if (data.correctUsers && data.correctUsers.length > 0) {
+        CorrectUserManager.setUsers(data.correctUsers);
+      }
+
+      setTimeout(() => {
+        if (isHost()) {
+          socket.emit('nextQuestion', { sessionId, userId });
+        }
+      }, 3000);
     });
 
     socket.on('voteSkipUpdate', ({ success, data, votes, total }) => {
@@ -304,7 +319,6 @@
     });
 
     // 게임 시작됨
-    // 게임 시작됨
     socket.on('game-started', ({ success, data, message }) => {
         if (!success) {
           console.error('❌ 게임 시작 실패:', message);
@@ -374,12 +388,12 @@
 
     //스킵투표
     voteSkipBtn.addEventListener('click', async () => {
-      socket.emit('voteSkip', { sessionId }); // Removed username
+      socket.emit('voteSkip', { sessionId });
     });
 
     //방장 강제스킵
     forceSkipBtn.addEventListener('click', () => {
-      socket.emit('forceSkip', { sessionId }); // Removed username
+      socket.emit('forceSkip', { sessionId });
     });
   
     //문제 넘기기
@@ -412,10 +426,23 @@
       const isCorrect = answers.includes(userInput);
 
       if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('correct', { sessionId }); // Removed username
+        socket.emit('correct', { sessionId });
       } else {
-        socket.emit('chatMessage', { sessionId, message }); // Removed username
+        socket.emit('chatMessage', { sessionId, message });
       }
+    }
+
+    //메세지 입력시 정답인지 일반채팅인지 판별
+    function choiceQuestionSendMessage() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      input.value = '';
+
+      if (!message) return;
+
+      const userInput = message.replace(/\s+/g, '').toLowerCase();
+      
+        socket.emit('chatMessage', { sessionId, message });
     }
 
     socket.on('chat', ({ user, message }) => {
@@ -433,7 +460,8 @@
       }
 
       const { username } = data;
-      showCorrectUser(username);
+      CorrectUserManager.addUser(username);
+
       const chatLog = document.getElementById('chatLog');
       const p = document.createElement('p');
       p.innerHTML = `${username}: ${username}님이 정답을 맞혔습니다! 🎉`;
@@ -449,7 +477,7 @@
         alert(message || '퀴즈가 종료되었습니다!');
         });
 
-    socket.on('answerReveal', ({ success, data, message }) => {
+    socket.on('revealAnswer_Emit', ({ success, data, message }) => {
       if (!success) {
         console.error('❌ 정답 공개 실패:', message);
         return;
@@ -463,28 +491,6 @@
         revealedAt
       });
     });
-
-    function showCorrectUser(username) {
-      const box = document.getElementById('questionBox');
-      let correctP = document.getElementById('correctUser');
-
-      if (!correctP) {
-        correctP = document.createElement('p');
-        correctP.id = 'correctUser';
-        correctP.style.color = 'blue';
-        box.appendChild(correctP);
-      }
-
-      // 기존 텍스트 파싱
-      let current = correctP.textContent.replace('🎯 정답자: ', '').split(',').map(s => s.trim()).filter(Boolean);
-
-      // 중복 추가 방지
-      if (!current.includes(username)) {
-        current.push(username);
-      }
-
-      correctP.textContent = `🎯 정답자: ${current.join(', ')}`;
-    }
 
     function showAnswer({ answers, answerImageBase64, revealedAt }) {
       const box = document.getElementById('questionBox');
@@ -530,73 +536,135 @@
     });
 
     function showQuestion({ silent = false } = {}) {
-    const box = document.getElementById('questionBox');
-    const question = questions[currentIndex];
+      const box = document.getElementById('questionBox');
+      const question = questions[currentIndex];
+      const answers = questions[currentIndex]?.answers;
 
-    if (!question) {
-      box.innerHTML = '<p>문제를 불러올 수 없습니다.</p>';
-      return;
-    }
+      let choiceQuestion = questions[currentIndex]?.incorrectAnswers;
 
-    let html = `<h2>문제 #${currentIndex + 1}</h2>`;
-    html += `<p>${question.text}</p>`;
+      if (!question) {
+        box.innerHTML = '<p>문제를 불러올 수 없습니다.</p>';
+        return;
+      }
 
-    if (question.imageBase64) {
-      html += `<img src="${question.imageBase64}" alt="문제 이미지" style="max-width: 300px;">`;
-    }
+      hasAnswered = false;
 
-    if (question.youtubeUrl) {
-      html += `<div style="margin-top: 10px;">
-                <iframe width="560" height="315"
-                  src="${question.youtubeUrl}"
-                  frameborder="0" allowfullscreen></iframe>
-              </div>`;
-    }
+      CorrectUserManager.clear();
 
-    box.innerHTML = html;
+      let html = `<h2>문제 #${currentIndex + 1}</h2><br>`;
 
-    const correctUsernames = questions[currentIndex]?.correctUsers;
-      if (correctUsernames && correctUsernames.length > 0) {
-        let correctP = document.getElementById('correctUser');
-        if (!correctP) {
-          correctP = document.createElement('p');
-          correctP.id = 'correctUser';
-          correctP.style.color = 'blue';
-          box.appendChild(correctP);
+      if(choiceQuestion && choiceQuestion.length > 0) {
+        try {
+          currentSendFunction = choiceQuestionSendMessage;
+          html += `<p>${question.text}</p>`;
+            // 객관식 선택지 만들기
+            html += `<div style="margin-top: 20px;">`;
+            html += `<h3>다음 중 정답을 선택하세요:</h3>`;
+            
+            // 정답과 오답을 합치기
+            const allChoices = [];
+            
+            // 정답들 추가
+            if (answers && answers.length > 0) {
+                const randomAnswer = answers[Math.floor(Math.random() * answers.length)];
+                allChoices.push(randomAnswer);
+            }
+            
+            // 오답들 추가
+            if (choiceQuestion && choiceQuestion.length > 0) {
+                choiceQuestion.forEach(incorrect => allChoices.push(incorrect));
+            }
+            
+            // 배열 섞기 (Fisher-Yates 알고리즘)
+            for (let i = allChoices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
+              }
+            
+            allChoices.forEach((choice, index) => {
+                html += `
+                    <button onclick="selectChoice('${choice.replace(/'/g, "\\'")}')" 
+                            style="display: block; margin: 8px 0; padding: 12px; width: 400px; 
+                                   background: #f0f0f0; border: 2px solid #ccc; border-radius: 8px; 
+                                   cursor: pointer; font-size: 16px; text-align: left;">
+                        ${index + 1}. ${choice}
+                    </button>
+                `;
+                });
+                html += `</div>`;
+        } catch (error) {
+          console.error('객관식 문제를 불러올수 없습니다.')
         }
-        correctP.textContent = `🎯 정답자: ${correctUsernames.join(', ')}`;
+      } else {
+        currentSendFunction = sendMessage;
+        html += `<p>${question.text}</p>`;
+      }
+      if (question.imageBase64) {
+        html += `<img src="${question.imageBase64}" alt="문제 이미지" style="max-width: 300px;">`;
       }
 
-    if (silent) return;
+      if (question.youtubeUrl) {
+        html += `<div style="margin-top: 10px;">
+                  <iframe width="560" height="315"
+                    src="${question.youtubeUrl}"
+                    frameborder="0" allowfullscreen></iframe>
+                </div>`;
+      }
 
-    // 기존 타이머 제거
-    if (questionTimer) clearTimeout(questionTimer);
-    if (countdownInterval) clearInterval(countdownInterval);
+      box.innerHTML = html;
 
-    const timeLimit = question.timeLimit || 90;
+      const correctUsernames = questions[currentIndex]?.correctUsers;
+        if (correctUsernames && correctUsernames.length > 0) {
+          CorrectUserManager.restoreFromData(correctUsernames);
+        }
 
-    // ✅ 정확한 시간 계산 (한 번만 new Date 사용)
-    const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
-    let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
+      if (silent) return;
 
-    const countdownEl = document.getElementById('countdown');
-    if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
+      // 기존 타이머 제거
+      if (questionTimer) clearTimeout(questionTimer);
+      if (countdownInterval) clearInterval(countdownInterval);
 
-    countdownInterval = setInterval(() => {
-      remaining--;
+      const timeLimit = question.timeLimit || 90;
+
+      // ✅ 정확한 시간 계산 (한 번만 new Date 사용)
+      const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
+      let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
+
+      const countdownEl = document.getElementById('countdown');
       if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
-      if (remaining <= 0) {
-        clearInterval(countdownInterval);
-      }
-    }, 1000);
 
-    questionTimer = setTimeout(() => {
-      if (isHost()) {
-        socket.emit('revealAnswer', { sessionId });
-      }
-    }, remaining * 1000);
-  }
+      countdownInterval = setInterval(() => {
+        remaining--;
+        if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
+        if (remaining <= 0) {
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
 
+      questionTimer = setTimeout(() => {
+        if (isHost()) {
+          socket.emit('revealAnswer', { sessionId });
+        }
+      }, remaining * 1000);
+    }
+
+    function selectChoice(choice) {
+        if (hasAnswered) return;
+        
+        hasAnswered = true;
+        
+        const rawAnswers = questions[currentIndex].answers || [];
+        const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
+        const userInput = choice.replace(/\s+/g, '').toLowerCase();
+        
+        const isCorrect = answers.includes(userInput);
+
+        if (!window.__isRevealingAnswer && isCorrect) {
+            socket.emit('choiceQuestionCorrect', { sessionId });
+        } else {
+            socket.emit('choiceQuestionIncorrect', { sessionId });
+        }
+    }
 
   </script>
 </body>

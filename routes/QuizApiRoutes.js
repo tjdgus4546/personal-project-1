@@ -54,7 +54,7 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
   const Quiz = require('../models/Quiz')(quizDb);
 
   try {
-    const { text, answers, answerImageBase64, imageBase64, youtubeUrl, timeLimit } = req.body;
+    const { text, answers, incorrectAnswers, answerImageBase64, imageBase64, youtubeUrl, timeLimit } = req.body;
 
     if (imageBase64 && youtubeUrl) {
       return res.status(400).json({ message: '이미지와 유튜브는 하나만 선택하세요.' });
@@ -84,9 +84,14 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       ? answers
       : answers.split(',').map(a => a.trim()).filter(Boolean);
 
+    const rawIncorrectAnswers = Array.isArray(incorrectAnswers)
+      ? incorrectAnswers
+      : incorrectAnswers.split(',').map(a => a.trim()).filter(Boolean);
+
     const newQuestion = {
       text: questionText,
       answers: rawAnswers,
+      incorrectAnswers: rawIncorrectAnswers,
       imageBase64: imageBase64?.trim() || null,
       answerImageBase64: answerImageBase64?.trim() || null,
       youtubeUrl: youtubeUrl?.trim() || null,

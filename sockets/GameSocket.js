@@ -20,6 +20,7 @@ module.exports = (io, app) => {
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
   const { ObjectId } = require('mongoose').Types;
 
+  const choiceQuestionCorrectUsers = [];
   io.use(cookieParser());
 
   io.use(async (socket, next) => {
@@ -392,7 +393,6 @@ module.exports = (io, app) => {
 
         session.markModified('correctUsers');
 
-        // player.answered[qIndex] = true;
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
         session.markModified('players');
         const success = await safeSaveSession(session);
@@ -441,6 +441,107 @@ module.exports = (io, app) => {
         handleSocketError(socket, error, 'correct');
       }
     });
+
+    //객관식 문제 정답처리
+    socket.on('choiceQuestionCorrect', async ({ sessionId }) => {
+      try {
+        if (!ObjectId.isValid(sessionId)) return;
+        const session = await safeFindSessionById(GameSession, sessionId);
+        if (!session || !session.isActive) return;
+
+        const username = socket.username;
+
+        const playerIndex = session.players.findIndex(p => p.username === username);
+        if (playerIndex === -1) return;
+
+        const player = session.players[playerIndex];
+
+        if (!player) return;
+
+        const qIndex = String(session.currentQuestionIndex);
+        if (player.answered?.[qIndex]) return;
+
+        if (!app.firstCorrectUsers) {
+          app.firstCorrectUsers = {};
+        }
+
+        const isFirst = !app.firstCorrectUsers[sessionId];
+        if (isFirst) {
+          app.firstCorrectUsers[sessionId] = username;
+          player.score += 2;
+        } else {
+          player.score += 1;
+        }
+        player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
+
+        session.correctUsers = session.correctUsers || {};
+        if (!session.correctUsers[qIndex]) {
+          session.correctUsers[qIndex] = [];
+        }
+        if (!session.correctUsers[qIndex].includes(username)) {
+          session.correctUsers[qIndex].push(username);
+        } else {
+        }
+        
+        choiceQuestionCorrectUsers.push(socket.username);
+        
+        const connectedPlayerCount = session.players.filter(p => p.connected).length;
+
+        session.set(`players.${playerIndex}.answered.${qIndex}`, true);
+
+        // 모든 플레이어가 답변 했을 때
+        if(choiceQuestionCorrectUsers.length == connectedPlayerCount) {
+          session.markModified('correctUsers');
+          session.markModified('players');
+          choiceQuestionCorrectUsers.length = 0;
+
+          io.to(sessionId).emit('choiceQuestionScoreboard', {
+            success: true,
+            data: {
+              players: session.players.map(p => ({
+                username: p.username,
+                score: p.score,
+                correctAnswersCount: p.correctAnswersCount || 0,
+                connected: p.connected
+              })),
+              correctUsers: session.correctUsers[qIndex] || []
+            }
+          });
+        }
+
+        const success = await safeSaveSession(session);
+          if (!success) {
+            console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
+            return;
+          }
+
+      } catch (error) {
+        handleSocketError(socket, error, 'correct');
+      }
+    });
+
+    socket.on('choiceQuestionIncorrect', async ({sessionId}) => {
+      try {
+        if (!ObjectId.isValid(sessionId)) return;
+        const session = await safeFindSessionById(GameSession, sessionId);
+        if (!session || !session.isActive) return;
+
+        const username = socket.username;
+
+        const playerIndex = session.players.findIndex(p => p.username === username);
+        if (playerIndex === -1) return;
+
+        const player = session.players[playerIndex];
+
+        if (!player) return;
+
+        const qIndex = String(session.currentQuestionIndex);
+        if (player.answered?.[qIndex]) return;
+
+      } catch (error) {
+        
+      }
+    })
 
   // 스킵투표
   socket.on('voteSkip', async ({ sessionId }) => {
@@ -516,7 +617,7 @@ module.exports = (io, app) => {
         }
 
       // 모든 참가자에게 정답 전송
-      io.to(sessionId).emit('answerReveal', {
+      io.to(sessionId).emit('revealAnswer_Emit', {
         success: true,
         data: {
           answers: question.answers,
@@ -601,7 +702,7 @@ module.exports = (io, app) => {
             return;
           }
 
-        io.to(sessionId).emit('answerReveal', {
+        io.to(sessionId).emit('revealAnswer_Emit', {
           success: true,
           data: {
             answers: question.answers,
