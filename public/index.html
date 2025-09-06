@@ -45,7 +45,6 @@
         const result = await res.json();
 
         if (res.ok) {
-            alert('세션에 참여했습니다! 퀴즈 방으로 이동합니다.');
             window.location.href = `/quiz/${result.sessionId}`;
         } else {
             // 서버에서 보낸 에러 메시지를 표시

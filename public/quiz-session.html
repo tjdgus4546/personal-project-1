@@ -61,7 +61,6 @@
                 response = await fetch(url, options);
             } else {
                 // Refresh failed, redirect to login
-                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
                 window.location.href = '/login';
                 return; // Prevent further execution
             }
@@ -131,9 +130,8 @@
         document.getElementById('inviteCode').textContent = data.inviteCode || '없음';
 
         // 점수판 및 투표 상태 렌더링
-        renderScoreboard(data.players);
         renderSkipStatus(data.skipVotes?.length || 0, data.players?.length || 0);
-
+        
         if (data.isStarted) {
           lobbySection.classList.add('hidden');
           gameSection.classList.remove('hidden');
@@ -142,15 +140,16 @@
           if (userId === host) {
             forceSkipBtn.classList.remove('hidden');
           }
-
-          const correctUsernames = data.correctUsers?.[currentIndex];
-          if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
-            CorrectUserManager.restoreFromData(correctUsernames);
-          }
-
+          
           // 정답 공개 상태면 UI 복원
           if (data.revealedAt) {
             showQuestion({ silent: true });
+            renderScoreboard(data.players, false);
+
+            const correctUsernames = data.correctUsers?.[currentIndex];
+            if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
+              CorrectUserManager.restoreFromData(correctUsernames);
+            }
 
             const answers = questions[currentIndex]?.answers;
             if (answers) {
@@ -181,6 +180,7 @@
             }, wait * 1000);
           } else {
             showQuestion();
+            renderScoreboard(data.players, false);
           }
         }
 
@@ -198,21 +198,21 @@
     }
 
 
-    // ✅ 점수판 렌더링 함수
+    // 점수판 렌더링 함수
     function renderScoreboard(players) {
       const board = document.getElementById('scoreboard');
       board.innerHTML = '';
 
-      // 점수 기준 정렬
-      players
-        .filter(p => p.connected)
-        .slice() // 원본 배열 훼손 방지
-        .sort((a, b) => b.score - a.score)
-        .forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = `${p.username}: ${p.score}점 (맞춘 문제 수 ${p.correctAnswersCount || 0}개)`;
-          board.appendChild(li);
-        });
+        // 실제 점수 표시 모드
+        players
+          .filter(p => p.connected)
+          .slice()
+          .sort((a, b) => b.score - a.score)
+          .forEach(p => {
+            const li = document.createElement('li');
+            li.textContent = `${p.username}: ${p.score}점 (맞춘 문제 수 ${p.correctAnswersCount || 0}개)`;
+            board.appendChild(li);
+          });
     }
 
     // ✅ 스킵 투표 상태 렌더링
@@ -237,17 +237,16 @@
         console.error('❌ 점수판 로딩 실패:', message);
         return;
       }
+
       renderScoreboard(data.players);
 
       if (data.correctUsers && data.correctUsers.length > 0) {
         CorrectUserManager.setUsers(data.correctUsers);
       }
 
-      setTimeout(() => {
         if (isHost()) {
-          socket.emit('nextQuestion', { sessionId, userId });
+          socket.emit('revealAnswer', { sessionId });
         }
-      }, 3000);
     });
 
     socket.on('voteSkipUpdate', ({ success, data, votes, total }) => {
@@ -473,8 +472,6 @@
           console.error('❌ 퀴즈 종료 오류:', message);
           return;
         }
-
-        alert(message || '퀴즈가 종료되었습니다!');
         });
 
     socket.on('revealAnswer_Emit', ({ success, data, message }) => {
@@ -483,7 +480,11 @@
         return;
       }
 
-      const { answers, answerImage, revealedAt } = data;
+      const { answers, answerImage, revealedAt, correctUsers } = data;
+
+      if (correctUsers && correctUsers.length > 0) {
+        CorrectUserManager.setUsers(correctUsers);
+      }
 
       showAnswer({
         answers,
@@ -539,6 +540,7 @@
       const box = document.getElementById('questionBox');
       const question = questions[currentIndex];
       const answers = questions[currentIndex]?.answers;
+      const isChoiceQuestion = question?.incorrectAnswers && question.incorrectAnswers.length > 0;
 
       let choiceQuestion = questions[currentIndex]?.incorrectAnswers;
 
@@ -613,10 +615,10 @@
 
       box.innerHTML = html;
 
-      const correctUsernames = questions[currentIndex]?.correctUsers;
-        if (correctUsernames && correctUsernames.length > 0) {
-          CorrectUserManager.restoreFromData(correctUsernames);
-        }
+      // const correctUsernames = questions[currentIndex]?.correctUsers;
+      //   if (correctUsernames && correctUsernames.length > 0) {
+      //     CorrectUserManager.restoreFromData(correctUsernames);
+      //   }
 
       if (silent) return;
 
@@ -626,7 +628,7 @@
 
       const timeLimit = question.timeLimit || 90;
 
-      // ✅ 정확한 시간 계산 (한 번만 new Date 사용)
+      // 시간 계산
       const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
       let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
 

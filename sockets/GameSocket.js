@@ -20,7 +20,6 @@ module.exports = (io, app) => {
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
   const { ObjectId } = require('mongoose').Types;
 
-  const choiceQuestionCorrectUsers = [];
   io.use(cookieParser());
 
   io.use(async (socket, next) => {
@@ -461,59 +460,25 @@ module.exports = (io, app) => {
         const qIndex = String(session.currentQuestionIndex);
         if (player.answered?.[qIndex]) return;
 
-        if (!app.firstCorrectUsers) {
-          app.firstCorrectUsers = {};
+        session.choiceQuestionCorrectUsers = session.choiceQuestionCorrectUsers || {};
+        if (!session.choiceQuestionCorrectUsers[qIndex]) {
+          session.choiceQuestionCorrectUsers[qIndex] = [];
         }
-
-        const isFirst = !app.firstCorrectUsers[sessionId];
-        if (isFirst) {
-          app.firstCorrectUsers[sessionId] = username;
-          player.score += 2;
-        } else {
-          player.score += 1;
+        if (!session.choiceQuestionCorrectUsers[qIndex].includes(username)) {
+          session.choiceQuestionCorrectUsers[qIndex].push(username);
         }
-        player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
-
-        session.correctUsers = session.correctUsers || {};
-        if (!session.correctUsers[qIndex]) {
-          session.correctUsers[qIndex] = [];
-        }
-        if (!session.correctUsers[qIndex].includes(username)) {
-          session.correctUsers[qIndex].push(username);
-        } else {
-        }
-        
-        choiceQuestionCorrectUsers.push(socket.username);
-        
-        const connectedPlayerCount = session.players.filter(p => p.connected).length;
 
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
-
-        // 모든 플레이어가 답변 했을 때
-        if(choiceQuestionCorrectUsers.length == connectedPlayerCount) {
-          session.markModified('correctUsers');
-          session.markModified('players');
-          choiceQuestionCorrectUsers.length = 0;
-
-          io.to(sessionId).emit('choiceQuestionScoreboard', {
-            success: true,
-            data: {
-              players: session.players.map(p => ({
-                username: p.username,
-                score: p.score,
-                correctAnswersCount: p.correctAnswersCount || 0,
-                connected: p.connected
-              })),
-              correctUsers: session.correctUsers[qIndex] || []
-            }
-          });
+        session.markModified('choiceQuestionCorrectUsers');
+        session.markModified('players');
+        
+        const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
+          return;
         }
 
-        const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
-            return;
-          }
+        await checkAllPlayersAnswered(sessionId, io, app);
 
       } catch (error) {
         handleSocketError(socket, error, 'correct');
@@ -538,10 +503,21 @@ module.exports = (io, app) => {
         const qIndex = String(session.currentQuestionIndex);
         if (player.answered?.[qIndex]) return;
 
+        session.set(`players.${playerIndex}.answered.${qIndex}`, true);
+        session.markModified('players');
+
+        const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('세션 저장 중 에러 발생 - choiceQuestionIncorrect');
+          return;
+        }
+
+        await checkAllPlayersAnswered(sessionId, io, app);
+
       } catch (error) {
-        
+        handleSocketError(socket, error, 'choiceQuestionIncorrect');
       }
-    })
+    });
 
   // 스킵투표
   socket.on('voteSkip', async ({ sessionId }) => {
@@ -607,14 +583,32 @@ module.exports = (io, app) => {
       const quiz = await Quiz.findById(session.quizId);
       const index = session.currentQuestionIndex;
       const question = quiz.questions[index];
+      const qIndex = String(index);
+      
       if (!quiz || !quiz.questions || !quiz.questions[index]) return;
 
       session.revealedAt = new Date();
+
+      // choiceQuestionCorrectUsers → correctUsers로 데이터 이동
+      if (session.choiceQuestionCorrectUsers && session.choiceQuestionCorrectUsers[qIndex]) {
+        session.correctUsers = session.correctUsers || {};
+        session.correctUsers[qIndex] = [...session.choiceQuestionCorrectUsers[qIndex]];
+        
+        // 임시 데이터 정리
+        delete session.choiceQuestionCorrectUsers[qIndex];
+        
+        session.markModified('correctUsers');
+        session.markModified('choiceQuestionCorrectUsers');
+      }
+
       const success = await safeSaveSession(session);
         if (!success) {
           console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
           return;
         }
+
+      // 현재 문제의 정답자 목록 가져오기
+      const correctUsers = session.correctUsers?.[qIndex] || [];
 
       // 모든 참가자에게 정답 전송
       io.to(sessionId).emit('revealAnswer_Emit', {
@@ -623,9 +617,24 @@ module.exports = (io, app) => {
           answers: question.answers,
           answerImage: question.answerImageBase64,
           index,
-          revealedAt: session.revealedAt
+          revealedAt: session.revealedAt,
+          correctUsers: correctUsers
         }
       });
+
+      // 2. 스코어보드 업데이트
+      io.to(sessionId).emit('scoreboard', {
+        success: true,
+        data: {
+          players: session.players.map(p => ({
+            username: p.username,
+            score: p.score,
+            correctAnswersCount: p.correctAnswersCount || 0,
+            connected: p.connected
+          }))
+        }
+      });
+
     } catch (error) {
       handleSocketError(socket, error, 'revealAnswer');
     }
@@ -692,15 +701,32 @@ module.exports = (io, app) => {
 
         const quiz = await Quiz.findById(session.quizId);
         const question = quiz.questions[session.currentQuestionIndex];
+        const qIndex = String(session.currentQuestionIndex);
 
         const revealedAt = new Date();
 
         session.revealedAt = revealedAt;
+
+        // choiceQuestionCorrectUsers → correctUsers로 데이터 이동
+        if (session.choiceQuestionCorrectUsers && session.choiceQuestionCorrectUsers[qIndex]) {
+          session.correctUsers = session.correctUsers || {};
+          session.correctUsers[qIndex] = [...session.choiceQuestionCorrectUsers[qIndex]];
+          
+          // 임시 데이터 정리
+          delete session.choiceQuestionCorrectUsers[qIndex];
+          
+          session.markModified('correctUsers');
+          session.markModified('choiceQuestionCorrectUsers');
+        }
+        
         const success = await safeSaveSession(session);
           if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
             return;
           }
+
+        // 현재 문제의 정답자 목록 가져오기
+        const correctUsers = session.correctUsers?.[qIndex] || [];
 
         io.to(sessionId).emit('revealAnswer_Emit', {
           success: true,
@@ -709,8 +735,22 @@ module.exports = (io, app) => {
             answerImage: question.answerImageBase64,
             index: session.currentQuestionIndex,
             revealedAt,
+            correctUsers: correctUsers
           }
         });
+
+        io.to(sessionId).emit('scoreboard', {
+          success: true,
+          data: {
+            players: session.players.map(p => ({
+              username: p.username,
+              score: p.score,
+              correctAnswersCount: p.correctAnswersCount || 0,
+              connected: p.connected
+            }))
+          }
+        });
+
       } catch (error) {
         console.error('❌ Error in revealAnswer:', error);
       }
@@ -776,5 +816,68 @@ module.exports = (io, app) => {
       console.error('❌ Error in goToNextQuestion:', error);
     }
   };
+
+  async function checkAllPlayersAnswered(sessionId, io, app) {
+    try {
+      const GameSession = require('../models/GameSession')(app.get('quizDb'));
+      const session = await safeFindSessionById(GameSession, sessionId);
+      if (!session || !session.isActive) return;
+
+      const qIndex = String(session.currentQuestionIndex);
+      const connectedPlayers = session.players.filter(p => p.connected);
+      
+      // 모든 연결된 플레이어가 답변했는지 확인
+      const allAnswered = connectedPlayers.every(player => 
+        player.answered && player.answered[qIndex] === true
+      );
+
+      if (allAnswered) {
+        const correctUsernames = session.choiceQuestionCorrectUsers[qIndex] || [];
+
+      if (correctUsernames.length > 0) {
+        // 첫 번째 정답자 찾기 (시간 순서대로)
+        const firstCorrectUser = correctUsernames[0];
+        
+        // 각 정답자에게 점수 부여
+        correctUsernames.forEach((username, index) => {
+          const player = session.players.find(p => p.username === username);
+          if (player) {
+            if (index === 0) {
+              // 첫 번째 정답자: 2점
+              player.score += 2;
+            } else {
+              // 나머지 정답자: 1점
+              player.score += 1;
+            }
+            player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
+          }
+        });
+
+        session.markModified('players');
+        const success = await safeSaveSession(session);
+        if (!success) {
+            console.error('점수 계산 후 세션 저장 실패');
+            return;
+        }
+      }
+
+        // 점수판과 정답자 공개
+        io.to(sessionId).emit('choiceQuestionScoreboard', {
+          success: true,
+          data: {
+            players: session.players.map(p => ({
+              username: p.username,
+              score: p.score,
+              correctAnswersCount: p.correctAnswersCount || 0,
+              connected: p.connected
+            })),
+            correctUsers: session.choiceQuestionCorrectUsers[qIndex] || []
+          }
+        });
+      }
+    } catch (error) {
+      console.error('checkAllPlayersAnswered 에러:', error);
+    }
+  }
 
 };
