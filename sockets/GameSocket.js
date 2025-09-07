@@ -478,7 +478,7 @@ module.exports = (io, app) => {
           return;
         }
 
-        await checkAllPlayersAnswered(sessionId, io, app);
+        await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
 
       } catch (error) {
         handleSocketError(socket, error, 'correct');
@@ -512,7 +512,7 @@ module.exports = (io, app) => {
           return;
         }
 
-        await checkAllPlayersAnswered(sessionId, io, app);
+        await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
 
       } catch (error) {
         handleSocketError(socket, error, 'choiceQuestionIncorrect');
@@ -550,7 +550,16 @@ module.exports = (io, app) => {
         const voteRatio = session.skipVotes.length / totalPlayers;
 
         if (voteRatio >= 0.5) {
-          await revealAnswer(sessionId, io, app)();
+          const qIndex = String(session.currentQuestionIndex);
+          const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
+                                        session.choiceQuestionCorrectUsers[qIndex] && 
+                                        session.choiceQuestionCorrectUsers[qIndex].length > 0;
+
+          if (hasChoiceQuestionData) {
+            await handleChoiceQuestionCompletion(sessionId, io, app, 'vote_skip');
+          } else {
+            await revealAnswer(sessionId, io, app)();
+          }
         }
       }
     } catch (error) {
@@ -565,7 +574,18 @@ module.exports = (io, app) => {
       const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || session.host?.toString() !== socket.userId) return;
 
-      await revealAnswer(sessionId, io, app)();
+      const qIndex = String(session.currentQuestionIndex);
+      const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
+                                    session.choiceQuestionCorrectUsers[qIndex] && 
+                                    session.choiceQuestionCorrectUsers[qIndex].length > 0;
+
+      if (hasChoiceQuestionData) {
+        // 객관식: 통합 함수 사용
+        await handleChoiceQuestionCompletion(sessionId, io, app, 'force_skip');
+      } else {
+        // 주관식: 기존 로직
+        await revealAnswer(sessionId, io, app)();
+      }
     } catch (error) {
       handleSocketError(socket, error, 'forceSkip');
     }
@@ -817,7 +837,7 @@ module.exports = (io, app) => {
     }
   };
 
-  async function checkAllPlayersAnswered(sessionId, io, app) {
+  async function handleChoiceQuestionCompletion(sessionId, io, app, triggerType = 'all_answered') {
     try {
       const GameSession = require('../models/GameSession')(app.get('quizDb'));
       const session = await safeFindSessionById(GameSession, sessionId);
@@ -826,43 +846,87 @@ module.exports = (io, app) => {
       const qIndex = String(session.currentQuestionIndex);
       const connectedPlayers = session.players.filter(p => p.connected);
       
-      // 모든 연결된 플레이어가 답변했는지 확인
-      const allAnswered = connectedPlayers.every(player => 
-        player.answered && player.answered[qIndex] === true
-      );
+      // 완료 조건 확인
+      let shouldComplete = false;
+      
+      switch (triggerType) {
+        case 'all_answered':
+          // 모든 플레이어가 답변 완료
+          shouldComplete = connectedPlayers.every(player => 
+            player.answered && player.answered[qIndex] === true
+          );
+          break;
+          
+        case 'vote_skip':
+          // 스킵 투표 통과 (이미 외부에서 확인됨)
+          shouldComplete = true;
+          break;
+          
+        case 'force_skip':
+          // 강제 스킵 (이미 외부에서 확인됨)
+          shouldComplete = true;
+          break;
+          
+        default:
+          shouldComplete = false;
+      }
 
-      if (allAnswered) {
+      if (shouldComplete) {
         const correctUsernames = session.choiceQuestionCorrectUsers[qIndex] || [];
-
-      if (correctUsernames.length > 0) {
-        // 첫 번째 정답자 찾기 (시간 순서대로)
-        const firstCorrectUser = correctUsernames[0];
         
-        // 각 정답자에게 점수 부여
-        correctUsernames.forEach((username, index) => {
-          const player = session.players.find(p => p.username === username);
-          if (player) {
-            if (index === 0) {
-              // 첫 번째 정답자: 2점
-              player.score += 2;
-            } else {
-              // 나머지 정답자: 1점
-              player.score += 1;
+        // 정답자들에게 점수 부여
+        if (correctUsernames.length > 0) {
+          correctUsernames.forEach((username, index) => {
+            const player = session.players.find(p => p.username === username);
+            if (player) {
+              if (index === 0) {
+                // 첫 번째 정답자: 2점
+                player.score += 2;
+              } else {
+                // 나머지 정답자: 1점
+                player.score += 1;
+              }
+              player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
             }
-            player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
+          });
+
+          session.markModified('players');
+        }
+
+        // 정답 공개 상태로 변경
+        const revealedAt = new Date();
+        session.revealedAt = revealedAt;
+
+        // 첫 정답자 초기화
+        if (app.firstCorrectUsers) {
+          delete app.firstCorrectUsers[sessionId];
+        }
+
+        const success = await safeSaveSession(session);
+        if (!success) {
+          console.error('객관식 완료 처리 중 세션 저장 실패');
+          return;
+        }
+
+        // 퀴즈 정보 가져오기
+        const Quiz = require('../models/Quiz')(app.get('quizDb'));
+        const quiz = await Quiz.findById(session.quizId);
+        const question = quiz.questions[session.currentQuestionIndex];
+
+        // 정답 공개 이벤트 발생
+        io.to(sessionId).emit('revealAnswer_Emit', {
+          success: true,
+          data: {
+            answers: question.answers,
+            answerImage: question.answerImageBase64,
+            index: session.currentQuestionIndex,
+            revealedAt,
+            correctUsers: correctUsernames
           }
         });
 
-        session.markModified('players');
-        const success = await safeSaveSession(session);
-        if (!success) {
-            console.error('점수 계산 후 세션 저장 실패');
-            return;
-        }
-      }
-
-        // 점수판과 정답자 공개
-        io.to(sessionId).emit('choiceQuestionScoreboard', {
+        // 스코어보드 업데이트 이벤트 발생
+        io.to(sessionId).emit('scoreboard', {
           success: true,
           data: {
             players: session.players.map(p => ({
@@ -870,13 +934,12 @@ module.exports = (io, app) => {
               score: p.score,
               correctAnswersCount: p.correctAnswersCount || 0,
               connected: p.connected
-            })),
-            correctUsers: session.choiceQuestionCorrectUsers[qIndex] || []
+            }))
           }
         });
       }
     } catch (error) {
-      console.error('checkAllPlayersAnswered 에러:', error);
+      console.error('handleChoiceQuestionCompletion 에러:', error);
     }
   }
 
