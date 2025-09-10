@@ -1,116 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Main</title>
-        <style>
+    <title>QuizApp - 메인</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
         .hidden { display: none; }
-        </style>
+    </style>
 </head>
-<body>
-    <button id="signupBtn" onclick="location.href='/signup'">회원가입</button>
-    <button id="loginBtn" onclick="location.href='/login'">로그인</button>
-    <button id="logoutBtn">로그아웃</button>
-    <button id="quizListBtn" onclick="location.href='/quiz/list-page'">퀴즈 리스트</button>
-    <button id="quizCreateBtn" onclick="location.href='/quiz/my-list'">나의 퀴즈</button>
-    <button id="quizCreateBtn" onclick="location.href='/quiz/init'">퀴즈 만들기</button>
-
+<body class="bg-[#222230]">
+    <!-- 상단바가 여기에 자동으로 삽입됩니다 -->
     
-    <!-- <button onclick="location.href='/helpId'">아이디 찾기</button>
-    <button onclick="location.href='/helpPassword'">비밀번호 찾기</button> -->
-
-    <h1 id="greeting">환영합니다!</h1>
-    <div id="inviteSection" style="display: none;">
-        <input type="text" id="inviteInput" placeholder="초대 코드 입력">
-        <button onclick="joinByInvite()">입장</button>
+    <!-- 메인 컨텐츠 -->
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center">
+            
+            <!-- 초대 코드 입력 섹션 -->
+            <div id="inviteSection" class="hidden max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">게임 참여</h2>
+                <div class="flex space-x-2">
+                    <input 
+                        type="text"
+                        id="inviteInput" 
+                        placeholder="초대 코드 입력"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                    <button 
+                        id="joinBtn"
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors"
+                    >
+                        입장
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 로그인 안내 -->
+            <div id="loginPrompt" class="hidden max-w-md mx-auto bg-gray-50 p-6 rounded-lg">
+                <p class="text-gray-600 mb-4">퀴즈 게임을 즐기려면 로그인이 필요합니다.</p>
+                <div class="space-x-4">
+                    <a href="/login" class="bg-green-500 hover:green-600 text-white px-6 py-2 rounded-md transition-colors inline-block">
+                        로그인
+                    </a>
+                    <a href="/signup" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md transition-colors inline-block">
+                        회원가입
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script>
-    async function joinByInvite() {
-    const code = document.getElementById('inviteInput').value.trim();
-    if (!code) return alert('초대 코드를 입력하세요');
-
-    try {
-        const res = await fetch('/game/join', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-requested-with': 'XMLHttpRequest' // AJAX 요청임을 서버에 알림
-            },
-            body: JSON.stringify({ inviteCode: code }),
-            credentials: 'include'
-        });
-
-        const result = await res.json();
-
-        if (res.ok) {
-            window.location.href = `/quiz/${result.sessionId}`;
-        } else {
-            // 서버에서 보낸 에러 메시지를 표시
-            alert(result.message || '입장에 실패했습니다. 코드를 다시 확인해주세요.');
-        }
-    } catch (err) {
-        console.error('Join session error:', err);
-        alert('입장 중 오류가 발생했습니다.');
-    }
-    }
-    </script>
-
-    <script type="module">
-        import { getUserData } from '/js/auth.js';
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            const signupBtn = document.getElementById('signupBtn');
-            const loginBtn = document.getElementById('loginBtn');
-            const logoutBtn = document.getElementById('logoutBtn');
-            const quizListBtn = document.getElementById('quizListBtn');
-            const quizCreateBtn = document.getElementById('quizCreateBtn');
-            const greeting = document.getElementById('greeting');
-            const inviteSection = document.getElementById('inviteSection');
-
-            const user = await getUserData();
-
-            if (user) {
-                // 로그인 상태
-                greeting.textContent = `${user.username}님 환영합니다!`;
-                signupBtn.style.display = 'none';
-                loginBtn.style.display = 'none';
-                logoutBtn.style.display = 'inline-block';
-                quizListBtn.style.display = 'inline-block';
-                quizCreateBtn.style.display = 'inline-block';
-                inviteSection.style.display = 'block';
-            } else {
-                // 로그아웃 상태
-                greeting.textContent = '로그인이 필요합니다.';
-                signupBtn.style.display = 'inline-block';
-                loginBtn.style.display = 'inline-block';
-                logoutBtn.style.display = 'none';
-                quizListBtn.style.display = 'none';
-                quizCreateBtn.style.display = 'none';
-                inviteSection.style.display = 'none';
-            }
-
-            // 로그아웃 버튼 클릭 이벤트
-            logoutBtn.addEventListener('click', async () => {
-                try {
-                    const response = await fetch('/auth/logout', {
-                        method: 'POST',
-                        credentials: 'include'
-                    });
-
-                    if (response.ok) {
-                        alert('로그아웃 되었습니다.');
-                        window.location.reload();
-                    } else {
-                        alert('로그아웃 실패');
-                    }
-                } catch (err) {
-                    console.error('로그아웃 에러:', err);
-                    alert('로그아웃 중 오류가 발생했습니다.');
-                }
-            });
-        });
-    </script>
+    <!-- ES6 모듈로 스크립트 로드 -->
+    <script type="module" src="/js/main.js"></script>
 </body>
 </html>
