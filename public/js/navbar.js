@@ -14,20 +14,17 @@ export async function getUserData() {
 function createNavbarHTML(user = null) {
   return `
     <nav class="bg-[#222230] text-white shadow-lg">
-      <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
         <div class="flex justify-between items-center h-14 sm:h-16">
           <!-- 로고 및 데스크톱 메뉴 -->
           <div class="flex items-center">
             <a href="/" class="text-lg sm:text-xl font-bold hover:text-blue-200 transition-colors flex-shrink-0">
-              QuizApp
+              QQ
             </a>
             
             ${user ? `
               <!-- 데스크톱 네비게이션 (768px 이상) -->
               <div class="hidden md:flex ml-6 lg:ml-8 space-x-4 lg:space-x-6">
-                <a href="/quiz/list-page" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
-                  퀴즈 목록
-                </a>
                 <a href="/quiz/my-list" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
                   나의 퀴즈
                 </a>
@@ -90,9 +87,6 @@ function createNavbarHTML(user = null) {
               </div>
               
               <!-- 네비게이션 링크 -->
-              <a href="/quiz/list-page" class="block px-2 py-2 hover:bg-gray-700 rounded-md transition-colors text-sm">
-                퀴즈 목록
-              </a>
               <a href="/quiz/my-list" class="block px-2 py-2 hover:bg-gray-700 rounded-md transition-colors text-sm">
                 나의 퀴즈
               </a>

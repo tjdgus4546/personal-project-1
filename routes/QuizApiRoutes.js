@@ -18,6 +18,95 @@ router.get('/quiz/my-list', authenticateToken, async (req, res) => {
   }
 });
 
+// 공개된 퀴즈 목록만 반환 (메인페이지용)
+router.get('/quiz/list', async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+  
+  const { page = 1, limit = 20, sort = 'popular' } = req.query;
+  const skip = (page - 1) * limit;
+  
+  try {
+
+    let sortCondition;
+    switch (sort) {
+      case 'latest':
+        sortCondition = { createdAt: -1 }; // 최신순
+        break;
+      case 'oldest':
+        sortCondition = { createdAt: 1 }; // 오래된순
+        break;
+      case 'popular':
+      default:
+        sortCondition = { 
+          completedGameCount: -1,  // 플레이 횟수 내림차순 (많은 순)
+          createdAt: -1           // 같은 플레이 횟수면 최신순
+        };
+        break;
+    }
+
+    // isComplete가 true인 퀴즈만 선택하고, 페이징 적용
+    const quizzes = await Quiz.find(
+      { isComplete: true }, // 완료된 퀴즈만
+      'title description titleImageBase64 createdAt completedGameCount' // 필요한 필드만
+    )
+    .sort(sortCondition) // 최신순 정렬
+    .skip(skip)
+    .limit(parseInt(limit));
+    
+    // 더 로드할 데이터가 있는지 확인
+    const hasMore = quizzes.length === parseInt(limit);
+    
+    res.json({ 
+      quizzes, 
+      hasMore, 
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: sort
+    });
+  } catch (err) {
+    console.error('퀴즈 목록 불러오기 실패:', err);
+    res.status(500).json({ message: '퀴즈 목록 불러오기 실패', error: err.message });
+  }
+});
+
+router.get('/quiz/search', async (req, res) => {
+    const quizDb = req.app.get('quizDb');
+    const Quiz = require('../models/Quiz')(quizDb);
+    
+    const { q, page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+    
+    try {
+        let query = { isComplete: true };
+        
+        if (q && q.trim()) {
+            query.$or = [
+                { title: { $regex: q.trim(), $options: 'i' } },
+                { description: { $regex: q.trim(), $options: 'i' } }
+            ];
+        }
+        
+        const quizzes = await Quiz.find(query)
+            .select('title description titleImageBase64 createdAt completedGameCount')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+        
+        const hasMore = quizzes.length === parseInt(limit);
+        
+        res.json({ 
+          quizzes, 
+          hasMore, 
+          page: parseInt(page),
+          limit: parseInt(limit)
+        });
+    } catch (err) {
+        console.error('검색 API 에러:', err);
+        res.status(500).json({ message: '검색 중 오류가 발생했습니다', error: err.message });
+    }
+});
+
 //퀴즈 제목 설명 저장
 router.post('/quiz/init', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
