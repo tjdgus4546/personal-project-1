@@ -59,9 +59,9 @@ router.get('/quiz/edit', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/quiz/play', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
-});
+// router.get('/quiz/play', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
+// });
 
 // 세션 만료 페이지 라우트
 router.get('/quiz/session-expired', (req, res) => {

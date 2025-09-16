@@ -9,12 +9,12 @@ let currentSortOrder = 'popular';
 let isLoading = false;
 let hasMore = true;
 
+let currentQuizId = null;
+
 // 초대 코드로 게임 참여
 async function joinByInvite() {
-    console.log('joinByInvite 함수 호출됨');
     
     const code = document.getElementById('inviteInput').value.trim();
-    console.log('입력된 초대코드:', code);
     
     if (!code) {
         alert('초대 코드를 입력하세요');
@@ -22,7 +22,6 @@ async function joinByInvite() {
     }
 
     try {
-        console.log('API 요청 시작');
         const response = await fetch('/game/join', {
             method: 'POST',
             headers: {
@@ -33,12 +32,9 @@ async function joinByInvite() {
             credentials: 'include'
         });
 
-        console.log('API 응답 상태:', response.status);
         const result = await response.json();
-        console.log('API 응답 데이터:', result);
 
         if (response.ok) {
-            console.log('게임 참여 성공, 이동:', `/quiz/${result.sessionId}`);
             window.location.href = `/quiz/${result.sessionId}`;
         } else {
             console.error('게임 참여 실패:', result.message);
@@ -51,7 +47,6 @@ async function joinByInvite() {
 }
 
 async function changeSortOrder(newSortOrder) {
-    console.log('정렬 순서 변경:', newSortOrder);
     currentSortOrder = newSortOrder;  // 🔄 정렬 상태 업데이트
     currentPage = 1;                  // 📄 페이지를 1로 리셋
     hasMore = true;                   // ➡️ 더보기 상태 리셋
@@ -245,7 +240,7 @@ function renderQuizList(quizzes) {
     }
 
     const quizHTML = quizzes.map(quiz => `
-        <div class="quiz-card bg-white rounded-lg shadow-md overflow-hidden cursor-pointer" onclick="playQuiz('${quiz._id}')">
+        <div class="quiz-card bg-white rounded-lg shadow-md overflow-hidden cursor-pointer" onclick="openQuizModal('${quiz._id}')">
             <div class="relative">
                 ${quiz.titleImageBase64 ? 
                     `<img src="${quiz.titleImageBase64}" alt="${quiz.title}" class="w-full h-48 object-cover">` :
@@ -279,11 +274,6 @@ function renderQuizList(quizzes) {
     ` : '';
 
     quizListContainer.innerHTML = quizHTML + loadingMessage;
-}
-
-// 퀴즈 플레이 시작
-function playQuiz(quizId) {
-    window.location.href = `/quiz/play?id=${quizId}`;
 }
 
 // 페이지 UI 업데이트
@@ -342,8 +332,166 @@ async function initializePage() {
     }
 }
 
+// 퀴즈 카드 클릭 시 모달 열기 (기존 playQuiz 함수 대체)
+async function openQuizModal(quizId) {
+    currentQuizId = quizId;
+    
+    try {
+        // 퀴즈 상세 정보 가져오기
+        const response = await fetch(`/api/quiz/${quizId}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('퀴즈 정보를 불러올 수 없습니다.');
+        }
+        
+        const quiz = await response.json();
+        
+        // 모달에 데이터 설정
+        updateModalContent(quiz);
+        
+        // 모달 표시
+        showModal();
+        
+    } catch (error) {
+        console.error('퀴즈 정보 로딩 실패:', error);
+        alert('퀴즈 정보를 불러오는 중 오류가 발생했습니다.');
+    }
+}
+
+// 모달 내용 업데이트
+function updateModalContent(quiz) {
+    // 썸네일 이미지
+    const modalThumbnail = document.getElementById('modalThumbnail');
+    const thumbnailContainer = modalThumbnail.parentElement;
+    
+    if (quiz.titleImageBase64) {
+        modalThumbnail.src = quiz.titleImageBase64;
+        modalThumbnail.alt = quiz.title;
+        modalThumbnail.style.display = 'block';
+        thumbnailContainer.classList.remove('bg-gradient-to-br', 'from-blue-400', 'via-purple-500', 'to-pink-500');
+    }
+    // 플레이 횟수 배지
+    const modalPlayBadge = document.getElementById('modalPlayBadge');
+    if (quiz.completedGameCount > 0) {
+        modalPlayBadge.textContent = `누적 플레이 ${quiz.completedGameCount}회!`;
+        modalPlayBadge.className = 'absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold';
+    } else {
+        modalPlayBadge.textContent = 'NEW';
+        modalPlayBadge.className = 'absolute top-4 left-4 bg-gray-500 text-white px-3 py-1 rounded-full text-sm font-bold';
+    }
+    
+    // 제목
+    document.getElementById('modalTitle').textContent = quiz.title;
+    
+    // 생성일과 플레이 횟수
+    const createdDate = new Date(quiz.createdAt).toLocaleDateString('ko-KR').replace(/\.$/, '');
+    document.getElementById('modalCreatedDate').textContent = `${createdDate}`;
+    // 설명
+    const description = quiz.description || '이 퀴즈에 도전해보세요!';
+    document.getElementById('modalDescription').textContent = description;
+}
+
+// 모달 표시 애니메이션
+function showModal() {
+    const modal = document.getElementById('quizModal');
+    const modalContent = document.getElementById('quizModalContent');
+    
+    // 모달 표시
+    modal.classList.remove('hidden');
+    
+    // 애니메이션 적용
+    setTimeout(() => {
+        modalContent.classList.remove('scale-95', 'opacity-0');
+        modalContent.classList.add('scale-100', 'opacity-100');
+    }, 10);
+    
+    // body 스크롤 방지
+    document.body.style.overflow = 'hidden';
+}
+
+// 모달 닫기
+function closeQuizModal() {
+    const modal = document.getElementById('quizModal');
+    const modalContent = document.getElementById('quizModalContent');
+    
+    // 애니메이션 적용
+    modalContent.classList.remove('scale-100', 'opacity-100');
+    modalContent.classList.add('scale-95', 'opacity-0');
+    
+    // 모달 숨기기
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        currentQuizId = null;
+    }, 300);
+    
+    // body 스크롤 복원
+    document.body.style.overflow = 'auto';
+}
+
+// 게임 세션 생성
+async function createGameSession() {
+    if (!currentQuizId) {
+        alert('퀴즈 정보를 찾을 수 없습니다.');
+        return;
+    }
+    
+    const createBtn = document.getElementById('createSessionBtn');
+    const originalText = createBtn.innerHTML;
+    
+    // 로딩 상태 표시
+    createBtn.innerHTML = '세션 생성 중...';
+    createBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/game/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ quizId: currentQuizId }),
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('게임 세션 생성에 실패했습니다.');
+        }
+        
+        const data = await response.json();
+        
+        if (data.sessionId) {
+            // 모달 닫고 게임 페이지로 이동
+            closeQuizModal();
+            window.location.href = `/quiz/${data.sessionId}`;
+        } else {
+            throw new Error('세션 ID를 받지 못했습니다.');
+        }
+        
+    } catch (error) {
+        console.error('게임 세션 생성 실패:', error);
+        alert('게임 세션을 생성하는 중 오류가 발생했습니다.');
+    } finally {
+        // 버튼 상태 복원
+        createBtn.innerHTML = originalText;
+        createBtn.disabled = false;
+    }
+}
+
 // 전역 함수로 등록 (HTML onclick에서 사용)
-window.playQuiz = playQuiz;
+window.openQuizModal = openQuizModal; // 퀴즈 모달 열기
+window.closeQuizModal = closeQuizModal; // 퀴즈 모달 닫기
+window.createGameSession = createGameSession; 
 window.loadQuizList = loadQuizList;
 window.joinByInvite = joinByInvite;
 window.changeSortOrder = changeSortOrder;
