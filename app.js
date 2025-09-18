@@ -1,20 +1,22 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const cookieParser = require('cookie-parser'); // Add this line
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
+const naverAuthRoutes = require('./routes/NaverAuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
-const authenticateToken = require('./middlewares/AuthMiddleware'); // 미들웨어 추가
+const authenticateToken = require('./middlewares/AuthMiddleware');
 const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 
 
 const app = express();
 const http = require('http');
 const { Server } = require('socket.io');
-const server = http.createServer(app); // 기존 app을 감싼다
-const io = new Server(server);        // 소켓 서버 생성
+const server = http.createServer(app);
+const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
@@ -23,6 +25,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+app.use(session({
+  secret: process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 30 * 60 * 1000 // 30분
+  }
+}));
+
 // ✅ MongoDB 연결
 connectDB().then(({ userDb, quizDb }) => {
   app.set('userDb', userDb);  // User DB를 전역에서 사용 가능하도록 설정
@@ -30,10 +42,10 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
   
   const quizApiRoutes = quizApiRoutesFactory(quizDb);
-  
-  // 미들웨어 설정
-  app.use('/auth', authRoutes);
+
   // 라우트 설정
+  app.use('/auth', authRoutes);
+  app.use('/auth', naverAuthRoutes);
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
   app.use('/api', quizApiRoutes);

@@ -15,7 +15,9 @@ const userSchema = new Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      return !this.provider;
+    },
   },
   createdAt: {
     type: Date,
@@ -24,6 +26,15 @@ const userSchema = new Schema({
   profileImage: {
     type: String,
     require: true,
+  },
+  provider: {
+    type: String,
+    enum: ['local', 'naver', 'google', 'kakao'],
+    default: 'local'
+  },
+  providerId: {
+    type: String,
+    default: null
   },
   gameSessions: [
     {
@@ -36,5 +47,7 @@ const userSchema = new Schema({
     ref: 'Quiz'
   }],
 });
+
+userSchema.index({ email: 1, provider: 1 }, { unique: true });
 
 module.exports = (userDb) => userDb.model('User', userSchema);
