@@ -16,8 +16,8 @@
         <div class="text-center text-[14px]">
 
             <div class="max-w-5xl mx-auto px-4 sm:px-6">
-                <div class="flex flex-col lg:flex-row gap-4 lg:gap-6 items-center justify-between">
-
+                <!-- 데스크톱 레이아웃 (lg 이상) -->
+                <div class="hidden lg:flex flex-col lg:flex-row gap-4 lg:gap-6 items-center justify-between">
                     <div class="flex justify-center h-[38px]">
                         <div class="relative flex items-center space-x-3 bg-white px-4 py-2 rounded-lg shadow-sm border">
                             <select 
@@ -53,21 +53,78 @@
                     </div>
     
                     <!-- 초대 코드 입력 섹션 -->
-                        <div id="inviteSection" class="flex h-[38px]">
+                    <div id="inviteSection" class="flex h-[38px]">
+                        <input 
+                            type="text"
+                            id="inviteInput" 
+                            placeholder="초대 코드 입력"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                        <button 
+                            id="joinBtn"
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition-colors"
+                        >
+                            입장
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 모바일/태블릿 레이아웃 (lg 미만) -->
+                <div class="lg:hidden space-y-4">
+                    <!-- 첫 번째 줄: 검색창 + 정렬 드롭다운 -->
+                    <div class="flex gap-3 h-[38px]">
+                        <!-- 검색창 (더 넓게) -->
+                        <div class="flex-1 flex min-w-0">
                             <input 
-                                type="text"
-                                id="inviteInput" 
-                                placeholder="초대 코드 입력"
-                                class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                type="text" 
+                                id="searchInputMobile"
+                                placeholder="검색어를 입력해 주세요."
+                                data-placeholder-full="검색어를 입력해 주세요."
+                                data-placeholder-short="검색"
+                                class="flex-1 px-3 py-2 rounded-l-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
                             >
                             <button 
-                                id="joinBtn"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition-colors"
+                                id="searchBtnMobile"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-r-lg transition-colors text-sm whitespace-nowrap"
+                            >
+                                검색
+                            </button>
+                        </div>
+                        
+                        <!-- 정렬 드롭다운 -->
+                        <div class="relative flex items-center bg-white px-3 py-2 rounded-lg shadow-sm border min-w-[100px]">
+                            <select 
+                                id="sortSelectMobile" 
+                                class="text-sm border-0 focus:outline-none focus:ring-0 bg-transparent cursor-pointer pr-6 appearance-none w-full"
+                                onchange="window.changeSortOrder && window.changeSortOrder(this.value)"
+                            >
+                                <option value="popular">인기순</option>
+                                <option value="latest">최신순</option>
+                                <option value="oldest">오래된순</option>
+                            </select>
+                            <svg class="w-3 h-3 text-gray-500 pointer-events-none absolute right-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- 두 번째 줄: 초대 코드 입력 (로그인 시에만) -->
+                    <div id="inviteSectionMobile" class="hidden">
+                        <div class="flex h-[38px]">
+                            <input 
+                                type="text"
+                                id="inviteInputMobile" 
+                                placeholder="초대 코드를 입력하세요"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
+                            >
+                            <button 
+                                id="joinBtnMobile"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition-colors text-sm whitespace-nowrap flex-shrink-0"
                             >
                                 입장
                             </button>
                         </div>
-
+                    </div>
                 </div>
             </div>
             
@@ -88,6 +145,7 @@
         </div>
     </div>
 
+    <!-- 퀴즈 모달 -->
     <div id="quizModal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
         <div class="flex items-center justify-center min-h-full">
             <!-- 모달 컨테이너 -->

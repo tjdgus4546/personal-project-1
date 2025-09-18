@@ -77,7 +77,7 @@ function createNavbarHTML(user = null) {
               <div class="flex items-center space-x-3">
                 ${createProfileImage(user)}
                 <span class="text-xs lg:text-sm hidden md:block">
-                  <span class="font-semibold">${user.nickname || user.username}</span>님
+                  <span class="font-semibold">${user.nickname || user.username}</span>
                 </span>
               </div>
               <button 
@@ -123,7 +123,7 @@ function createNavbarHTML(user = null) {
               <!-- 사용자 정보 -->
               <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2 flex items-center space-x-3">
                 ${createProfileImage(user)}
-                <span class="font-semibold">${user.nickname || user.username}</span>님
+                <span class="font-semibold">${user.nickname || user.username}</span>
               </div>
               
               <!-- 네비게이션 링크 -->
@@ -137,7 +137,7 @@ function createNavbarHTML(user = null) {
               <!-- 로그아웃 버튼 -->
               <button 
                 id="logoutBtnMobile"
-                class="w-full text-left px-2 py-2 bg-red-500 hover:bg-red-600 rounded-md transition-colors text-sm font-medium mt-3"
+                class="w-full text-left px-2 py-2 bg-[#8BA2FA] hover:bg-[#617DE9] rounded-md transition-colors text-sm font-medium mt-3"
               >
                 로그아웃
               </button>

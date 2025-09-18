@@ -13,8 +13,11 @@ let currentQuizId = null;
 
 // 초대 코드로 게임 참여
 async function joinByInvite() {
+    // 데스크톱과 모바일 양쪽에서 값 가져오기
+    const desktopInput = document.getElementById('inviteInput');
+    const mobileInput = document.getElementById('inviteInputMobile');
     
-    const code = document.getElementById('inviteInput').value.trim();
+    const code = (desktopInput?.value || mobileInput?.value || '').trim();
     
     if (!code) {
         alert('초대 코드를 입력하세요');
@@ -47,12 +50,18 @@ async function joinByInvite() {
 }
 
 async function changeSortOrder(newSortOrder) {
-    currentSortOrder = newSortOrder;  // 🔄 정렬 상태 업데이트
-    currentPage = 1;                  // 📄 페이지를 1로 리셋
-    hasMore = true;                   // ➡️ 더보기 상태 리셋
-    allQuizzes = [];                  // 🗑️ 기존 데이터 초기화
+    currentSortOrder = newSortOrder;
+    currentPage = 1;
+    hasMore = true;
+    allQuizzes = [];
     
-    // 🔄 로딩 메시지 표시
+    // 데스크톱과 모바일 모두 업데이트
+    const desktopSelect = document.getElementById('sortSelect');
+    const mobileSelect = document.getElementById('sortSelectMobile');
+    
+    if (desktopSelect) desktopSelect.value = newSortOrder;
+    if (mobileSelect) mobileSelect.value = newSortOrder;
+    
     const quizListContainer = document.getElementById('quizList');
     quizListContainer.innerHTML = `
         <div class="text-center py-8 col-span-full">
@@ -63,26 +72,48 @@ async function changeSortOrder(newSortOrder) {
         </div>
     `;
     
-    await loadQuizzes(); // 🔄 새로운 정렬로 데이터 로드
+    await loadQuizzes();
 }
 
 // 검색 이벤트 리스너 설정
 function setupSearchListener() {
+    // 데스크톱 검색
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
     
-    // 버튼 클릭으로 검색
+    // 모바일 검색
+    const searchInputMobile = document.getElementById('searchInputMobile');
+    const searchBtnMobile = document.getElementById('searchBtnMobile');
+    
+    // 통합 검색 함수
+    const performSearch = (inputElement) => {
+        if (inputElement) {
+            searchQuizzes(inputElement.value);
+        }
+    };
+    
+    // 데스크톱 이벤트
     if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
-            searchQuizzes(searchInput.value);
-        });
+        searchBtn.addEventListener('click', () => performSearch(searchInput));
     }
     
-    // Enter 키로도 검색
     if (searchInput) {
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                searchQuizzes(searchInput.value);
+                performSearch(searchInput);
+            }
+        });
+    }
+    
+    // 모바일 이벤트
+    if (searchBtnMobile) {
+        searchBtnMobile.addEventListener('click', () => performSearch(searchInputMobile));
+    }
+    
+    if (searchInputMobile) {
+        searchInputMobile.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch(searchInputMobile);
             }
         });
     }
@@ -93,7 +124,14 @@ async function searchQuizzes(searchTerm) {
     currentSearchTerm = searchTerm;
     currentPage = 1;
     hasMore = true;
-    allQuizzes = []; // 기존 데이터 초기화
+    allQuizzes = [];
+    
+    // 양쪽 검색창에 같은 값 동기화
+    const desktopInput = document.getElementById('searchInput');
+    const mobileInput = document.getElementById('searchInputMobile');
+    
+    if (desktopInput) desktopInput.value = searchTerm;
+    if (mobileInput) mobileInput.value = searchTerm;
     
     const quizListContainer = document.getElementById('quizList');
     quizListContainer.innerHTML = `<div class="loading-spinner text-center py-8 col-span-full text-gray-300">검색 중...</div>`;
@@ -110,10 +148,8 @@ async function loadQuizzes() {
     try {
         let url;
         if (currentSearchTerm) {
-            // 검색 모드
             url = `/api/quiz/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=20&sort=${currentSortOrder}`;
         } else {
-            // 일반 목록 모드
             url = `/api/quiz/list?page=${currentPage}&limit=20&sort=${currentSortOrder}`;
         }
         
@@ -121,7 +157,6 @@ async function loadQuizzes() {
         const data = await response.json();
         
         if (response.ok) {
-            // 첫 번째 페이지면 기존 데이터 초기화, 아니면 추가
             if (currentPage === 1) {
                 allQuizzes = data.quizzes || [];
             } else {
@@ -131,7 +166,6 @@ async function loadQuizzes() {
             hasMore = data.hasMore || false;
             renderQuizList(allQuizzes);
             
-            // 무한 스크롤 설정 (첫 로딩시에만)
             if (currentPage === 1) {
                 setupInfiniteScroll();
             }
@@ -164,10 +198,7 @@ async function loadMoreQuizzes() {
 
 // 무한 스크롤 설정
 function setupInfiniteScroll() {
-    // 기존 리스너 제거
     window.removeEventListener('scroll', handleScroll);
-    
-    // 새 리스너 추가
     window.addEventListener('scroll', handleScroll);
 }
 
@@ -186,7 +217,6 @@ async function loadQuizList() {
         return;
     }
 
-    // 로딩 상태 표시
     quizListContainer.innerHTML = `
         <div class="text-center py-8 col-span-full">
             <div class="inline-flex items-center space-x-2 text-gray-300">
@@ -196,18 +226,18 @@ async function loadQuizList() {
         </div>
     `;
 
-    // 상태 초기화
     currentPage = 1;
     currentSearchTerm = '';
     currentSortOrder = 'popular';
     hasMore = true;
     allQuizzes = [];
 
-    // 정렬 드롭다운 초기값 설정
-    const sortSelect = document.getElementById('sortSelect');
-    if (sortSelect) {
-        sortSelect.value = currentSortOrder;
-    }
+    // 양쪽 정렬 선택기 초기값 설정
+    const desktopSelect = document.getElementById('sortSelect');
+    const mobileSelect = document.getElementById('sortSelectMobile');
+    
+    if (desktopSelect) desktopSelect.value = currentSortOrder;
+    if (mobileSelect) mobileSelect.value = currentSortOrder;
 
     try {
         await loadQuizzes();
@@ -263,7 +293,6 @@ function renderQuizList(quizzes) {
         </div>
     `).join('');
 
-    // 로딩 중 메시지 추가 (더 로드할 데이터가 있고 현재 로딩 중일 때)
     const loadingMessage = hasMore && isLoading ? `
         <div class="text-center py-4 col-span-full">
             <div class="inline-flex items-center space-x-2 text-gray-500">
@@ -278,30 +307,51 @@ function renderQuizList(quizzes) {
 
 // 페이지 UI 업데이트
 function updatePageUI(user) {
-    const inviteSection = document.getElementById('inviteSection');
+    const desktopInviteSection = document.getElementById('inviteSection');
+    const mobileInviteSection = document.getElementById('inviteSectionMobile');
+    
     loadQuizList();
 
     if (user) {
         // 로그인 상태
-        inviteSection.classList.remove('hidden');
+        if (desktopInviteSection) desktopInviteSection.classList.remove('hidden');
+        if (mobileInviteSection) mobileInviteSection.classList.remove('hidden');
     } else { 
         // 비로그인 상태
-        inviteSection.classList.add('hidden');
+        if (desktopInviteSection) desktopInviteSection.classList.add('hidden');
+        if (mobileInviteSection) mobileInviteSection.classList.add('hidden');
     }
 }
 
 // 이벤트 리스너 설정
 function attachEventListeners() {
+    // 데스크톱 초대 버튼
     const joinBtn = document.getElementById('joinBtn');
     const inviteInput = document.getElementById('inviteInput');
+    
+    // 모바일 초대 버튼
+    const joinBtnMobile = document.getElementById('joinBtnMobile');
+    const inviteInputMobile = document.getElementById('inviteInputMobile');
 
     if (joinBtn) {
         joinBtn.addEventListener('click', joinByInvite);
     }
 
-    // Enter 키로도 참여 가능
+    if (joinBtnMobile) {
+        joinBtnMobile.addEventListener('click', joinByInvite);
+    }
+
+    // Enter 키로 참여 가능
     if (inviteInput) {
         inviteInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinByInvite();
+            }
+        });
+    }
+
+    if (inviteInputMobile) {
+        inviteInputMobile.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 joinByInvite();
             }
@@ -312,32 +362,22 @@ function attachEventListeners() {
 // 페이지 초기화
 async function initializePage() {
     try {
-        // 1. 상단바 렌더링 (사용자 정보도 함께 반환)
         const user = await renderNavbar();
-        
-        // 2. 현재 페이지 하이라이트
         highlightCurrentPage();
-        
-        // 3. 페이지 UI 업데이트
         updatePageUI(user);
-        
-        // 4. 이벤트 리스너 설정
         attachEventListeners();
-                
     } catch (err) {
         console.error('페이지 초기화 실패:', err);
-        // 에러가 발생해도 기본 UI는 표시
         updatePageUI(null);
         attachEventListeners();
     }
 }
 
-// 퀴즈 카드 클릭 시 모달 열기 (기존 playQuiz 함수 대체)
+// 퀴즈 카드 클릭 시 모달 열기
 async function openQuizModal(quizId) {
     currentQuizId = quizId;
     
     try {
-        // 퀴즈 상세 정보 가져오기
         const response = await fetch(`/api/quiz/${quizId}`, {
             credentials: 'include'
         });
@@ -352,11 +392,7 @@ async function openQuizModal(quizId) {
         }
         
         const quiz = await response.json();
-        
-        // 모달에 데이터 설정
         updateModalContent(quiz);
-        
-        // 모달 표시
         showModal();
         
     } catch (error) {
@@ -367,7 +403,6 @@ async function openQuizModal(quizId) {
 
 // 모달 내용 업데이트
 function updateModalContent(quiz) {
-    // 썸네일 이미지
     const modalThumbnail = document.getElementById('modalThumbnail');
     const thumbnailContainer = modalThumbnail.parentElement;
     
@@ -377,7 +412,7 @@ function updateModalContent(quiz) {
         modalThumbnail.style.display = 'block';
         thumbnailContainer.classList.remove('bg-gradient-to-br', 'from-blue-400', 'via-purple-500', 'to-pink-500');
     }
-    // 플레이 횟수 배지
+
     const modalPlayBadge = document.getElementById('modalPlayBadge');
     if (quiz.completedGameCount > 0) {
         modalPlayBadge.textContent = `누적 플레이 ${quiz.completedGameCount}회!`;
@@ -387,13 +422,11 @@ function updateModalContent(quiz) {
         modalPlayBadge.className = 'absolute top-4 left-4 bg-gray-500 text-white px-3 py-1 rounded-full text-sm font-bold';
     }
     
-    // 제목
     document.getElementById('modalTitle').textContent = quiz.title;
     
-    // 생성일과 플레이 횟수
     const createdDate = new Date(quiz.createdAt).toLocaleDateString('ko-KR').replace(/\.$/, '');
     document.getElementById('modalCreatedDate').textContent = `${createdDate}`;
-    // 설명
+    
     const description = quiz.description || '이 퀴즈에 도전해보세요!';
     document.getElementById('modalDescription').textContent = description;
 }
@@ -403,16 +436,13 @@ function showModal() {
     const modal = document.getElementById('quizModal');
     const modalContent = document.getElementById('quizModalContent');
     
-    // 모달 표시
     modal.classList.remove('hidden');
     
-    // 애니메이션 적용
     setTimeout(() => {
         modalContent.classList.remove('scale-95', 'opacity-0');
         modalContent.classList.add('scale-100', 'opacity-100');
     }, 10);
     
-    // body 스크롤 방지
     document.body.style.overflow = 'hidden';
 }
 
@@ -421,17 +451,14 @@ function closeQuizModal() {
     const modal = document.getElementById('quizModal');
     const modalContent = document.getElementById('quizModalContent');
     
-    // 애니메이션 적용
     modalContent.classList.remove('scale-100', 'opacity-100');
     modalContent.classList.add('scale-95', 'opacity-0');
     
-    // 모달 숨기기
     setTimeout(() => {
         modal.classList.add('hidden');
         currentQuizId = null;
     }, 300);
     
-    // body 스크롤 복원
     document.body.style.overflow = 'auto';
 }
 
@@ -445,7 +472,6 @@ async function createGameSession() {
     const createBtn = document.getElementById('createSessionBtn');
     const originalText = createBtn.innerHTML;
     
-    // 로딩 상태 표시
     createBtn.innerHTML = '세션 생성 중...';
     createBtn.disabled = true;
     
@@ -471,7 +497,6 @@ async function createGameSession() {
         const data = await response.json();
         
         if (data.sessionId) {
-            // 모달 닫고 게임 페이지로 이동
             closeQuizModal();
             window.location.href = `/quiz/${data.sessionId}`;
         } else {
@@ -482,15 +507,14 @@ async function createGameSession() {
         console.error('게임 세션 생성 실패:', error);
         alert('게임 세션을 생성하는 중 오류가 발생했습니다.');
     } finally {
-        // 버튼 상태 복원
         createBtn.innerHTML = originalText;
         createBtn.disabled = false;
     }
 }
 
 // 전역 함수로 등록 (HTML onclick에서 사용)
-window.openQuizModal = openQuizModal; // 퀴즈 모달 열기
-window.closeQuizModal = closeQuizModal; // 퀴즈 모달 닫기
+window.openQuizModal = openQuizModal;
+window.closeQuizModal = closeQuizModal;
 window.createGameSession = createGameSession; 
 window.loadQuizList = loadQuizList;
 window.joinByInvite = joinByInvite;
