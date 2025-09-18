@@ -9,25 +9,45 @@ const signup = async (req, res) => {
   const userDb = req.app.get('userDb');
   const User = require('../models/User')(userDb);
 
-  const { username, email, password } = req.body;
+  const { username, nickname, email, password } = req.body;
 
-  if (!username || !email || !password) {
+  if (!username || !nickname || !email || !password) {
     return res.status(400).json({ message: '모든 필드를 입력해주세요.' });
   }
 
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    // 이메일 중복 체크
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({ message: '이메일이 이미 사용 중입니다.' });
+    }
+
+    // 닉네임 중복 체크
+    const existingNickname = await User.findOne({ nickname });
+    if (existingNickname) {
+      return res.status(400).json({ message: '닉네임이 이미 사용 중입니다.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ username, email, password: hashedPassword });
+    const newUser = new User({ 
+      username: username.trim(),
+      nickname: nickname.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashedPassword 
+    });
     await newUser.save();
 
     res.status(201).json({ message: '회원가입 성공!' });
   } catch (err) {
+    console.error('회원가입 에러:', err);
+    if (err.code === 11000) {
+      // MongoDB 중복 키 에러
+      const field = Object.keys(err.keyPattern)[0];
+      const message = field === 'email' ? '이메일이 이미 사용 중입니다.' : 
+                     field === 'nickname' ? '닉네임이 이미 사용 중입니다.' : '중복된 값이 있습니다.';
+      return res.status(400).json({ message });
+    }
     res.status(500).json({ message: '서버 오류', error: err.message });
   }
 };
@@ -45,36 +65,47 @@ const login = async (req, res) => {
       return res.status(400).json({ message: '사용자를 찾을 수 없습니다.' });
     }
 
+    // OAuth 사용자인 경우 (password가 없는 경우)
+    if (!user.password && user.naverId) {
+      return res.status(400).json({ 
+        message: '네이버 로그인으로 가입된 계정입니다. 네이버 로그인을 이용해주세요.' 
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: '잘못된 비밀번호입니다.' });
     }
 
-    const accessToken = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
-      expiresIn: '15m', // 액세스 토큰 유효기간: 15분
-    });
+    const accessToken = jwt.sign(
+      { id: user._id, username: user.username, nickname: user.nickname }, 
+      JWT_SECRET, 
+      { expiresIn: '15m' }
+    );
 
     const refreshToken = jwt.sign({ id: user._id }, JWT_SECRET, {
-      expiresIn: '7d', // 리프레시 토큰 유효기간: 7일
+      expiresIn: '7d',
     });
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // 프로덕션 환경에서는 https를 사용해야 합니다.
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000 // 15분
+      maxAge: 15 * 60 * 1000
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      // path 제거로 미들웨어에서 접근 가능하도록 함
     });
 
     res.json({
       message: 'Login successful',
       username: user.username,
+      nickname: user.nickname,
       userId: user._id
     });
   } catch (err) {
@@ -99,13 +130,7 @@ const getUserInfo = async (req, res) => {
 
 const logout = (req, res) => {
   res.clearCookie('accessToken');
-  // refreshToken을 삭제할 때, 생성 시 사용했던 path 옵션을 반드시 포함해야 합니다.
-  res.clearCookie('refreshToken', { 
-    path: '/auth/refresh',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
+  res.clearCookie('refreshToken');
   res.status(200).json({ message: '로그아웃 성공' });
 };
 
@@ -128,15 +153,17 @@ const refreshToken = async (req, res) => {
       return res.status(403).json({ message: '사용자를 찾을 수 없습니다.' });
     }
 
-    const newAccessToken = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
-      expiresIn: '15m', // New access token valid for 15 minutes
-    });
+    const newAccessToken = jwt.sign(
+      { id: user._id, username: user.username, nickname: user.nickname }, 
+      JWT_SECRET, 
+      { expiresIn: '15m' }
+    );
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000 // 15분
+      maxAge: 15 * 60 * 1000
     });
 
     res.status(200).json({ message: '새로운 액세스 토큰 발급 성공' });

@@ -5,7 +5,12 @@ const userSchema = new Schema({
   username: {
     type: String,
     required: true,
+  },
+  nickname: {
+    type: String,
+    required: true,
     unique: true,
+    trim: true,
   },
   email: {
     type: String,
@@ -18,6 +23,11 @@ const userSchema = new Schema({
     required: function() {
       return !this.provider;
     },
+  },
+  naverId: {
+    type: String,
+    unique: true,
+    sparse: true, // null 값 허용하면서 unique 유지
   },
   createdAt: {
     type: Date,

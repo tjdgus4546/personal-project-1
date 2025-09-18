@@ -1,6 +1,4 @@
-// middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
-const User = require('../models/User'); // User 모델을 직접 가져오도록 수정
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -50,9 +48,15 @@ const authenticateToken = async (req, res, next) => {
       }
 
       // 새로운 액세스 토큰 발급
-      const newAccessToken = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, {
-        expiresIn: '15m',
-      });
+      const newAccessToken = jwt.sign(
+        { 
+          id: user._id, 
+          username: user.username,
+          nickname: user.nickname 
+        }, 
+        JWT_SECRET, 
+        { expiresIn: '15m' }
+      );
 
       // 새로 발급한 액세스 토큰을 쿠키에 저장
       res.cookie('accessToken', newAccessToken, {
@@ -63,7 +67,11 @@ const authenticateToken = async (req, res, next) => {
       });
 
       // 새로 발급된 토큰의 정보를 요청 객체에 저장하여 다음 미들웨어에서 사용
-      req.user = { id: user._id, username: user.username };
+      req.user = { 
+        id: user._id, 
+        username: user.username,
+        nickname: user.nickname 
+      };
       return next();
 
     } catch (err) {

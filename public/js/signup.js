@@ -84,7 +84,7 @@ function setupSignupForm() {
                 return;
             }
             
-            const response = await fetch('/signup', {
+            const response = await fetch('/auth/signup', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -120,18 +120,34 @@ function setupSignupForm() {
 // 폼 유효성 검사
 function validateSignupForm(data) {
     // 닉네임 검사
-    if (!data.username || !data.username.trim()) {
+    if (!data.nickname || !data.nickname.trim()) {
         showAlert('error', '닉네임을 입력해주세요.');
         return false;
     }
     
-    if (data.username.trim().length < 2) {
+    if (data.nickname.trim().length < 2) {
         showAlert('error', '닉네임은 2글자 이상이어야 합니다.');
         return false;
     }
     
-    if (data.username.trim().length > 20) {
+    if (data.nickname.trim().length > 20) {
         showAlert('error', '닉네임은 20글자 이하여야 합니다.');
+        return false;
+    }
+    
+    // 이름 검사
+    if (!data.username || !data.username.trim()) {
+        showAlert('error', '이름을 입력해주세요.');
+        return false;
+    }
+    
+    if (data.username.trim().length < 2) {
+        showAlert('error', '이름은 2글자 이상이어야 합니다.');
+        return false;
+    }
+    
+    if (data.username.trim().length > 20) {
+        showAlert('error', '이름은 20글자 이하여야 합니다.');
         return false;
     }
     
@@ -158,8 +174,8 @@ function validateSignupForm(data) {
         return false;
     }
     
-    if (data.password.length > 50) {
-        showAlert('error', '비밀번호는 50글자 이하여야 합니다.');
+    if (data.password.length > 30) {
+        showAlert('error', '비밀번호는 30글자 이하여야 합니다.');
         return false;
     }
     
@@ -197,45 +213,66 @@ function setLoadingState(loading) {
 
 // 실시간 유효성 검사 (선택사항)
 document.addEventListener('DOMContentLoaded', function() {
+    const nicknameInput = document.getElementById('nickname');
     const usernameInput = document.getElementById('username');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     
     // 닉네임 실시간 검사
-    usernameInput.addEventListener('blur', function() {
-        const username = this.value.trim();
-        if (username && username.length < 2) {
-            this.style.borderColor = '#ff4444';
-        } else {
-            this.style.borderColor = '#ddd';
-        }
-    });
+    if (nicknameInput) {
+        nicknameInput.addEventListener('blur', function() {
+            const nickname = this.value.trim();
+            if (nickname && nickname.length < 2) {
+                this.style.borderColor = '#ff4444';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    }
+    
+    // 이름 실시간 검사
+    if (usernameInput) {
+        usernameInput.addEventListener('blur', function() {
+            const username = this.value.trim();
+            if (username && username.length < 2) {
+                this.style.borderColor = '#ff4444';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    }
     
     // 이메일 실시간 검사
-    emailInput.addEventListener('blur', function() {
-        const email = this.value.trim();
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (email && !emailRegex.test(email)) {
-            this.style.borderColor = '#ff4444';
-        } else {
-            this.style.borderColor = '#ddd';
-        }
-    });
+    if (emailInput) {
+        emailInput.addEventListener('blur', function() {
+            const email = this.value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (email && !emailRegex.test(email)) {
+                this.style.borderColor = '#ff4444';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    }
     
     // 비밀번호 실시간 검사
-    passwordInput.addEventListener('blur', function() {
-        const password = this.value;
-        if (password && password.length < 6) {
-            this.style.borderColor = '#ff4444';
-        } else {
-            this.style.borderColor = '#ddd';
-        }
-    });
+    if (passwordInput) {
+        passwordInput.addEventListener('blur', function() {
+            const password = this.value;
+            if (password && password.length < 6) {
+                this.style.borderColor = '#ff4444';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    }
     
     // 입력 필드 포커스 시 테두리 색상 초기화
-    [usernameInput, emailInput, passwordInput].forEach(input => {
-        input.addEventListener('focus', function() {
-            this.style.borderColor = '#4CAF50';
-        });
+    [nicknameInput, usernameInput, emailInput, passwordInput].forEach(input => {
+        if (input) {
+            input.addEventListener('focus', function() {
+                this.style.borderColor = '#4CAF50';
+            });
+        }
     });
 });

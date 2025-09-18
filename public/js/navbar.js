@@ -10,6 +10,34 @@ export async function getUserData() {
   }
 }
 
+// 프로필 이미지 컴포넌트 생성 함수
+function createProfileImage(user) {
+  const profileImageUrl = user.profileImage;
+  const displayName = user.nickname || user.username;
+  
+  if (profileImageUrl && profileImageUrl !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
+    // 실제 프로필 이미지가 있는 경우
+    return `
+      <img 
+        src="${profileImageUrl}" 
+        alt="${displayName}님의 프로필" 
+        class="w-8 h-8 rounded-full object-cover border-2 border-white/20"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+      >
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm border-2 border-white/20" style="display: none;">
+        ${displayName.charAt(0).toUpperCase()}
+      </div>
+    `;
+  } else {
+    // 기본 이미지이거나 이미지가 없는 경우 - 이니셜 아바타 사용
+    return `
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm border-2 border-white/20">
+        ${displayName.charAt(0).toUpperCase()}
+      </div>
+    `;
+  }
+}
+
 // 상단바 HTML 생성 함수
 function createNavbarHTML(user = null) {
   return `
@@ -38,9 +66,13 @@ function createNavbarHTML(user = null) {
           <!-- 데스크톱 사용자 메뉴 -->
           <div class="hidden sm:flex items-center space-x-2 lg:space-x-4">
             ${user ? `
-              <span class="text-xs lg:text-sm hidden md:block">
-                안녕하세요, <span class="font-semibold">${user.username}</span>님
-              </span>
+              <!-- 사용자 프로필 -->
+              <div class="flex items-center space-x-3">
+                ${createProfileImage(user)}
+                <span class="text-xs lg:text-sm hidden md:block">
+                  <span class="font-semibold">${user.nickname || user.username}</span>
+                </span>
+              </div>
               <button 
                 id="logoutBtn"
                 class="bg-[#8BA2FA] hover:bg-[#617DE9] px-2 py-1 lg:px-4 lg:py-2 rounded-md transition-colors text-xs lg:text-sm font-medium"
@@ -82,8 +114,9 @@ function createNavbarHTML(user = null) {
           <div class="py-3 space-y-2">
             ${user ? `
               <!-- 사용자 정보 -->
-              <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2">
-                안녕하세요, <span class="font-semibold">${user.username}</span>님
+              <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2 flex items-center space-x-3">
+                ${createProfileImage(user)}
+                <span class="font-semibold">${user.nickname || user.username}</span>
               </div>
               
               <!-- 네비게이션 링크 -->
