@@ -46,8 +46,15 @@ function createNavbarHTML(user = null) {
         <div class="flex justify-between items-center h-14 sm:h-16">
           <!-- 로고 및 데스크톱 메뉴 -->
           <div class="flex items-center">
-            <a href="/" class="text-lg sm:text-xl font-bold hover:text-blue-200 transition-colors flex-shrink-0">
-              QQ
+            <!-- 로고 -->
+            <a href="/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity flex-shrink-0">
+              <img 
+                src="/images/logo.png" 
+                alt="QuizApp 로고" 
+                class="h-8 w-auto sm:h-10"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
+              >
+              <span class="text-lg sm:text-xl font-bold text-white hidden" id="fallbackLogo">QQ</span>
             </a>
             
             ${user ? `
@@ -70,7 +77,7 @@ function createNavbarHTML(user = null) {
               <div class="flex items-center space-x-3">
                 ${createProfileImage(user)}
                 <span class="text-xs lg:text-sm hidden md:block">
-                  <span class="font-semibold">${user.nickname || user.username}</span>
+                  <span class="font-semibold">${user.nickname || user.username}</span>님
                 </span>
               </div>
               <button 
@@ -116,7 +123,7 @@ function createNavbarHTML(user = null) {
               <!-- 사용자 정보 -->
               <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2 flex items-center space-x-3">
                 ${createProfileImage(user)}
-                <span class="font-semibold">${user.nickname || user.username}</span>
+                <span class="font-semibold">${user.nickname || user.username}</span>님
               </div>
               
               <!-- 네비게이션 링크 -->
@@ -169,7 +176,6 @@ function toggleMobileMenu() {
     if (isHidden) {
       mobileMenu.classList.remove('hidden');
       mobileMenuBtn.setAttribute('aria-label', '메뉴 닫기');
-      // 햄버거 아이콘을 X 아이콘으로 변경
       mobileMenuBtn.innerHTML = `
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -178,7 +184,6 @@ function toggleMobileMenu() {
     } else {
       mobileMenu.classList.add('hidden');
       mobileMenuBtn.setAttribute('aria-label', '메뉴 열기');
-      // X 아이콘을 햄버거 아이콘으로 변경
       mobileMenuBtn.innerHTML = `
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -199,7 +204,6 @@ async function handleLogout() {
     if (response.ok) {
       alert('로그아웃 되었습니다.');
       
-      // 현재 페이지가 로그인이 필요한 페이지인지 확인
       const protectedPages = ['/quiz/my-list', '/quiz/init', '/quiz/edit'];
       const currentPath = window.location.pathname;
       
@@ -232,6 +236,18 @@ function handleResize() {
         </svg>
       `;
     }
+  }
+}
+
+// 로고 로드 실패 시 폴백 처리
+function handleLogoError() {
+  const logoImg = document.querySelector('nav img[alt*="로고"]');
+  const fallbackText = document.getElementById('fallbackLogo');
+  
+  if (logoImg && fallbackText) {
+    logoImg.style.display = 'none';
+    fallbackText.style.display = 'inline-block';
+    fallbackText.classList.remove('hidden');
   }
 }
 
@@ -273,30 +289,24 @@ function attachNavbarListeners() {
 // 메인 상단바 렌더링 함수 (외부에서 호출)
 export async function renderNavbar() {
   try {
-    // 사용자 정보 가져오기
     const user = await getUserData();
     
-    // 기존 상단바 제거
     const existingNavbar = document.getElementById('navbar');
     if (existingNavbar) {
       existingNavbar.remove();
     }
     
-    // 기존 이벤트 리스너 제거
     window.removeEventListener('resize', handleResize);
     
-    // 새 상단바 생성 및 삽입
     const navbarHTML = createNavbarHTML(user);
     document.body.insertAdjacentHTML('afterbegin', `<div id="navbar">${navbarHTML}</div>`);
     
-    // 이벤트 리스너 추가
     attachNavbarListeners();
     
-    return user; // 다른 모듈에서 사용할 수 있도록 반환
+    return user;
     
   } catch (err) {
     console.error('상단바 렌더링 에러:', err);
-    // 에러 발생 시 로그인 안된 상태로 렌더링
     const navbarHTML = createNavbarHTML();
     document.body.insertAdjacentHTML('afterbegin', `<div id="navbar">${navbarHTML}</div>`);
     attachNavbarListeners();
@@ -307,7 +317,7 @@ export async function renderNavbar() {
 // 현재 페이지 하이라이트 함수
 export function highlightCurrentPage() {
   const currentPath = window.location.pathname;
-  const links = document.querySelectorAll('#navbar a');
+  const links = document.querySelectorAll('#navbar a:not([href="/"])'); // 로고 링크 제외
   
   links.forEach(link => {
     if (link.getAttribute('href') === currentPath) {
