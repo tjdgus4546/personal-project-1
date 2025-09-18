@@ -70,7 +70,6 @@ const login = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
-      path: '/auth/refresh' // 리프레시 토큰은 재발급 경로에서만 사용
     });
 
     res.json({
