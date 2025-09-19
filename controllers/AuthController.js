@@ -1,4 +1,3 @@
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -176,4 +175,107 @@ const refreshToken = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getUserInfo, logout, refreshToken };
+// 프로필 업데이트
+const updateProfile = async (req, res) => {
+  const userDb = req.app.get('userDb');
+  const User = require('../models/User')(userDb);
+
+  const { nickname, currentPassword, newPassword, profileImage, removeProfileImage } = req.body;
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    let updateData = {};
+
+    // 닉네임 변경
+    if (nickname && nickname !== user.nickname) {
+      // 닉네임 중복 체크
+      const existingNickname = await User.findOne({ 
+        nickname: nickname.trim(),
+        _id: { $ne: req.user.id } // 현재 사용자 제외
+      });
+      
+      if (existingNickname) {
+        return res.status(400).json({ message: '이미 사용중인 닉네임입니다.' });
+      }
+      
+      updateData.nickname = nickname.trim();
+    }
+
+    // 프로필 이미지 처리
+    if (profileImage) {
+      // 새 이미지가 제공된 경우
+      if (!profileImage.startsWith('data:image/')) {
+        return res.status(400).json({ message: '유효하지 않은 이미지 형식입니다.' });
+      }
+      
+      // 이미지 크기 확인 (Base64 디코딩 후 대략 200KB 이하)
+      const imageSize = Math.round((profileImage.length * 3) / 4 / 1024); // KB
+      if (imageSize > 200) {
+        return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 200KB)' });
+      }
+      
+      updateData.profileImage = profileImage;
+    } else if (removeProfileImage) {
+      // 현재 이미지 제거 (네이버 연동 사용자는 네이버 기본 이미지로 복원)
+      if (user.naverId) {
+        updateData.profileImage = 'https://ssl.pstatic.net/static/pwe/address/img_profile.png';
+      } else {
+        updateData.profileImage = null;
+      }
+    }
+
+    // 비밀번호 변경 (OAuth 사용자가 아닌 경우에만)
+    if (newPassword && !user.naverId) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: '현재 비밀번호를 입력해주세요.' });
+      }
+
+      // 현재 비밀번호 확인
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: '현재 비밀번호가 올바르지 않습니다.' });
+      }
+
+      // 새 비밀번호 해시화
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      updateData.password = hashedPassword;
+    } else if (newPassword && user.naverId) {
+      return res.status(400).json({ message: '네이버 연동 계정은 비밀번호를 변경할 수 없습니다.' });
+    }
+
+    // 업데이트할 데이터가 없는 경우
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: '변경할 정보가 없습니다.' });
+    }
+
+    // 사용자 정보 업데이트
+    await User.findByIdAndUpdate(req.user.id, updateData, { new: true });
+
+    let responseMessage = '프로필이 성공적으로 업데이트되었습니다.';
+    
+    // 구체적인 변경 내용 알림
+    const changes = [];
+    if (updateData.nickname) changes.push('닉네임');
+    if (updateData.profileImage !== undefined) changes.push('프로필 이미지');
+    if (updateData.password) changes.push('비밀번호');
+    
+    if (changes.length > 0) {
+      responseMessage = `${changes.join(', ')}이(가) 성공적으로 업데이트되었습니다.`;
+    }
+
+    res.json({ message: responseMessage });
+
+  } catch (err) {
+    console.error('프로필 업데이트 에러:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ message: '이미 사용중인 닉네임입니다.' });
+    }
+    res.status(500).json({ message: '서버 오류', error: err.message });
+  }
+};
+
+module.exports = { signup, login, getUserInfo, logout, refreshToken, updateProfile };

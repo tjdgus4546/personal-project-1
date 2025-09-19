@@ -371,6 +371,24 @@ router.get('/quiz/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// 사용자 통계 정보 API
+router.get('/user/stats', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+  
+  try {
+    const createdQuizzes = await Quiz.countDocuments({ creatorId: req.user.id });
+    
+    res.json({
+      createdQuizzes: createdQuizzes,
+      playedQuizzes: 0 // User 모델의 playedQuizzes 배열 길이로 나중에 수정 가능
+    });
+  } catch (error) {
+    console.error('사용자 통계 조회 실패:', error);
+    res.status(500).json({ message: '통계 정보를 불러올 수 없습니다.' });
+  }
+});
+
 return router;
 
 };

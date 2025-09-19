@@ -75,10 +75,12 @@ function createNavbarHTML(user = null) {
             ${user ? `
               <!-- 사용자 프로필 -->
               <div class="flex items-center space-x-3">
-                ${createProfileImage(user)}
-                <span class="text-xs lg:text-sm hidden md:block">
-                  <span class="font-semibold">${user.nickname || user.username}</span>
-                </span>
+                <button onclick="goToMyPage()" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+                  ${createProfileImage(user)}
+                  <span class="text-xs lg:text-sm hidden md:block">
+                    <span class="font-semibold">${user.nickname || user.username}</span>님
+                  </span>
+                </button>
               </div>
               <button 
                 id="logoutBtn"
@@ -121,9 +123,11 @@ function createNavbarHTML(user = null) {
           <div class="py-3 space-y-2">
             ${user ? `
               <!-- 사용자 정보 -->
-              <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2 flex items-center space-x-3">
-                ${createProfileImage(user)}
-                <span class="font-semibold">${user.nickname || user.username}</span>
+              <div class="px-2 py-2 text-sm border-b border-gray-700 mb-2">
+                <button onclick="goToMyPage()" class="flex items-center space-x-3 hover:bg-gray-700 rounded-md p-2 w-full text-left transition-colors">
+                  ${createProfileImage(user)}
+                  <span class="font-semibold">${user.nickname || user.username}</span>님
+                </button>
               </div>
               
               <!-- 네비게이션 링크 -->
@@ -137,7 +141,7 @@ function createNavbarHTML(user = null) {
               <!-- 로그아웃 버튼 -->
               <button 
                 id="logoutBtnMobile"
-                class="w-full text-left px-2 py-2 bg-[#8BA2FA] hover:bg-[#617DE9] rounded-md transition-colors text-sm font-medium mt-3"
+                class="w-full text-left px-2 py-2 bg-red-500 hover:bg-red-600 rounded-md transition-colors text-sm font-medium mt-3"
               >
                 로그아웃
               </button>
@@ -251,6 +255,11 @@ function handleLogoError() {
   }
 }
 
+// 마이페이지로 이동하는 함수
+function goToMyPage() {
+  window.location.href = '/my-page';
+}
+
 // 이벤트 리스너 추가 함수
 function attachNavbarListeners() {
   // 데스크톱 로그아웃 버튼
@@ -284,6 +293,9 @@ function attachNavbarListeners() {
       }
     });
   });
+  
+  // 전역 함수로 goToMyPage 등록
+  window.goToMyPage = goToMyPage;
 }
 
 // 메인 상단바 렌더링 함수 (외부에서 호출)

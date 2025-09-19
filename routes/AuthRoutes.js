@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const router = express.Router();
-const { signup, login, getUserInfo, logout, refreshToken } = require('../controllers/AuthController');
+const { signup, login, getUserInfo, logout, refreshToken, updateProfile } = require('../controllers/AuthController');
 const authenticateToken = require('../middlewares/AuthMiddleware');
 
 // 로그인 페이지 라우팅
@@ -21,6 +21,14 @@ router.get('/my-info', authenticateToken, getUserInfo);
 router.get('/my-page', authenticateToken, (req, res) => {
   res.sendFile(path.resolve(__dirname, '..', 'public', 'my-page.html'));
 });
+
+// 내 정보 수정 페이지
+router.get('/edit-profile', authenticateToken, (req, res) => {
+  res.sendFile(path.resolve(__dirname, '..', 'public', 'edit-profile.html'));
+});
+
+// 프로필 업데이트 API
+router.put('/update-profile', authenticateToken, updateProfile);
 
 router.post('/login', login);
 router.post('/signup', signup);
