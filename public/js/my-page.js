@@ -53,10 +53,11 @@ async function loadUserProfile() {
 
 // 사용자 정보 화면에 표시
 function displayUserInfo(user, stats) {
-    // 프로필 이미지 설정
+    // 프로필 이미지 설정 (navbar와 동일한 방식)
     const profileContainer = document.getElementById('profileImageContainer');
     const displayName = user.nickname || user.username;
     
+    // 네이버 기본 이미지가 아니고 실제 프로필 이미지가 있는 경우
     if (user.profileImage && user.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
         profileContainer.innerHTML = `
             <img 
@@ -70,6 +71,7 @@ function displayUserInfo(user, stats) {
             </div>
         `;
     } else {
+        // 기본 이미지이거나 이미지가 없는 경우 - 이니셜 아바타 사용
         profileContainer.innerHTML = `
             <div class="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
                 ${displayName.charAt(0).toUpperCase()}

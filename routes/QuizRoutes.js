@@ -5,19 +5,17 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 
 // JWT 인증 미들웨어 (GameRoutes.js와 중복되므로, 별도 파일로 분리하는 것을 권장합니다)
-const authMiddleware = (req, res, next) => {
-  const token = req.cookies.accessToken;
-  if (!token) {
-    return res.status(401).redirect('/login'); // 페이지 요청이므로 로그인 페이지로 리다이렉트
-  }
+const authenticateToken = require('../middlewares/AuthMiddleware');
 
+const authMiddlewareForPages = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
+    await authenticateToken(req, res, next);
   } catch (error) {
-    // 유효하지 않은 토큰이면 로그인 페이지로
-    return res.status(401).redirect('/login?reason=invalid_token');
+    // API 미들웨어에서 JSON 응답을 보내려고 하면, 페이지 요청에서는 리다이렉트로 변경
+    if (res.headersSent) return;
+    
+    // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
+    return res.status(401).redirect('/login?reason=session_expired');
   }
 };
 
@@ -33,7 +31,7 @@ router.get('/quiz/init', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-init.html'))
 });
 
-router.get('/quiz/edit', authMiddleware, async (req, res) => {
+router.get('/quiz/edit', authMiddlewareForPages, async (req, res) => {
   const { quizId } = req.query;
   if (!quizId) {
     return res.status(400).send('<h1>잘못된 접근입니다.</h1><p>퀴즈 ID가 필요합니다. <a href="/">홈으로 돌아가기</a></p>');
@@ -59,17 +57,13 @@ router.get('/quiz/edit', authMiddleware, async (req, res) => {
   }
 });
 
-// router.get('/quiz/play', (req, res) => {
-//   res.sendFile(path.join(__dirname, '../public/quiz-play.html'));
-// });
-
 // 세션 만료 페이지 라우트
 router.get('/quiz/session-expired', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/session-expired.html'));
 });
 
 // 퀴즈 세션 페이지 라우트
-router.get('/quiz/:sessionId', authMiddleware, async (req, res) => {
+router.get('/quiz/:sessionId', authMiddlewareForPages, async (req, res) => {
   const { sessionId } = req.params;
   const { id: userId } = req.user;
 

@@ -242,11 +242,12 @@ function populateForm(user) {
     }
 }
 
-// 프로필 이미지 표시 (별도 함수로 분리)
+// 프로필 이미지 표시
 function populateProfileImage(user) {
     const profileContainer = document.getElementById('currentProfileImage');
     const displayName = user.nickname || user.username;
     
+    // 프로필 이미지가 있고 네이버 기본 이미지가 아닌 경우
     if (user.profileImage && user.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
         profileContainer.innerHTML = `
             <img 
@@ -260,20 +261,12 @@ function populateProfileImage(user) {
             </div>
         `;
         
-        // 프로필 이미지 정보
+        // 프로필 이미지 정보 표시
         document.getElementById('profileImageInfo').innerHTML = `
-            <p class="text-green-400">✓ ${user.naverId ? '네이버' : '커스텀'} 이미지</p>
+            <p class="text-green-400">✓ ${user.naverId ? '네이버' : '사용자'} 프로필 이미지</p>
         `;
-        
-        // 현재 이미지 제거 버튼 표시 (네이버 이미지가 아닌 경우만)
-        const currentImageActions = document.getElementById('currentImageActions');
-        if (!user.naverId || user.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
-            currentImageActions.classList.remove('hidden');
-        } else {
-            currentImageActions.classList.add('hidden');
-        }
-        
     } else {
+        // 기본 이미지이거나 이미지가 없는 경우
         profileContainer.innerHTML = `
             <div class="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
                 ${displayName.charAt(0).toUpperCase()}
@@ -281,11 +274,8 @@ function populateProfileImage(user) {
         `;
         
         document.getElementById('profileImageInfo').innerHTML = `
-            <p class="text-gray-500">기본 프로필 이미지</p>
+            <p class="text-gray-400">기본 프로필 이미지</p>
         `;
-        
-        // 현재 이미지 제거 버튼 숨기기
-        document.getElementById('currentImageActions').classList.add('hidden');
     }
 }
 

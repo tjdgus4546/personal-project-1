@@ -42,7 +42,7 @@ function createProfileImage(user) {
 function createNavbarHTML(user = null) {
   return `
     <nav class="bg-[#222230] text-white shadow-lg">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="max-w-[1080px] mx-auto sm:px-0 px-4">
         <div class="flex justify-between items-center h-14 sm:h-16">
           <!-- 로고 및 데스크톱 메뉴 -->
           <div class="flex items-center">

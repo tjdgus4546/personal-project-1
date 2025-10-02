@@ -19,6 +19,13 @@ const CorrectUserManager = {
     }
   },
 
+  getUsers() {
+    const correctBox = document.getElementById(this.config.boxId);
+    if (!correctBox) return [];
+    
+    return this.getCurrentUsers(correctBox);
+  },
+
   getOrCreateBox() {
     const box = document.getElementById('questionBox');
     if (!box) return null;

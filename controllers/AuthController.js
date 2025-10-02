@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt'); 
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -63,19 +64,19 @@ const login = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: '사용자를 찾을 수 없습니다.' });
     }
-
+    
     // OAuth 사용자인 경우 (password가 없는 경우)
     if (!user.password && user.naverId) {
       return res.status(400).json({ 
         message: '네이버 로그인으로 가입된 계정입니다. 네이버 로그인을 이용해주세요.' 
       });
     }
-
+    
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: '잘못된 비밀번호입니다.' });
     }
-
+    
     const accessToken = jwt.sign(
       { id: user._id, username: user.username, nickname: user.nickname }, 
       JWT_SECRET, 

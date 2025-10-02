@@ -3,670 +3,242 @@
 <head>
   <meta charset="UTF-8">
   <title>퀴즈 세션</title>
-    <style>
-    .hidden { display: none; }
-    </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/common.css">
 </head>
-<body>
-  <button id="outBtn" onclick="location.href='/'">나가기</button>
-  <button id="forceSkipBtn" class="hidden">강제스킵</button>
-  <button id="voteSkipBtn" class="hidden">스킵투표</button>
-  <p id="skipStatus" class="hidden">스킵 투표: 0 / 0</p>
+<body class="bg-[#222230] text-white min-h-screen">
+
+  <div class="fixed top-4 right-4 z-50 flex flex-col gap-2">
+    <button id="outBtn" onclick="location.href='/'" 
+            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg transition-colors">
+      나가기
+    </button>
+    <button id="forceSkipBtn" class="hidden bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-lg transition-colors">
+      강제스킵
+    </button>
+    <button id="voteSkipBtn" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-lg transition-colors">
+      스킵투표
+    </button>
+  </div>
+
+  <!-- 스킵 상태 표시 -->
+  <div id="skipStatus" class="fixed top-4 left-4 z-50 hidden bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2">
+    <span class="text-sm text-gray-300">스킵 투표: 0 / 0</span>
+  </div>
+
+  <div class="container max-w-[1080px] mx-auto lg:px-0 px-4 py-8">
     
-  <h1>실시간 퀴즈 세션</h1>
+    <!-- 퀴즈 정보 섹션 (게임 시작 전) -->
+    <div id="quizInfoSection">
 
-    <!-- ✅ 대기 화면 -->
-  <div id="lobbySection">
-    <h2>게임 대기 중...</h2>
-    <p>초대코드: <span id="inviteCode">로딩중...</span></p>
-    <p>참가자 목록:</p>
-    <ul id="playerList"></ul>
-    <button id="startBtn" class="hidden">게임시작</button>
+      <div class="flex text-center flex-col md:flex-row justify-between md:gap-5 space-y-[20px] md:space-y-0">
+
+        <!-- 퀴즈 설명란과 게임시작 버튼 -->
+        <div class="bg-black/30 md:flex-[7] w-full rounded-2xl p-6 shadow-xl border border-gray-600">
+        
+          <div class="flex flex-col md:flex-row gap-6 items-center">
+
+            <!-- 썸네일 섹션 -->
+            <div class="flex-shrink-0">
+              <div id="quizThumbnail" class="w-48 h-32 md:w-[280px] md:h-[360px] rounded-xl overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <!-- 이미지가 있을 때 -->
+                <!-- <img src="이미지URL" alt="퀴즈 썸네일" class="w-full h-full object-cover"> -->
+                
+                <!-- 기본 상태 -->
+                <div class="text-4xl md:text-6xl font-bold text-white">Q</div>
+              </div>
+            </div>
+            
+            <!-- 텍스트 섹션 -->
+            <div class="flex-1 text-center md:text-left flex flex-col justify-between md:h-[360px]">
+              <!-- 상단 그룹: 제목 + 설명 -->
+              <div class="space-y-4">
+                <h1 id="quizTitle" class="text-2xl font-bold text-white"></h1>
+                <p id="quizDescription" class="text-gray-300 leading-relaxed max-w-[660px]">
+                  <!-- 퀴즈 설명이 여기에 표시됩니다. -->
+                </p>
+              </div>
+              
+              <!-- 하단 그룹: 문제 수 + 버튼 -->
+              <div class="space-y-4">
+                <!-- 총 문제 수 -->
+                <div class="flex justify-center md:justify-start font-bold">
+                  <div class="text-blue-400 mb-2" id="totalQuestions">-</div>
+                  <div class="text-gray-400 ml-2">문제</div>
+                </div>
+                
+                <!-- 게임 시작 버튼 -->
+                <div class="flex justify-center md:justify-start">
+                  <button id="startBtn" class="hidden whitespace-nowrap w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-12 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg">
+                    게임시작
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 오른쪽 박스 (3 비율) - 초대코드와 참가인원 창 -->
+        <div class="flex flex-col bg-black/30 md:flex-[3] rounded-2xl p-6 shadow-xl border border-gray-600">
+          <!-- 초대코드 구역 -->
+            <div class="flex pb-4 items-start">
+              
+              <div class="flex flex-wrap justify-center items-baseline gap-3">
+                
+                <div class="flex gap-2">
+
+                  <div class="text-gray-400 whitespace-nowrap">초대 코드 :</div>
+    
+                  <!-- 마스킹된 코드 + 토글 버튼 -->
+                  <div class="">
+                    <div class="flex space-x-3">
+                      <div id="inviteCodeDisplay" class="font-mono font-bold text-purple-400 tracking-wider">
+        
+                      </div>
+                      <button 
+                        id="toggleCodeBtn" 
+                        class= "translate-y-[-3px] text-gray-400 hover:text-white transition-colors p-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="코드 보기/숨기기"
+                        disabled
+                      >
+                      <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                      </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+                
+                <!-- 복사 버튼 -->
+                <button 
+                id="copyInviteBtn" 
+                class="flex whitespace-nowrap bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                disabled
+                >
+                  <div class="flex items-center justify-center space-x-2 text-[12px] font-bold">
+                    <svg id="copyIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    <span id="copyBtnText">복사</span>
+                  </div>
+                </button>
+              
+              </div>
+            
+            </div>
+          
+            <!-- 참가자 목록 (스크롤 가능 - 향상된 버전) -->
+            <div class="">
+              <h3 class="text-xl font-semibold text-white mb-4">참가자</h3>
+              
+              <!-- 스크롤 컨테이너 (커스텀 스크롤바) -->
+              <div class="max-h-[224px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700 hover:scrollbar-thumb-gray-400">
+                <ul id="playerList" class="space-y-2 pr-2">
+                  <!-- 참가자 목록이 여기에 동적으로 추가됩니다 -->
+                </ul>
+                </div>
+              
+              <!-- 참가자 수 표시 (선택사항) -->
+              <div class="mt-3 text-center">
+                <span class="text-gray-400 text-sm">
+                  총 <span id="totalPlayerCount" class="text-white font-semibold">0</span>명 참가
+                </span>
+              </div>
+            </div>
+            
+        </div>
+
+      </div>
+      
+      <div class="bg-black/30 rounded-xl p-6 shadow-xl border border-gray-600 mt-[20px]">
+        <!-- 채팅 로그 -->
+        <div id="waitingChatLog" class="flex flex-col items-start h-64 overflow-y-auto space-y-2 mb-4 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+        </div>
+        
+        <!-- 채팅 입력 -->
+        <form id="waitingChatForm" onsubmit="event.preventDefault(); currentWaitingSendFunction();" class="relative">
+          <input type="text" id="waitingChatInput" placeholder="대기실 메세지 보내기" 
+                class="w-full pr-14 pl-4 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300">
+          <button type="button" onclick="currentWaitingSendFunction()" 
+                  class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1">
+            <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
+          </button>
+        </form>
+
+      </div>
+
+      
+    </div>
+
+    <!-- 게임 진행 섹션 (게임 시작 후) -->
+    <div id="gameSection" class="hidden space-y-6">
+
+      <!-- 스코어보드 박스 -->
+      <div class="bg-black/30 h-auto rounded-2xl p-6 shadow-xl border border-gray-600">
+        <!-- 스코어보드 컨테이너 -->
+        <div id="scoreboardWrapper" class="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+          <ul id="scoreboard" class="flex gap-3">
+            <!-- 스코어보드가 여기에 표시됩니다 -->
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex text-center flex-col sm:flex-row justify-between sm:gap-5 space-y-[20px] sm:space-y-0">
+
+        <!-- 문제 박스 -->
+        <div class="bg-black/30 sm:flex-[7] sm:max-h-[660px] w-full rounded-2xl p-6 shadow-xl border border-gray-600">
+          
+          <!-- 타이머 + 문제 번호  -->
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-600">
+            <div id="timerDisplay" class="text-sm font-bold text-gray-300">
+              남은 시간: --
+            </div>
+            <div id="currentQuestionNumber" class="text-blue-400 font-bold text-sm">
+              문제 - / -
+            </div>
+          </div>
+
+          <!-- 문제 내용 -->
+          <div id="questionBox" class="min-h-[300px] sm:min-h-[360px]">
+            <!-- 문제 내용이 여기에 표시됩니다 -->
+          </div>
+        </div>
+
+        <!-- 게임 채팅 및 답변 입력 섹션 -->
+        <div class="sm:flex-[3] bg-black/30 rounded-2xl p-6 shadow-xl border border-gray-600">
+          <h3 class="text-[18px] font-semibold text-white mb-4">채팅 & 답변</h3>
+          
+          <!-- 채팅 로그 -->
+          <div id="chatLog" class="h-[300px] sm:h-[460px] break-words overflow-y-auto space-y-2 mb-4 p-2 bg-black/30 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+            <!-- 채팅 메시지들이 여기에 표시됩니다 -->
+          </div>
+          
+          <!-- 채팅 입력 -->
+          <form id="chatForm" onsubmit="event.preventDefault(); currentSendFunction();" class="relative">
+            <input type="text" id="chatInput" placeholder="메시지 입력 또는 답변 입력" 
+                  class="w-full pr-14 pl-4 py-2 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300">
+            <button type="button" onclick="currentSendFunction()"
+                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1">
+              <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
+            </button>
+          </form>
+
+        </div>
+
+      </div>
+
+    </div>
+
   </div>
 
-  <!-- ✅ 게임 화면 -->
-  <div id="gameSection" class="hidden">
-    <p id="countdown">남은 시간: </p>
-    <div id="questionBox"></div>
-
-    <div id="chatLog"></div>
-
-    <form id="chatForm" onsubmit="event.preventDefault(); currentSendFunction();">
-      <input type="text" id="chatInput" placeholder="메세지 입력">
-      <button onclick="currentSendFunction();">전송</button>
-    </form>
-
-    <h2>현재 점수판</h2>
-    <ul id="scoreboard"></ul>
-  </div>
-
+  <!-- Socket.IO 및 스크립트 -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/CorrectUserManager.js"></script>
-  <script>
-
-    async function fetchWithAuth(url, options = {}) {
-        options.credentials = 'include'; // Ensure cookies are sent
-
-        let response = await fetch(url, options);
-
-        if (response.status === 401) {
-            // Try to refresh token
-            const refreshResponse = await fetch('/auth/refresh', {
-                method: 'POST',
-                credentials: 'include'
-            });
-
-            if (refreshResponse.ok) {
-                // Token refreshed, retry original request
-                response = await fetch(url, options);
-            } else {
-                // Refresh failed, redirect to login
-                window.location.href = '/login';
-                return; // Prevent further execution
-            }
-        }
-        return response;
-    }
-
-    let currentSendFunction = sendMessage;
-    let questions = [];
-    let currentIndex = 0;
-    let questionTimer = null;
-    let host = null;
-    let questionStartAt  = null;
-    let countdownInterval = null;
-    let hasAnswered = false;
-
-    const socket = io();
-    const sessionId = window.location.pathname.split('/').pop();
-    let userId = null; // Will be set after successful session data load or from server
-    let username = null; // Will be set after successful session data load or from server
-    
-
-    (async () => {
-      try {
-        const response = await fetchWithAuth('/my-info');
-        if (!response.ok) {
-          throw new Error('Failed to fetch user info');
-        }
-        const userData = await response.json();
-        userId = userData._id;
-        username = userData.username;
-
-        socket.emit('joinSession', { sessionId });
-      } catch (error) {
-        console.error('Error fetching user info:', error);
-        window.location.href = '/login';
-      }
-    })();
-
-    function isHost() {
-      return userId === host;
-    }
-
-    // ✅ 데이터 로딩 전용 함수
-    async function loadSessionData() {
-      try {
-        const res = await fetchWithAuth(`/game/session/${sessionId}`); // Changed to fetchWithAuth
-
-        // 응답 상태 확인
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.message || '세션 정보를 불러오는 데 실패했습니다.');
-        }
-
-        const data = await res.json();
-
-        // 필수 데이터 유효성 검사
-        if (!data || !data.quiz || !Array.isArray(data.players)) {
-          throw new Error('세션 데이터가 유효하지 않습니다.');
-        }
-
-        // 상태 초기화
-        questions = data.quiz.questions;
-        currentIndex = data.currentQuestionIndex;
-        questionStartAt = new Date(data.questionStartAt);
-        host = data.host;
-        document.getElementById('inviteCode').textContent = data.inviteCode || '없음';
-
-        // 점수판 및 투표 상태 렌더링
-        renderSkipStatus(data.skipVotes?.length || 0, data.players?.length || 0);
-        
-        if (data.isStarted) {
-          lobbySection.classList.add('hidden');
-          gameSection.classList.remove('hidden');
-          voteSkipBtn.classList.remove('hidden');
-          document.getElementById('skipStatus').classList.remove('hidden');
-          if (userId === host) {
-            forceSkipBtn.classList.remove('hidden');
-          }
-          
-          // 정답 공개 상태면 UI 복원
-          if (data.revealedAt) {
-            showQuestion({ silent: true });
-            renderScoreboard(data.players, false);
-
-            const correctUsernames = data.correctUsers?.[currentIndex];
-            if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
-              CorrectUserManager.restoreFromData(correctUsernames);
-            }
-
-            const answers = questions[currentIndex]?.answers;
-            if (answers) {
-              const p = document.createElement('p');
-              p.textContent = `✅ 정답 공개: ${answers}`;
-              p.style.color = 'green';
-              document.getElementById('questionBox').appendChild(p);
-            }
-
-            const answerImage = questions[currentIndex]?.answerImageBase64;
-            if (answerImage) {
-              const img = document.createElement('img');
-              img.src = answerImage;
-              img.alt = '정답 이미지';
-              img.style.maxWidth = '300px';
-              img.style.marginTop = '10px';
-              document.getElementById('questionBox').appendChild(img);
-            }
-
-            window.__isRevealingAnswer = true;
-            const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
-            const wait = Math.max(0, 5 - elapsed);
-            setTimeout(() => {
-              window.__isRevealingAnswer = false;
-              if (isHost()) {
-                socket.emit('nextQuestion', { sessionId, userId });
-              }
-            }, wait * 1000);
-          } else {
-            showQuestion();
-            renderScoreboard(data.players, false);
-          }
-        }
-
-      } catch (err) {
-        console.error('❌ 세션 로딩 실패:', err);
-        // "세션 없음" 오류일 경우, 경고창 없이 바로 리다이렉트
-        if (err.message === '세션 없음') {
-          location.href = '/';
-        } else {
-          // 다른 종류의 오류는 사용자에게 알림
-          alert(err.message || '세션 정보를 불러오는 중 오류가 발생했습니다.');
-          location.href = '/';
-        }
-      }
-    }
-
-
-    // 점수판 렌더링 함수
-    function renderScoreboard(players) {
-      const board = document.getElementById('scoreboard');
-      board.innerHTML = '';
-
-        // 실제 점수 표시 모드
-        players
-          .filter(p => p.connected)
-          .slice()
-          .sort((a, b) => b.score - a.score)
-          .forEach(p => {
-            const li = document.createElement('li');
-            li.textContent = `${p.username}: ${p.score}점 (맞춘 문제 수 ${p.correctAnswersCount || 0}개)`;
-            board.appendChild(li);
-          });
-    }
-
-    // ✅ 스킵 투표 상태 렌더링
-    function renderSkipStatus(voted, total) {
-      document.getElementById('skipStatus').textContent = `스킵 투표: ${voted} / ${total}`;
-    }
-
-    socket.on('session-ready', () => {
-      loadSessionData(); // <--- 초기화 전용 함수로 분리
-    });
-    
-    socket.on('scoreboard', ({ success, message, data }) => {
-      if (!success) {
-        console.error('❌ 점수판 로딩 실패:', message);
-        return;
-      }
-      renderScoreboard(data.players);
-    });
-    
-    socket.on('choiceQuestionScoreboard', ({ success, message, data }) => {
-      if (!success) {
-        console.error('❌ 점수판 로딩 실패:', message);
-        return;
-      }
-
-      renderScoreboard(data.players);
-
-      if (data.correctUsers && data.correctUsers.length > 0) {
-        CorrectUserManager.setUsers(data.correctUsers);
-      }
-
-        if (isHost()) {
-          socket.emit('revealAnswer', { sessionId });
-        }
-    });
-
-    socket.on('voteSkipUpdate', ({ success, data, votes, total }) => {
-      if (success === false && data === undefined) {
-        // joinSession에서 오는 경우
-        renderSkipStatus(votes, total);
-      } else {
-        // vote 이벤트에서 오는 경우
-        const el = document.getElementById('skipStatus');
-        if (el && data) {
-          el.textContent = `스킵 투표: ${data.votes} / ${data.total}`;
-        }
-      }
-    });
-
-    const lobbySection = document.getElementById('lobbySection');
-    const gameSection = document.getElementById('gameSection');
-    const startBtn = document.getElementById('startBtn');
-    const playerList = document.getElementById('playerList');
-    const voteSkipBtn = document.getElementById('voteSkipBtn');
-    const forceSkipBtn = document.getElementById('forceSkipBtn');
-    
-    // 채팅 기록 불러오기
-    fetchWithAuth(`/game/chat/${sessionId}`) // Changed to fetchWithAuth
-      .then(res => res.json())
-      .then(data => {
-        const chatLog = document.getElementById('chatLog');
-        data.messages.forEach(msg => {
-          const p = document.createElement('p');
-          p.innerHTML = `${msg.username}: ${msg.message}`;
-          chatLog.appendChild(p);
-        });
-      })
-      .catch(err => console.error('채팅 기록 불러오기 실패:', err));
-
-    // 대기실 수신
-    socket.on('waiting-room', ({ success, data, message }) => {
-
-      if (!success) {
-        console.error('❌ 대기실 로딩 실패:', message || '알 수 없는 오류');
-        return;
-      }
-
-      const { host: newHost, players, isStarted } = data;
-
-      host = newHost;
-      
-      playerList.innerHTML = '';
-      players
-        .filter(p => p.connected)
-        .forEach(({ username }) => {
-          const li = document.createElement('li');
-          li.textContent = username;
-          playerList.appendChild(li);
-        });
-
-      // 🔥 userId 기준 비교
-      if (userId === host && !isStarted) {
-        startBtn.classList.remove('hidden');
-        startBtn.onclick = () => {
-          socket.emit('startGame', { sessionId, userId });
-          startBtn.disabled = true;
-        };
-        forceSkipBtn.classList.add('hidden');
-      } else {
-        startBtn?.classList.add('hidden');
-        forceSkipBtn.classList.add('hidden');
-      }
-    });
-
-    // 게임 시작됨
-    socket.on('game-started', ({ success, data, message }) => {
-        if (!success) {
-          console.error('❌ 게임 시작 실패:', message);
-          alert(message || '게임을 시작할 수 없습니다.');
-          return;
-        }
-
-        const { quiz, host: newHost, questionStartAt: startAt } = data;
-
-        if (!quiz || !Array.isArray(quiz.questions)) {
-          console.error('❌ 잘못된 퀴즈 구조:', quiz);
-          alert('퀴즈 데이터가 손상되었습니다.');
-          return;
-        }
-
-      host = newHost;
-      questions = quiz.questions;
-      currentIndex = 0;
-      questionStartAt = new Date(startAt);
-
-      lobbySection.classList.add('hidden');
-      gameSection.classList.remove('hidden');
-      voteSkipBtn.classList.remove('hidden');
-      document.getElementById('skipStatus').classList.remove('hidden');
-      
-      if (userId === host) {
-          forceSkipBtn.classList.remove('hidden');
-      };
-
-      showQuestion();
-    });
-
-    // 새로운 호스트선정
-    socket.on('host-updated', ({ success, data, message }) => {
-      if (!success) {
-        console.error('❌ 호스트 갱신 실패:', message);
-        return;
-      }
-
-      const { host: newHost } = data;
-      host = data.host;
-
-      const isGameStarted = !gameSection.classList.contains('hidden');
-
-      if (host === '__NONE__') {
-        forceSkipBtn.classList.add('hidden');
-        startBtn?.classList.add('hidden');
-      } else if (userId === host) {
-
-        if (isGameStarted) {
-          forceSkipBtn.classList.remove('hidden');
-        } else {
-          forceSkipBtn.classList.add('hidden'); // ✅ 대기실이면 숨기기
-        }
-
-        if (!isGameStarted) {
-          startBtn?.classList.remove('hidden');
-        } else {
-          startBtn?.classList.add('hidden');
-        }
-
-      } else {
-        forceSkipBtn.classList.add('hidden');
-        startBtn?.classList.add('hidden');
-      }
-    });
-
-    //스킵투표
-    voteSkipBtn.addEventListener('click', async () => {
-      socket.emit('voteSkip', { sessionId });
-    });
-
-    //방장 강제스킵
-    forceSkipBtn.addEventListener('click', () => {
-      socket.emit('forceSkip', { sessionId });
-    });
-  
-    //문제 넘기기
-    socket.on('next', ({ success, data, message }) => {
-      if (!success) {
-        console.error('❌ 다음 문제 전송 실패:', message);
-        return;
-      }
-
-      const { index, questionStartAt: startAt, totalPlayers } = data;
-
-      currentIndex = index;
-      questionStartAt  = new Date(startAt); 
-      document.getElementById('skipStatus').textContent = `스킵 투표: 0 / ${totalPlayers}`;
-      showQuestion();
-    });
-
-    //메세지 입력시 정답인지 일반채팅인지 판별
-    function sendMessage() {
-      const input = document.getElementById('chatInput');
-      const message = input.value.trim();
-      input.value = '';
-
-      if (!message) return;
-
-      const rawAnswers = questions[currentIndex].answers || []; // 배열
-      const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
-      const userInput = message.replace(/\s+/g, '').toLowerCase();
-      
-      const isCorrect = answers.includes(userInput);
-
-      if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('correct', { sessionId });
-      } else {
-        socket.emit('chatMessage', { sessionId, message });
-      }
-    }
-
-    function choiceQuestionSendMessage() {
-      const input = document.getElementById('chatInput');
-      const message = input.value.trim();
-      input.value = '';
-
-      if (!message) return;
-
-      const userInput = message.replace(/\s+/g, '').toLowerCase();
-      
-        socket.emit('chatMessage', { sessionId, message });
-    }
-
-    socket.on('chat', ({ user, message }) => {
-      const chatLog = document.getElementById('chatLog');
-      const p = document.createElement('p');
-      p.innerHTML = `${user}: ${message}`;
-      chatLog.appendChild(p);
-    });
-
-    //정답시 중복 방지하여 출력한다
-    socket.on('correct', ({ success, data, message }) => {
-      if (!success) {
-        console.error('❌ 정답 수신 실패:', message);
-        return;
-      }
-
-      const { username } = data;
-      CorrectUserManager.addUser(username);
-
-      const chatLog = document.getElementById('chatLog');
-      const p = document.createElement('p');
-      p.innerHTML = `${username}: ${username}님이 정답을 맞혔습니다! 🎉`;
-      chatLog.appendChild(p);
-    });
-
-    socket.on('end', ({ success, message }) => {
-        if (!success) {
-          console.error('❌ 퀴즈 종료 오류:', message);
-          return;
-        }
-        });
-
-    socket.on('revealAnswer_Emit', ({ success, data, message }) => {
-      if (!success) {
-        console.error('❌ 정답 공개 실패:', message);
-        return;
-      }
-
-      const { answers, answerImage, revealedAt, correctUsers } = data;
-
-      if (correctUsers && correctUsers.length > 0) {
-        CorrectUserManager.setUsers(correctUsers);
-      }
-
-      showAnswer({
-        answers,
-        answerImageBase64: answerImage,
-        revealedAt
-      });
-    });
-
-    function showAnswer({ answers, answerImageBase64, revealedAt }) {
-      const box = document.getElementById('questionBox');
-
-      // 정답 텍스트
-      if (answers) {
-        const p = document.createElement('p');
-        p.style.color = 'green';
-        p.textContent = `✅ 정답 공개: ${answers}`;
-        box.appendChild(p);
-      }
-
-      // 정답 이미지
-      if (answerImageBase64) {
-        try {
-          const img = document.createElement('img');
-          img.src = answerImageBase64;
-          img.alt = '정답 이미지';
-          img.style.maxWidth = '300px';
-          img.style.marginTop = '10px';
-          box.appendChild(img);
-        } catch (err) {
-          console.error('❌ 정답 이미지 렌더링 실패:', err);
-        }
-      }
-
-      window.__isRevealingAnswer = true;
-
-      const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
-      const waitTime = Math.max(0, 5 - elapsed);
-
-      setTimeout(() => {
-        window.__isRevealingAnswer = false;
-        if (isHost()) {
-          socket.emit('nextQuestion', { sessionId, userId });
-        }
-      }, waitTime * 1000);
-    }
-
-    socket.on('forceRedirect', (data) => {
-      alert('세션이 종료되어 메인 페이지로 이동합니다.');
-      window.location.href = data.url || '/';
-    });
-
-    function showQuestion({ silent = false } = {}) {
-      const box = document.getElementById('questionBox');
-      const question = questions[currentIndex];
-      const answers = questions[currentIndex]?.answers;
-      const isChoiceQuestion = question?.incorrectAnswers && question.incorrectAnswers.length > 0;
-
-      let choiceQuestion = questions[currentIndex]?.incorrectAnswers;
-
-      if (!question) {
-        box.innerHTML = '<p>문제를 불러올 수 없습니다.</p>';
-        return;
-      }
-
-      hasAnswered = false;
-
-      CorrectUserManager.clear();
-
-      let html = `<h2>문제 #${currentIndex + 1}</h2><br>`;
-
-      if(choiceQuestion && choiceQuestion.length > 0) {
-        try {
-          currentSendFunction = choiceQuestionSendMessage;
-          html += `<p>${question.text}</p>`;
-            // 객관식 선택지 만들기
-            html += `<div style="margin-top: 20px;">`;
-            html += `<h3>다음 중 정답을 선택하세요:</h3>`;
-            
-            // 정답과 오답을 합치기
-            const allChoices = [];
-            
-            // 정답들 추가
-            if (answers && answers.length > 0) {
-                const randomAnswer = answers[Math.floor(Math.random() * answers.length)];
-                allChoices.push(randomAnswer);
-            }
-            
-            // 오답들 추가
-            if (choiceQuestion && choiceQuestion.length > 0) {
-                choiceQuestion.forEach(incorrect => allChoices.push(incorrect));
-            }
-            
-            // 배열 섞기 (Fisher-Yates 알고리즘)
-            for (let i = allChoices.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
-              }
-            
-            allChoices.forEach((choice, index) => {
-                html += `
-                    <button onclick="selectChoice('${choice.replace(/'/g, "\\'")}')" 
-                            style="display: block; margin: 8px 0; padding: 12px; width: 400px; 
-                                   background: #f0f0f0; border: 2px solid #ccc; border-radius: 8px; 
-                                   cursor: pointer; font-size: 16px; text-align: left;">
-                        ${index + 1}. ${choice}
-                    </button>
-                `;
-                });
-                html += `</div>`;
-        } catch (error) {
-          console.error('객관식 문제를 불러올수 없습니다.')
-        }
-      } else {
-        currentSendFunction = sendMessage;
-        html += `<p>${question.text}</p>`;
-      }
-      if (question.imageBase64) {
-        html += `<img src="${question.imageBase64}" alt="문제 이미지" style="max-width: 300px;">`;
-      }
-
-      if (question.youtubeUrl) {
-        html += `<div style="margin-top: 10px;">
-                  <iframe width="560" height="315"
-                    src="${question.youtubeUrl}"
-                    frameborder="0" allowfullscreen></iframe>
-                </div>`;
-      }
-
-      box.innerHTML = html;
-
-      // const correctUsernames = questions[currentIndex]?.correctUsers;
-      //   if (correctUsernames && correctUsernames.length > 0) {
-      //     CorrectUserManager.restoreFromData(correctUsernames);
-      //   }
-
-      if (silent) return;
-
-      // 기존 타이머 제거
-      if (questionTimer) clearTimeout(questionTimer);
-      if (countdownInterval) clearInterval(countdownInterval);
-
-      const timeLimit = question.timeLimit || 90;
-
-      // 시간 계산
-      const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
-      let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
-
-      const countdownEl = document.getElementById('countdown');
-      if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
-
-      countdownInterval = setInterval(() => {
-        remaining--;
-        if (countdownEl) countdownEl.textContent = `남은 시간: ${remaining}초`;
-        if (remaining <= 0) {
-          clearInterval(countdownInterval);
-        }
-      }, 1000);
-
-      questionTimer = setTimeout(() => {
-        if (isHost()) {
-          socket.emit('revealAnswer', { sessionId });
-        }
-      }, remaining * 1000);
-    }
-
-    function selectChoice(choice) {
-        if (hasAnswered) return;
-        
-        hasAnswered = true;
-        
-        const rawAnswers = questions[currentIndex].answers || [];
-        const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
-        const userInput = choice.replace(/\s+/g, '').toLowerCase();
-        
-        const isCorrect = answers.includes(userInput);
-
-        if (!window.__isRevealingAnswer && isCorrect) {
-            socket.emit('choiceQuestionCorrect', { sessionId });
-        } else {
-            socket.emit('choiceQuestionIncorrect', { sessionId });
-        }
-    }
-
-  </script>
+  <script type="module" src="/js/quiz-session.js"></script>
 </body>
 </html>

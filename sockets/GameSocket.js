@@ -12,11 +12,33 @@ const handleSocketError = (socket, error, eventName) => {
 };
 
 module.exports = (io, app) => {
+    /**
+   * 스코어보드 업데이트 emit 함수
+   * @param {Object} io - Socket.IO 인스턴스
+   * @param {string} sessionId - 세션 ID
+   * @param {Array} players - 플레이어 배열
+   */
+    function emitScoreboard(io, sessionId, players) {
+    io.to(sessionId).emit('scoreboard', {
+      success: true,
+      data: {
+        players: players.map(p => ({
+          username: p.username,
+          nickname: p.nickname,
+          score: p.score,
+          correctAnswersCount: p.correctAnswersCount || 0,
+          connected: p.connected,
+          profileImage: p.profileImage
+        }))
+      }
+    });
+  }
   const quizDb = app.get('quizDb');
   const userDb = app.get('userDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
+  const sessionUserCache = new Map();
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
   const { ObjectId } = require('mongoose').Types;
 
@@ -46,15 +68,28 @@ module.exports = (io, app) => {
     socket.on('joinSession', async ({ sessionId }) => {
       try {
         const quizDb = app.get('quizDb');
+        const userDb = app.get('userDb');
         const GameSession = require('../models/GameSession')(quizDb);
+        const User = require('../models/User')(userDb);
         
         const userId = socket.userId;
         const username = socket.username;
-
+        
         if (!ObjectId.isValid(sessionId)) return;
         
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session) return;
+        const user = await User.findById(userId).select('nickname profileImage');
+
+        if (!sessionUserCache.has(sessionId)) {
+            sessionUserCache.set(sessionId, new Map());
+        }
+        
+        sessionUserCache.get(sessionId).set(socket.userId, {
+            nickname: user?.nickname,
+            profileImage: user?.profileImage
+        });
+
         
         let updated = false;
         let player = session.players.find(p => p.userId.toString() === userId.toString());
@@ -63,6 +98,8 @@ module.exports = (io, app) => {
           session.players.push({
             userId,
             username,
+            nickname: user?.nickname || null,
+            profileImage: user?.profileImage || null,
             score: 0,
             correctAnswersCount: 0,
             answered: {},
@@ -76,6 +113,8 @@ module.exports = (io, app) => {
           player.connected = true;
           player.lastSeen = new Date();
           player.socketId = socket.id;
+          player.nickname = user?.nickname || null,
+          player.profileImage = user?.profileImage || null;
           updated = true;
         }
         
@@ -113,17 +152,7 @@ module.exports = (io, app) => {
         }
         if (!latestSession) return;
 
-        io.to(sessionId).emit('scoreboard', {
-          success: true,
-          data: {
-            players: session.players.map(p => ({
-              username: p.username,
-              score: p.score,
-              correctAnswersCount: p.correctAnswersCount || 0,
-              connected: p.connected
-            }))
-          }
-        });
+        emitScoreboard(io, sessionId, session.players);
 
         const connectedCount = session.players.filter(p => p.connected).length;
         // 스킵투표 인원수 공개
@@ -143,12 +172,15 @@ module.exports = (io, app) => {
             host: session.host?.toString() || '__NONE__',
             players: session.players.map(p => ({
               username: p.username,
+              nickname: p.nickname,
               userId: p.userId.toString(),
-              connected: p.connected
+              connected: p.connected,
+              profileImage: p.profileImage
             })),
             isStarted: session.isStarted || false
           }
         });
+
 
         socket.emit('host-updated', {
           success: true,
@@ -220,17 +252,7 @@ module.exports = (io, app) => {
             // 분기 처리
             if (session.isStarted) {
               // 게임 중: 점수판 갱신
-              io.to(sessionId).emit('scoreboard', {
-                success: true,
-                data: {
-                  players: session.players.map(p => ({
-                    username: p.username,
-                    score: p.score,
-                    correctAnswersCount: p.correctAnswersCount || 0,
-                    connected: p.connected
-                  }))
-                }
-              });
+            emitScoreboard(io, sessionId, session.players);
 
               io.to(sessionId).emit('host-updated', {
                 success: true,
@@ -256,8 +278,10 @@ module.exports = (io, app) => {
                   host: session.host?.toString() || '__NONE__',
                   players: session.players.map(p => ({
                     username: p.username,
+                    nickname: p.nickname,
                     userId: p.userId.toString(),
-                    connected: p.connected
+                    connected: p.connected,
+                    profileImage: p.profileImage // 추가!
                   })),
                   isStarted: session.isStarted || false
                 }
@@ -319,34 +343,18 @@ module.exports = (io, app) => {
 
     // 일반 채팅은 DB에 로그 저장
     socket.on('chatMessage', async ({ sessionId, message }) => {
-      try {
-        if (!message?.trim()) return;
-
-        const username = socket.username;
-
-        try {
-          const ChatLog = require('../models/ChatLog')(quizDb);
-          
-          await ChatLog.updateOne(
-            { sessionId },
-            {
-              $push: {
-                messages: {
-                  username,
-                  message,
-                  createdAt: new Date()
-                }
-              }
-            },
-            { upsert: true }
-          );
-        } catch (err) {
-          console.error('❌ 채팅 로그 저장 실패:', err.message)
-        }
-        io.to(sessionId).emit('chat', { user: username, message });
-      } catch (error) {
-        handleSocketError(socket, error, 'chatMessage');
-      }
+        // 캐시에서 사용자 정보 조회 (DB 조회 없음!)
+        const userInfo = sessionUserCache.get(sessionId)?.get(socket.userId) || {
+            nickname: null,
+            profileImage: null
+        };
+        
+        // 즉시 브로드캐스트
+        io.to(sessionId).emit('chat', {
+            nickname: userInfo.nickname || userInfo.username,
+            profileImage: userInfo.profileImage,
+            message
+        });
     });
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
@@ -366,7 +374,9 @@ module.exports = (io, app) => {
         if (!player) return;
 
         const qIndex = String(session.currentQuestionIndex);
-        if (player.answered?.[qIndex]) return; //
+        if (player.answered?.[qIndex]) return;
+
+        const displayName = player.nickname || username;
 
         if (!app.firstCorrectUsers) {
           app.firstCorrectUsers = {};
@@ -374,7 +384,7 @@ module.exports = (io, app) => {
 
         const isFirst = !app.firstCorrectUsers[sessionId];
         if (isFirst) {
-          app.firstCorrectUsers[sessionId] = username;
+          app.firstCorrectUsers[sessionId] = displayName;
           player.score += 2;
         } else {
           player.score += 1;
@@ -385,20 +395,24 @@ module.exports = (io, app) => {
         if (!session.correctUsers[qIndex]) {
           session.correctUsers[qIndex] = [];
         }
-        if (!session.correctUsers[qIndex].includes(username)) {
-          session.correctUsers[qIndex].push(username);
-        } else {
+        if (!session.correctUsers[qIndex].includes(displayName)) {
+          session.correctUsers[qIndex].push(displayName);
         }
 
         session.markModified('correctUsers');
-
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
         session.markModified('players');
+        
         const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
-            return;
-          }
+        if (!success) {
+          console.error('⌧ 세션 저장 중 에러 발생 - correct');
+          return;
+        }
+
+        const userInfo = sessionUserCache.get(sessionId)?.get(socket.userId) || {
+            nickname: null,
+            profileImage: null
+        };
 
         try {
             await ChatLog.findOneAndUpdate(
@@ -407,35 +421,26 @@ module.exports = (io, app) => {
                 $push: {
                   messages: {
                     username,
-                    message: `${username}님이 정답을 맞혔습니다! 🎉`,
+                    message: `${displayName}님이 정답을 맞혔습니다! 🎉`,
                     createdAt: new Date()
                   }
                 }
               },
               { upsert: true, new: true }
             );
-          } catch (err) {
-            console.error('❌ 정답 채팅 로그 저장 실패:', err.message);
-          }
+        } catch (err) {
+          console.error('⌧ 정답 채팅 로그 저장 실패:', err.message);
+        }
 
         io.to(sessionId).emit('correct', {
           success: true,
           data: {
-            username
+            nickname: displayName,
+            profileImage: userInfo.profileImage
           }
         });
 
-        io.to(sessionId).emit('scoreboard', {
-          success: true,
-          data: {
-            players: session.players.map(p => ({
-              username: p.username,
-              score: p.score,
-              correctAnswersCount: p.correctAnswersCount || 0,
-              connected: p.connected
-            }))
-          }
-        });
+        emitScoreboard(io, sessionId, session.players);
       } catch (error) {
         handleSocketError(socket, error, 'correct');
       }
@@ -460,12 +465,14 @@ module.exports = (io, app) => {
         const qIndex = String(session.currentQuestionIndex);
         if (player.answered?.[qIndex]) return;
 
+        const displayName = player.nickname || username;
+
         session.choiceQuestionCorrectUsers = session.choiceQuestionCorrectUsers || {};
         if (!session.choiceQuestionCorrectUsers[qIndex]) {
           session.choiceQuestionCorrectUsers[qIndex] = [];
         }
-        if (!session.choiceQuestionCorrectUsers[qIndex].includes(username)) {
-          session.choiceQuestionCorrectUsers[qIndex].push(username);
+        if (!session.choiceQuestionCorrectUsers[qIndex].includes(displayName)) {
+          session.choiceQuestionCorrectUsers[qIndex].push(displayName);
         }
 
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
@@ -527,9 +534,11 @@ module.exports = (io, app) => {
       if (!session || !session.isActive) return;
 
       const username = socket.username;
+      const player = session.players.find(p => p.username === username);
+      const displayName = player?.nickname || username;
 
-      if (!session.skipVotes.includes(username)) {
-        session.skipVotes.push(username);
+      if (!session.skipVotes.includes(displayName)) {
+        session.skipVotes.push(displayName);
         const success = await safeSaveSession(session);
           if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - voteSkip');
@@ -643,17 +652,7 @@ module.exports = (io, app) => {
       });
 
       // 2. 스코어보드 업데이트
-      io.to(sessionId).emit('scoreboard', {
-        success: true,
-        data: {
-          players: session.players.map(p => ({
-            username: p.username,
-            score: p.score,
-            correctAnswersCount: p.correctAnswersCount || 0,
-            connected: p.connected
-          }))
-        }
-      });
+      emitScoreboard(io, sessionId, session.players);
 
     } catch (error) {
       handleSocketError(socket, error, 'revealAnswer');
@@ -759,17 +758,7 @@ module.exports = (io, app) => {
           }
         });
 
-        io.to(sessionId).emit('scoreboard', {
-          success: true,
-          data: {
-            players: session.players.map(p => ({
-              username: p.username,
-              score: p.score,
-              correctAnswersCount: p.correctAnswersCount || 0,
-              connected: p.connected
-            }))
-          }
-        });
+        emitScoreboard(io, sessionId, session.players);
 
       } catch (error) {
         console.error('❌ Error in revealAnswer:', error);
@@ -872,12 +861,13 @@ module.exports = (io, app) => {
       }
 
       if (shouldComplete) {
-        const correctUsernames = session.choiceQuestionCorrectUsers[qIndex] || [];
+        const correctDisplayNames = session.choiceQuestionCorrectUsers[qIndex] || [];
         
-        // 정답자들에게 점수 부여
-        if (correctUsernames.length > 0) {
-          correctUsernames.forEach((username, index) => {
-            const player = session.players.find(p => p.username === username);
+        if (correctDisplayNames.length > 0) {
+          correctDisplayNames.forEach((displayName, index) => {
+            const player = session.players.find(p => 
+              (p.nickname || p.username) === displayName
+            );
             if (player) {
               if (index === 0) {
                 // 첫 번째 정답자: 2점
@@ -913,7 +903,6 @@ module.exports = (io, app) => {
         const quiz = await Quiz.findById(session.quizId);
         const question = quiz.questions[session.currentQuestionIndex];
 
-        // 정답 공개 이벤트 발생
         io.to(sessionId).emit('revealAnswer_Emit', {
           success: true,
           data: {
@@ -921,22 +910,12 @@ module.exports = (io, app) => {
             answerImage: question.answerImageBase64,
             index: session.currentQuestionIndex,
             revealedAt,
-            correctUsers: correctUsernames
+            correctUsers: correctDisplayNames
           }
         });
 
         // 스코어보드 업데이트 이벤트 발생
-        io.to(sessionId).emit('scoreboard', {
-          success: true,
-          data: {
-            players: session.players.map(p => ({
-              username: p.username,
-              score: p.score,
-              correctAnswersCount: p.correctAnswersCount || 0,
-              connected: p.connected
-            }))
-          }
-        });
+        emitScoreboard(io, sessionId, session.players);
       }
     } catch (error) {
       console.error('handleChoiceQuestionCompletion 에러:', error);

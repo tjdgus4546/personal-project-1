@@ -2,14 +2,14 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const questionSchema = new Schema({
-  text: { type: String },
+  text: { type: String, maxlength: 84 },
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   answers: { type: [String], required: true },
   incorrectAnswers:{ type: [String] },
   answerImageBase64: { type: String },
   order: { type: Number, required: true },
-  timeLimit: {type: Number, default: 90 , min: 5, max: 180 },
+  timeLimit: {type: Number, default: 90 , min: 5, max: 1800 },
 });
 
 const quizSchema = new Schema({

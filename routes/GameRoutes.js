@@ -32,8 +32,10 @@ router.get('/session/:id', authMiddleware, async (req, res) => {
   }
 
   const quizDb = req.app.get('quizDb');
+  const userDb = req.app.get('userDb');  // User DB 추가
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
+  const User = require('../models/User')(userDb);  // User 모델 추가
 
   try {
     const session = await GameSession.findById(req.params.id).lean();
@@ -47,18 +49,46 @@ router.get('/session/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: '이 세션에 접근할 권한이 없습니다.' });
     }
 
+    // 퀴즈 정보 가져오기
     const quiz = await Quiz.findById(session.quizId).lean();
     if (!quiz) return res.status(404).json({ message: '퀴즈 없음' });
 
+    // 각 플레이어의 최신 프로필 이미지 정보 가져오기
+    const playerIds = session.players.map(p => p.userId);
+    const users = await User.find({ _id: { $in: playerIds } }).select('_id nickname profileImage').lean();
+    
+    // 사용자 정보를 ID로 매핑
+    const userMap = {};
+    users.forEach(user => {
+      userMap[user._id.toString()] = user;
+    });
+
+    // 플레이어 정보에 최신 프로필 이미지 추가
+    const updatedPlayers = session.players.map(player => {
+      const userInfo = userMap[player.userId.toString()];
+      return {
+        ...player,
+        profileImage: userInfo?.profileImage || player.profileImage || null,
+        nickname: userInfo?.nickname || player.nickname || null
+      };
+    });
+
+    // correctUsers 처리
     const correctUsers = session.correctUsers || {};
     quiz.questions.forEach((q, i) => {
       q.correctUsers = correctUsers[i] || [];
     });
 
-    session.quiz = quiz;
+    // 세션 데이터에 업데이트된 플레이어 정보 포함
+    const responseData = {
+      ...session,
+      players: updatedPlayers,
+      quiz: quiz
+    };
 
-    res.json(session);
+    res.json(responseData);
   } catch (err) {
+    console.error('세션 조회 중 오류:', err);
     res.status(500).json({ message: '세션 조회 실패', error: err.message });
   }
 });
@@ -134,10 +164,20 @@ router.post('/join', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: '유효하지 않은 초대 코드입니다.' });
     }
 
-    // 이미 참여한 사용자인지 확인
-    const isAlreadyPlayer = session.players.some(player => player.userId.toString() === userId);
-    if (isAlreadyPlayer) {
-      return res.status(409).json({ message: '이미 참여한 세션입니다.', sessionId: session._id });
+    const existingPlayer = session.players.find(player => player.userId.toString() === userId);
+    if (existingPlayer) {
+      // 이미 참여한 플레이어면 상태만 업데이트 (재연결)
+      existingPlayer.connected = true;
+      existingPlayer.lastSeen = new Date();
+      existingPlayer.socketId = null; // Socket ID는 나중에 업데이트됨
+      
+      await session.save();
+      
+      return res.status(200).json({ 
+        message: '세션에 다시 참여했습니다.', 
+        sessionId: session._id,
+        reconnected: true
+      });
     }
 
     // 새 플레이어 추가

@@ -4,6 +4,8 @@ const { Schema } = mongoose;
 const playerSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   username: String,
+  nickname: { type: String, default: null },
+  profileImage: { type: String, default: null },
   score: { type: Number, default: 0 },
   correctAnswersCount: { type: Number, default: 0 },
   choiceQuestionCorrect : { type: Boolean, default : false },
