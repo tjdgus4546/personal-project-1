@@ -63,7 +63,7 @@ function createNavbarHTML(user = null) {
                 <a href="/quiz/my-list" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
                   나의 퀴즈
                 </a>
-                <a href="/quiz/init" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
+                <a href="#" onclick="event.preventDefault(); openQuizInitModal();" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
                   퀴즈 만들기
                 </a>
               </div>
@@ -134,7 +134,7 @@ function createNavbarHTML(user = null) {
               <a href="/quiz/my-list" class="block px-2 py-2 hover:bg-gray-700 rounded-md transition-colors text-sm">
                 나의 퀴즈
               </a>
-              <a href="/quiz/init" class="block px-2 py-2 hover:bg-gray-700 rounded-md transition-colors text-sm">
+              <a href="#" onclick="event.preventDefault(); openQuizInitModal();" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
                 퀴즈 만들기
               </a>
               
