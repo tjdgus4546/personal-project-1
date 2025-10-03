@@ -41,7 +41,7 @@ function createProfileImage(user) {
 // 상단바 HTML 생성 함수
 function createNavbarHTML(user = null) {
   return `
-    <nav class="bg-[#222230] text-white shadow-lg">
+    <nav class="bg-[#222230] text-white shadow-lg mx-auto px-4">
       <div class="max-w-[1080px] mx-auto sm:px-0 px-4">
         <div class="flex justify-between items-center h-14 sm:h-16">
           <!-- 로고 및 데스크톱 메뉴 -->
