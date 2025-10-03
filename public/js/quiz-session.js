@@ -206,8 +206,14 @@ function showQuizInfoSection() {
     document.getElementById('quizInfoSection').classList.remove('hidden');
     document.getElementById('gameSection').classList.add('hidden');
     
+    // 데스크톱 버튼 숨기기
     document.getElementById('voteSkipBtn').classList.add('hidden');
     document.getElementById('forceSkipBtn').classList.add('hidden');
+    
+    // 모바일 버튼 숨기기
+    document.getElementById('voteSkipBtnMobile').classList.add('hidden');
+    document.getElementById('forceSkipBtnMobile').classList.add('hidden');
+    
     document.getElementById('skipStatus').classList.add('hidden');
 }
 
@@ -216,11 +222,18 @@ function showGameSection() {
     document.getElementById('quizInfoSection').classList.add('hidden');
     document.getElementById('gameSection').classList.remove('hidden');
     
+    // 데스크톱 스킵투표 버튼 표시
     document.getElementById('voteSkipBtn').classList.remove('hidden');
+    
+    // 모바일 스킵투표 버튼 표시
+    document.getElementById('voteSkipBtnMobile').classList.remove('hidden');
+    
     document.getElementById('skipStatus').classList.remove('hidden');
     
+    // 호스트인 경우 강제스킵 버튼 표시
     if (userId === host) {
         document.getElementById('forceSkipBtn').classList.remove('hidden');
+        document.getElementById('forceSkipBtnMobile').classList.remove('hidden');
     }
 }
 
@@ -717,6 +730,16 @@ function setupEventListeners() {
         socket.emit('forceSkip', { sessionId });
     });
 
+    // 모바일 스킵 투표 버튼
+    document.getElementById('voteSkipBtnMobile').addEventListener('click', () => {
+        socket.emit('voteSkip', { sessionId });
+    });
+
+    // 모바일 강제 스킵 버튼
+    document.getElementById('forceSkipBtnMobile').addEventListener('click', () => {
+        socket.emit('forceSkip', { sessionId });
+    });
+
     // 채팅 입력 엔터 키
     document.getElementById('chatInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -725,6 +748,66 @@ function setupEventListeners() {
     });
 
     document.addEventListener('keydown', handleChoiceKeyPress);
+
+    // ESC 키: 포커스 해제
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'TEXTAREA') {
+                document.activeElement.blur();
+            }
+        }
+    });
+
+    // Enter 키: 채팅창 포커스
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            if (document.activeElement.tagName !== 'INPUT' && 
+                document.activeElement.tagName !== 'TEXTAREA' &&
+                document.activeElement.tagName !== 'BUTTON') {
+                
+                const gameSection = document.getElementById('gameSection');
+                const quizInfoSection = document.getElementById('quizInfoSection');
+                
+                if (!gameSection.classList.contains('hidden')) {
+                    document.getElementById('chatInput').focus();
+                } else if (!quizInfoSection.classList.contains('hidden')) {
+                    document.getElementById('waitingChatInput').focus();
+                }
+            }
+        }
+    });
+
+    // K 키: 스킵 투표
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'k' || e.key === 'K') {
+            if (document.activeElement.tagName !== 'INPUT' && 
+                document.activeElement.tagName !== 'TEXTAREA') {
+                
+                const gameSection = document.getElementById('gameSection');
+                
+                if (!gameSection.classList.contains('hidden')) {
+                    const voteSkipBtn = document.getElementById('voteSkipBtn');
+                    const voteSkipBtnMobile = document.getElementById('voteSkipBtnMobile');
+                    
+                    if (!voteSkipBtn.classList.contains('hidden') || 
+                        !voteSkipBtnMobile.classList.contains('hidden')) {
+                        socket.emit('voteSkip', { sessionId });
+                        
+                        // 시각적 피드백
+                        [voteSkipBtn, voteSkipBtnMobile].forEach(btn => {
+                            if (!btn.classList.contains('hidden')) {
+                                btn.classList.add('scale-95', 'opacity-70');
+                                setTimeout(() => {
+                                    btn.classList.remove('scale-95', 'opacity-70');
+                                }, 150);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    });
 
     const toggleCodeBtn = document.getElementById('toggleCodeBtn');
     if (toggleCodeBtn) {
@@ -846,20 +929,27 @@ function setupSocketListeners() {
 
         const isGameStarted = !document.getElementById('gameSection').classList.contains('hidden');
         const startBtn = document.getElementById('startBtn');
+        
+        // 데스크톱 버튼
         const forceSkipBtn = document.getElementById('forceSkipBtn');
+        // 모바일 버튼
+        const forceSkipBtnMobile = document.getElementById('forceSkipBtnMobile');
 
         if (host === '__NONE__') {
             forceSkipBtn.classList.add('hidden');
+            forceSkipBtnMobile.classList.add('hidden');
             startBtn?.classList.add('hidden');
         } else if (userId === host) {
             if (isGameStarted) {
                 forceSkipBtn.classList.remove('hidden');
+                forceSkipBtnMobile.classList.remove('hidden');
             }
             if (!isGameStarted) {
                 startBtn?.classList.remove('hidden');
             }
         } else {
             forceSkipBtn.classList.add('hidden');
+            forceSkipBtnMobile.classList.add('hidden');
             startBtn?.classList.add('hidden');
         }
     });
