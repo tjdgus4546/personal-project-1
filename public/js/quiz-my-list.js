@@ -139,13 +139,13 @@ function createQuizCard(quiz) {
             <div class="flex gap-2 mt-2">
                 <button 
                     onclick="event.stopPropagation(); openEditModal('${quiz._id}', '${escapeHtml(quiz.title)}', '${escapeHtml(quiz.description || '')}')" 
-                    class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 rounded-lg transition-colors text-sm"
+                    class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
                 >
                     제목 수정
                 </button>
                 <button 
                     onclick="event.stopPropagation(); deleteQuiz('${quiz._id}')" 
-                    class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded-lg transition-colors text-sm"
+                    class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
                 >
                     삭제
                 </button>

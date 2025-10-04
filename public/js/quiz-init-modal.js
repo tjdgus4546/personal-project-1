@@ -1,26 +1,34 @@
-async function fetchWithAuth(url, options = {}) {
-    options.credentials = 'include'; // Ensure cookies are sent
+// fetchWithAuth를 export로 변경
+export async function fetchWithAuth(url, options = {}) {
+    options.credentials = 'include';
+    
+    try {
+        let response = await fetch(url, options);
 
-    let response = await fetch(url, options);
+        if (response.status === 401) {
+            console.log('401 에러 - 토큰 갱신 시도');
+            
+            const refreshResponse = await fetch('/auth/refresh', {
+                method: 'POST',
+                credentials: 'include'
+            });
 
-    if (response.status === 401) {
-        // Try to refresh token
-        const refreshResponse = await fetch('/auth/refresh', {
-            method: 'POST',
-            credentials: 'include'
-        });
-
-        if (refreshResponse.ok) {
-            // Token refreshed, retry original request
-            response = await fetch(url, options);
-        } else {
-            // Refresh failed, redirect to login
-            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
-            window.location.href = '/login';
-            return;
+            if (refreshResponse.ok) {
+                console.log('토큰 갱신 성공 - 원래 요청 재시도');
+                response = await fetch(url, options);
+            } else {
+                console.log('토큰 갱신 실패 - 로그인 페이지로 이동');
+                alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+                window.location.href = '/login';
+                throw new Error('Token refresh failed');
+            }
         }
+        
+        return response;
+    } catch (error) {
+        console.error('fetchWithAuth 에러:', error);
+        throw error;
     }
-    return response;
 }
 
 let quizInitTitleImageBase64 = null;
@@ -37,7 +45,7 @@ function openQuizInitModal() {
         document.getElementById('quizInitDescription').value = '';
         document.getElementById('quizInitTitleImageInput').value = '';
         document.getElementById('quizInitTitleImagePreview').style.display = 'none';
-        document.getElementById('quizInitImagePreviewContainer').classList.add('hidden');  // 이 줄 추가
+        document.getElementById('quizInitImagePreviewContainer').classList.add('hidden');
         quizInitTitleImageBase64 = null;
     }
 }
@@ -58,8 +66,8 @@ function handleQuizInitModalClick(event) {
     }
 }
 
-// 이미지 리사이즈 함수
-async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
+// 이미지 리사이즈 함수를 export로 변경
+export async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
     return new Promise((resolve, reject) => {
         const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > 6) {
@@ -111,8 +119,8 @@ async function handleQuizInitImageSelect(event) {
             const container = document.getElementById('quizInitImagePreviewContainer');
             
             preview.src = quizInitTitleImageBase64;
-            preview.style.display = 'block';  // 이미지 보이기
-            container.classList.remove('hidden');  // 컨테이너 보이기
+            preview.style.display = 'block';
+            container.classList.remove('hidden');
         } catch (err) {
             alert('이미지 처리 실패: ' + err.message);
         }
