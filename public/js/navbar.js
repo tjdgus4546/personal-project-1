@@ -492,11 +492,6 @@ async function submitCreateQuiz() {
   const title = document.getElementById('createQuizTitle').value.trim();
   const description = document.getElementById('createQuizDescription').value.trim();
   
-  console.log('=== 퀴즈 생성 시작 ===');
-  console.log('제목:', title);
-  console.log('설명:', description);
-  console.log('이미지 Base64 존재:', !!quizTitleImageBase64);
-  
   if (!title) {
     alert('퀴즈 제목을 입력해주세요.');
     return;
@@ -513,7 +508,6 @@ async function submitCreateQuiz() {
   createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>생성 중...</div>';
   
   try {
-    console.log('API 요청 시작...');
     
     // quiz-init-modal.js의 fetchWithAuth 사용
     const response = await fetchWithAuth('/api/quiz/init', {
@@ -526,12 +520,9 @@ async function submitCreateQuiz() {
       })
     });
     
-    console.log('응답 상태:', response.status);
     const data = await response.json();
-    console.log('응답 데이터:', data);
     
     if (response.ok) {
-      console.log('퀴즈 생성 성공! quizId:', data.quizId);
       alert('퀴즈가 생성되었습니다!');
       closeCreateQuizModal();
       window.location.href = `/quiz/edit?quizId=${data.quizId}`;
