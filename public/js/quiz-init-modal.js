@@ -6,7 +6,6 @@ export async function fetchWithAuth(url, options = {}) {
         let response = await fetch(url, options);
 
         if (response.status === 401) {
-            console.log('401 에러 - 토큰 갱신 시도');
             
             const refreshResponse = await fetch('/auth/refresh', {
                 method: 'POST',
@@ -14,10 +13,8 @@ export async function fetchWithAuth(url, options = {}) {
             });
 
             if (refreshResponse.ok) {
-                console.log('토큰 갱신 성공 - 원래 요청 재시도');
                 response = await fetch(url, options);
             } else {
-                console.log('토큰 갱신 실패 - 로그인 페이지로 이동');
                 alert('세션이 만료되었습니다. 다시 로그인해주세요.');
                 window.location.href = '/login';
                 throw new Error('Token refresh failed');
@@ -132,11 +129,6 @@ async function createQuizFromModal() {
     const title = document.getElementById('quizInitTitle').value.trim();
     const description = document.getElementById('quizInitDescription').value.trim();
     
-    console.log('=== 퀴즈 생성 시작 ===');
-    console.log('제목:', title);
-    console.log('설명:', description);
-    console.log('이미지 Base64 존재:', !!quizInitTitleImageBase64);
-    
     if (!title) {
         alert('퀴즈 제목을 입력하세요.');
         return;
@@ -153,7 +145,6 @@ async function createQuizFromModal() {
     createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>생성 중...</div>';
 
     try {
-        console.log('API 요청 시작...');
         const res = await fetchWithAuth('/api/quiz/init', {
             method: 'POST',
             headers: { 
@@ -162,12 +153,10 @@ async function createQuizFromModal() {
             body: JSON.stringify({ title, description, titleImageBase64: quizInitTitleImageBase64 })
         });
 
-        console.log('응답 상태:', res.status);
         const data = await res.json();
-        console.log('응답 데이터:', data);
 
         if (res.ok) {
-            console.log('퀴즈 생성 성공! quizId:', data.quizId);
+            
             closeQuizInitModal();
             window.location.href = `/quiz/edit?quizId=${data.quizId}`;
         } else {

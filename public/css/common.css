@@ -150,26 +150,32 @@
     100% { background-position: -200% 0; }
 }
 
-/* 스코어보드 전용 얇은 스크롤바 (트랙 없음) */
-#scoreboardWrapper::-webkit-scrollbar {
-    height: 2px;
+/* 스코어보드 & 사이드바 전용 얇은 스크롤바 (트랙 없음) */
+#scoreboardWrapper::-webkit-scrollbar,
+#questionSidebar::-webkit-scrollbar {
+    height: 2px;  /* 가로 스크롤 (스코어보드) */
+    width: 4px;   /* 세로 스크롤 (사이드바) */
 }
 
-#scoreboardWrapper::-webkit-scrollbar-track {
+#scoreboardWrapper::-webkit-scrollbar-track,
+#questionSidebar::-webkit-scrollbar-track {
     background: transparent;
 }
 
-#scoreboardWrapper::-webkit-scrollbar-thumb {
+#scoreboardWrapper::-webkit-scrollbar-thumb,
+#questionSidebar::-webkit-scrollbar-thumb {
     background: rgb(107 114 128);
     border-radius: 2px;
 }
 
-#scoreboardWrapper::-webkit-scrollbar-thumb:hover {
+#scoreboardWrapper::-webkit-scrollbar-thumb:hover,
+#questionSidebar::-webkit-scrollbar-thumb:hover {
     background: rgb(156 163 175);
 }
 
 /* Firefox 지원 */
-#scoreboardWrapper {
+#scoreboardWrapper,
+#questionSidebar {
     scrollbar-width: thin;
     scrollbar-color: rgb(107 114 128) transparent;
 }

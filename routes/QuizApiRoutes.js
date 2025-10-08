@@ -184,6 +184,9 @@ router.post('/quiz/:id/add-question', authenticateToken, async (req, res) => {
       imageBase64: imageBase64?.trim() || null,
       answerImageBase64: answerImageBase64?.trim() || null,
       youtubeUrl: youtubeUrl?.trim() || null,
+      youtubeStartTime: parseInt(youtubeStartTime) || 0,
+      youtubeEndTime: parseInt(youtubeEndTime) || 0,
+      youtubeLoop: youtubeLoop || false,
       order,
       timeLimit: parsedTimeLimit
     };
@@ -263,6 +266,61 @@ router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, 
     res.json({ message: '문제 수정 완료' });
   } catch (err) {
     res.status(500).json({ message: '문제 수정 실패', error: err.message });
+  }
+});
+
+// 퀴즈의 전체 문제 목록 업데이트
+router.put('/quiz/:quizId/questions', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+  
+  try {
+    const { questions } = req.body;
+    
+    if (!Array.isArray(questions)) {
+      return res.status(400).json({ message: '문제 목록은 배열이어야 합니다.' });
+    }
+    
+    const quiz = await Quiz.findById(req.params.quizId);
+    if (!quiz) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    }
+    
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+    
+    // 문제 데이터 처리 - isChoice 필드 추가
+    const processedQuestions = questions.map((q, index) => {
+      const processedQ = {
+        text: q.text || '',
+        answers: q.answers || [],
+        incorrectAnswers: q.incorrectAnswers || [],
+        imageBase64: q.imageBase64 || null,
+        answerImageBase64: q.answerImageBase64 || null,
+        youtubeUrl: q.youtubeUrl || null,
+        youtubeStartTime: q.youtubeStartTime || 0,
+        youtubeEndTime: q.youtubeEndTime || 0,
+        youtubeLoop: q.youtubeLoop || false,
+        answerYoutubeUrl: q.answerYoutubeUrl || null,
+        answerYoutubeStartTime: q.answerYoutubeStartTime || 0,
+        answerYoutubeEndTime: q.answerYoutubeEndTime || 0,
+        order: index + 1,
+        timeLimit: q.timeLimit || 90,
+        // isChoice 필드 추가: 전달되지 않으면 incorrectAnswers로 판단
+        isChoice: q.isChoice !== undefined ? q.isChoice : (q.incorrectAnswers && q.incorrectAnswers.length > 0)
+      };
+      
+      return processedQ;
+    });
+    
+    quiz.questions = processedQuestions;
+    await quiz.save();
+    
+    res.json({ message: '문제 목록 업데이트 성공' });
+  } catch (err) {
+    console.error('문제 목록 업데이트 오류:', err);
+    res.status(500).json({ message: '문제 목록 업데이트 실패', error: err.message });
   }
 });
 
