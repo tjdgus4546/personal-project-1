@@ -3,6 +3,7 @@ const { Schema } = mongoose;
 
 const questionSchema = new Schema({
   text: { type: String, maxlength: 84 },
+  questionType: { type: String, enum: ['text', 'image', 'video', 'audio'], required: true, default: 'text' },
   imageBase64: { type: String },
   youtubeUrl: { type: String },
   youtubeStartTime: { type: Number, default: 0 },

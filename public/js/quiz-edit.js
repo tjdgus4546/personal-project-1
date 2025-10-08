@@ -16,20 +16,17 @@ const quizId = new URLSearchParams(window.location.search).get('quizId');
 
 // 문제 타입 자동 감지 (기존 문제용)
 function detectQuestionType(question) {
-    // 이미 questionType이 있으면 그대로 반환
     if (question.questionType) {
         return question.questionType;
     }
     
-    // questionType이 없는 기존 문제의 경우 자동 감지
     if (question.imageBase64) {
-        return 'image'; // 이미지가 있으면 이미지 문제
+        return 'image';
     } else if (question.youtubeUrl) {
-        // 유튜브 URL이 있으면 영상 또는 소리 문제
         // 기존 로직에서는 구분이 없으므로 기본값으로 'video'
         return 'video';
     } else {
-        return 'text'; // 기본은 텍스트 문제
+        return 'text';
     }
 }
 
@@ -45,86 +42,47 @@ async function initNavbar() {
     return true;
 }
 
-// ========== 새로 추가: 문제 타입 선택 기능 ==========
-
-// 문제 타입 선택
+// 문제 타입 선택 함수 (버튼 클릭 시 호출)
 export function selectQuestionType(type) {
-    currentQuestionType = type;
+    console.log('선택된 문제 타입:', type);
+    currentQuestionType = type; // 전역 변수 업데이트
     
-    // 모든 타입 버튼의 active 클래스 제거
-    document.querySelectorAll('.question-type-btn').forEach(btn => {
-        btn.classList.remove('active');
+    // 모든 버튼의 스타일 초기화
+    document.querySelectorAll('[data-question-type]').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'ring-2', 'ring-blue-400');
+        btn.classList.add('bg-gray-700', 'hover:bg-gray-600');
     });
     
-    // 선택된 버튼에 active 클래스 추가
-    document.getElementById(`type${type.charAt(0).toUpperCase() + type.slice(1)}Btn`).classList.add('active');
+    // 선택된 버튼 활성화 스타일 적용
+    const selectedButton = document.querySelector(`[data-question-type="${type}"]`);
+    if (selectedButton) {
+        selectedButton.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+        selectedButton.classList.add('bg-blue-600', 'ring-2', 'ring-blue-400');
+    }
     
-    // UI 업데이트
+    // 타입에 따른 폼 표시/숨김
     updateFormVisibility();
 }
 
-// 폼 표시/숨김 업데이트
+// 폼 표시 업데이트 함수
 function updateFormVisibility() {
-    const isMultipleChoice = document.getElementById('isMultipleChoice').checked;
-    
-    // 기본적으로 모든 섹션 표시 설정
-    const questionTextSection = document.getElementById('questionTextSection');
-    const questionImageSection = document.getElementById('questionImageSection');
+    const imageSection = document.getElementById('imageSection');
     const youtubeSection = document.getElementById('youtubeSection');
-    const answerTextSection = document.getElementById('answerTextSection');
-    const answerImageSection = document.getElementById('answerImageSection');
     const answerYoutubeSection = document.getElementById('answerYoutubeSection');
-    const incorrectSection = document.getElementById('incorrectSection');
-    const incorrectImageSection = document.getElementById('incorrectImageSection');
     
     // 모든 섹션 숨김
-    questionTextSection.style.display = 'none';
-    questionImageSection.style.display = 'none';
-    youtubeSection.style.display = 'none';
-    answerTextSection.style.display = 'none';
-    answerImageSection.style.display = 'none';
-    answerYoutubeSection.style.display = 'none';
-    incorrectImageSection.style.display = 'none';
+    imageSection?.classList.add('hidden');
+    youtubeSection?.classList.add('hidden');
+    answerYoutubeSection?.classList.add('hidden');
     
-    // 문제 타입별로 표시할 섹션 결정
-    switch(currentQuestionType) {
-        case 'text':
-            // 텍스트 문제: 문제 텍스트, 정답 텍스트만
-            questionTextSection.style.display = 'block';
-            answerTextSection.style.display = 'block';
-            break;
-            
-        case 'image':
-            // 이미지 문제: 문제 텍스트 + 문제 이미지 + 정답 텍스트 + 정답 이미지
-            questionTextSection.style.display = 'block';
-            questionImageSection.style.display = 'block';
-            answerTextSection.style.display = 'block';
-            answerImageSection.style.display = 'block';
-            
-            // 객관식이면 오답 이미지도 표시
-            if (isMultipleChoice) {
-                incorrectImageSection.style.display = 'block';
-            }
-            break;
-            
-        case 'video':
-            // 영상 문제: 문제 텍스트 + 유튜브 편집 + 정답 텍스트 + 정답 유튜브
-            questionTextSection.style.display = 'block';
-            youtubeSection.style.display = 'block';
-            answerTextSection.style.display = 'block';
-            answerYoutubeSection.style.display = 'block';
-            document.getElementById('youtubeSectionTitle').textContent = '유튜브 영상 문제 편집';
-            break;
-            
-        case 'audio':
-            // 소리 문제: 영상 문제와 동일 (CSS로 숨김 처리는 게임 세션에서)
-            questionTextSection.style.display = 'block';
-            youtubeSection.style.display = 'block';
-            answerTextSection.style.display = 'block';
-            answerYoutubeSection.style.display = 'block';
-            document.getElementById('youtubeSectionTitle').textContent = '유튜브 소리 문제 편집 (영상은 게임에서 가려짐)';
-            break;
+    // 선택된 타입에 따라 표시
+    if (currentQuestionType === 'image') {
+        imageSection?.classList.remove('hidden');
+    } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
+        youtubeSection?.classList.remove('hidden');
+        answerYoutubeSection?.classList.remove('hidden');
     }
+    // text는 기본 필드만 사용하므로 추가 섹션 불필요
 }
 
 // 객관식 토글
@@ -324,9 +282,9 @@ export function updateAnswerYoutubePreview() {
 // 유튜브 비디오 ID 추출
 function extractYoutubeVideoId(url) {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
     const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+    return (match && match[7].length === 11) ? match[7] : null;
 }
 
 // 시간을 초로 변환
@@ -457,64 +415,66 @@ export function removeIncorrect(index) {
 
 // 문제 카드 렌더링
 function renderQuestions() {
-    const container = document.getElementById('questionsList');
+    const container = document.getElementById('questionsList'); // ⭐ HTML과 일치
     const emptyState = document.getElementById('emptyState');
     
-    if (questions.length === 0) {
-        container.innerHTML = '';
-        emptyState.classList.remove('hidden');
+    if (!container) {
+        console.error('questionsList 요소를 찾을 수 없습니다');
         return;
     }
     
-    emptyState.classList.add('hidden');
+    if (questions.length === 0) {
+        container.innerHTML = '';
+        if (emptyState) {
+            emptyState.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    if (emptyState) {
+        emptyState.classList.add('hidden');
+    }
     container.innerHTML = '';
     
     questions.forEach((q, index) => {
-        // 문제 타입 자동 감지
         const questionType = detectQuestionType(q);
+        
+        // 타입별 한글명
+        const typeNames = {
+            'text': '텍스트',
+            'image': '이미지', 
+            'video': '영상',
+            'audio': '소리'
+        };
+        const typeName = typeNames[questionType] || '텍스트';
         
         const card = document.createElement('div');
         card.className = 'bg-gray-800/50 rounded-2xl overflow-hidden border border-gray-700 hover:border-blue-500 transition-all duration-200 cursor-pointer transform hover:scale-105';
+        
+        // ⭐ 카드 클릭 이벤트 추가
         card.onclick = () => editQuestion(index);
         
-        // 문제 타입 아이콘
-        let typeName = '텍스트';
-        if (questionType === 'image') {
-            typeName = '이미지';
-        } else if (questionType === 'video') {
-            typeName = '영상';
-        } else if (questionType === 'audio') {
-            typeName = '소리';
-        }
-        
-        // 미리보기 이미지/영상 썸네일 생성
         let previewContent = '';
         
+        // 미리보기 콘텐츠 생성
         if (questionType === 'image' && q.imageBase64) {
-            // 이미지 문제: 문제 이미지 표시
             previewContent = `
                 <div class="w-full h-48 bg-gray-900 overflow-hidden">
                     <img src="${q.imageBase64}" alt="문제 이미지" class="w-full h-full object-cover">
                 </div>
             `;
         } else if ((questionType === 'video' || questionType === 'audio') && q.youtubeUrl) {
-            // 영상/소리 문제: 유튜브 썸네일 표시
             const videoId = extractYoutubeVideoId(q.youtubeUrl);
             if (videoId) {
-                const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
                 previewContent = `
-                    <div class="w-full h-48 bg-gray-900 overflow-hidden relative">
-                        <img src="${thumbnailUrl}" alt="영상 썸네일" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 flex items-center justify-center bg-black/30">
-                            <svg class="w-16 h-16 text-white opacity-80" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                        </div>
+                    <div class="relative w-full h-48 bg-gray-900">
+                        <img src="https://img.youtube.com/vi/${videoId}/mqdefault.jpg" 
+                             alt="유튜브 썸네일" 
+                             class="w-full h-full object-cover">
                         ${questionType === 'audio' ? '<div class="absolute top-2 right-2 bg-purple-500 text-white text-xs px-2 py-1 rounded">소리만</div>' : ''}
                     </div>
                 `;
             } else {
-                // 비디오 ID를 추출하지 못한 경우 텍스트로 표시
                 previewContent = `
                     <div class="w-full h-48 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center p-6">
                         <p class="text-white text-center text-lg font-medium line-clamp-4">${q.text || '제목 없음'}</p>
@@ -522,7 +482,6 @@ function renderQuestions() {
                 `;
             }
         } else {
-            // 텍스트 문제 또는 콘텐츠 없음: 문제 텍스트 미리보기
             const previewText = q.text || '제목 없음';
             previewContent = `
                 <div class="w-full h-48 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center p-6">
@@ -542,7 +501,7 @@ function renderQuestions() {
                 </div>
                 <h3 class="text-white font-medium mb-2 line-clamp-2">${q.text || '제목 없음'}</h3>
                 <div class="flex items-center justify-between text-sm text-gray-400">
-                    <span>${q.timeLimit || 60}초</span>
+                    <span>${q.timeLimit || 90}초</span>
                     <span>${q.answers?.length || 0}개 정답</span>
                 </div>
                 ${q.isChoice ? '<div class="mt-2 text-xs text-purple-400">객관식</div>' : ''}
@@ -680,20 +639,20 @@ export function createNewQuestion() {
     renderQuestions();
 }
 
-// 문제 편집
+// 문제 편집 함수 (기존 문제 불러올 때)
 export function editQuestion(index) {
+    // 전체보기 뷰에서 클릭 시 편집 뷰로 전환
     if (currentView === 'overview') {
         switchView('edit');
     }
-    
+
     currentEditingIndex = index;
     const question = questions[index];
     
-    // 문제 타입 자동 감지 및 설정
-    const questionType = detectQuestionType(question);
-    currentQuestionType = questionType;
+    // 문제 타입 설정 (없으면 자동 감지)
+    const questionType = question.questionType || detectQuestionType(question);
     
-    // 문제 타입에 따라 DB에도 저장되도록 업데이트
+    // 자동 감지한 타입을 문제 객체에 저장
     if (!question.questionType) {
         question.questionType = questionType;
     }
@@ -702,10 +661,10 @@ export function editQuestion(index) {
     
     // 폼 데이터 채우기
     document.getElementById('questionText').value = question.text || '';
-    document.getElementById('timeLimit').value = question.timeLimit || 60; // 90 → 60으로 변경
+    document.getElementById('timeLimit').value = question.timeLimit || 90;
     document.getElementById('isMultipleChoice').checked = question.isChoice || false;
     
-    // 문제 이미지
+    // 이미지 데이터 로드
     questionImageBase64 = question.imageBase64 || '';
     if (questionImageBase64) {
         document.getElementById('questionImagePreview').querySelector('img').src = questionImageBase64;
@@ -714,7 +673,6 @@ export function editQuestion(index) {
         document.getElementById('questionImagePreview').classList.add('hidden');
     }
     
-    // 정답 이미지
     answerImageBase64 = question.answerImageBase64 || '';
     if (answerImageBase64) {
         document.getElementById('answerImagePreview').querySelector('img').src = answerImageBase64;
@@ -723,16 +681,13 @@ export function editQuestion(index) {
         document.getElementById('answerImagePreview').classList.add('hidden');
     }
     
-    // 오답 이미지
     incorrectImagesBase64 = question.incorrectImagesBase64 || [];
     renderIncorrectImages();
     
-    // 유튜브 설정
+    // 유튜브 설정 로드
     document.getElementById('youtubeUrl').value = question.youtubeUrl || '';
     document.getElementById('startTime').value = secondsToTimeFormat(question.youtubeStartTime || 0);
     document.getElementById('endTime').value = secondsToTimeFormat(question.youtubeEndTime || 0);
-    
-    // 정답 공개 유튜브 설정
     document.getElementById('answerYoutubeUrl').value = question.answerYoutubeUrl || '';
     document.getElementById('answerStartTime').value = secondsToTimeFormat(question.answerYoutubeStartTime || 0);
     
@@ -758,7 +713,7 @@ export function editQuestion(index) {
     renderSidebar();
 }
 
-// 문제 저장
+// 문제 저장 함수 (수정됨)
 export async function saveQuestion() {
     if (currentEditingIndex === null) return;
     
@@ -768,12 +723,12 @@ export async function saveQuestion() {
     const timeLimit = parseInt(timeLimitValue);
     
     console.log('=== 저장 디버깅 ===');
-    console.log('timeLimit input value:', timeLimitValue);
-    console.log('timeLimit parsed:', timeLimit);
-    console.log('timeLimit isNaN:', isNaN(timeLimit));
+    console.log('선택된 questionType:', currentQuestionType);
+    console.log('timeLimit:', timeLimit);
     
     const isChoice = document.getElementById('isMultipleChoice').checked;
     
+    // 유효성 검사
     if (!text) {
         alert('문제를 입력하세요.');
         return;
@@ -798,11 +753,11 @@ export async function saveQuestion() {
     let finalQuestionData = {
         questionType: currentQuestionType,
         text: text,
-        timeLimit: timeLimit, // 여기가 중요!
+        timeLimit: timeLimit,
         answers: [...currentAnswers],
         incorrectAnswers: isChoice ? [...currentIncorrects] : [],
         isChoice: isChoice,
-        // 모든 선택적 데이터를 기본값으로 초기화 (DB에서 기존 데이터 완전 제거)
+        // 모든 선택적 데이터를 기본값으로 초기화
         imageBase64: null,
         answerImageBase64: null,
         incorrectImagesBase64: [],
@@ -814,14 +769,12 @@ export async function saveQuestion() {
         answerYoutubeEndTime: null
     };
     
-    console.log('finalQuestionData.timeLimit:', finalQuestionData.timeLimit);
-    
-    // 타입별로 필요한 데이터만 추가 (null이 아닌 실제 값으로)
+    // 타입별 데이터 추가
     if (currentQuestionType === 'text') {
-        // 텍스트 문제: 추가 데이터 없음 (이미 모두 null로 초기화됨)
+        // 텍스트 문제: 추가 데이터 없음
         
     } else if (currentQuestionType === 'image') {
-        // 이미지 문제: 이미지 데이터만 저장
+        // 이미지 문제
         if (!questionImageBase64) {
             alert('문제 이미지를 업로드하세요.');
             return;
@@ -831,12 +784,13 @@ export async function saveQuestion() {
         finalQuestionData.incorrectImagesBase64 = incorrectImagesBase64.length > 0 ? [...incorrectImagesBase64] : [];
         
     } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
-        // 영상/소리 문제: 유튜브 데이터만 저장
+        // 영상/소리 문제
         const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
         if (!youtubeUrl) {
             alert('유튜브 URL을 입력하세요.');
             return;
         }
+        
         finalQuestionData.youtubeUrl = youtubeUrl;
         finalQuestionData.youtubeStartTime = parseTimeToSeconds(document.getElementById('startTime').value) || 0;
         finalQuestionData.youtubeEndTime = parseTimeToSeconds(document.getElementById('endTime').value) || 0;
@@ -899,6 +853,10 @@ export async function deleteCurrentQuestion() {
 
 // 서버에 저장
 async function saveToServer() {
+    console.log('=== 서버 저장 시작 ===');
+    console.log('Quiz ID:', quizId);
+    console.log('Questions:', questions);
+    
     const response = await fetch(`/api/quiz/${quizId}/questions`, {
         method: 'PUT',
         headers: {
@@ -908,11 +866,17 @@ async function saveToServer() {
         body: JSON.stringify({ questions })
     });
     
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
-        throw new Error('서버 저장 실패');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('서버 오류:', errorData);
+        throw new Error(errorData.message || '서버 저장 실패');
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log('저장 성공:', result);
+    return result;
 }
 
 // 서버에서 문제 목록 로드
@@ -978,3 +942,6 @@ window.updateYoutubePreview = updateYoutubePreview;
 window.updateAnswerYoutubePreview = updateAnswerYoutubePreview;
 window.saveQuestion = saveQuestion;
 window.deleteCurrentQuestion = deleteCurrentQuestion;
+window.renderQuestions = renderQuestions;
+window.extractYoutubeVideoId = extractYoutubeVideoId;
+window.detectQuestionType = detectQuestionType;

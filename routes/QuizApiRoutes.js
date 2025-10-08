@@ -228,44 +228,74 @@ router.delete('/quiz/:quizId/question/:questionId', authenticateToken, async (re
   }
 });
 
-//문제 수정
-router.put('/quiz/:quizId/question/:questionId', authenticateToken, async (req, res) => {
+// 문제 추가 API 엔드포인트
+router.post('/quiz/:quizId/question', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
-  
+
   try {
+    const { 
+      text, 
+      answers, 
+      incorrectAnswers = [], 
+      imageBase64, 
+      answerImageBase64, 
+      youtubeUrl, 
+      youtubeStartTime, 
+      youtubeEndTime, 
+      youtubeLoop,
+      timeLimit,
+      questionType = 'text'  // 프론트엔드에서 전달받은 타입
+    } = req.body;
+
     const quiz = await Quiz.findById(req.params.quizId);
-    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-    if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
-    
-    const question = quiz.questions.id(req.params.questionId);
-    if (!question) return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
-    
-    // 수정할 필드만 바꿈
-    if (req.body.text !== undefined) question.text = req.body.text;
-    if (req.body.answers !== undefined) {
-      const rawAnswers = Array.isArray(req.body.answers)
-      ? req.body.answers
-      : req.body.answers.split(',').map(a => a.trim()).filter(Boolean);
-      
-      question.answers = rawAnswers;
+    if (!quiz) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
     }
 
-    if (req.body.timeLimit !== undefined) {
-      let parsed = parseInt(req.body.timeLimit, 10);
-      question.timeLimit = (isNaN(parsed) || parsed < 5 || parsed > 180) ? 90 : parsed;
+    // 권한 체크
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
     }
-    if (req.body.imageBase64 !== undefined) {
-      question.imageBase64 = req.body.imageBase64;
+
+    const questionText = (text && text.trim()) || quiz.title;
+    const order = quiz.questions.length + 1;
+
+    let parsedTimeLimit = parseInt(timeLimit, 10);
+    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 5 || parsedTimeLimit > 1800) {
+      parsedTimeLimit = 90;
     }
-    if (req.body.answerImageBase64 !== undefined) {
-      question.answerImageBase64 = req.body.answerImageBase64;
-    }
+
+    const rawAnswers = Array.isArray(answers)
+      ? answers
+      : answers.split(',').map(a => a.trim()).filter(Boolean);
+
+    const rawIncorrectAnswers = Array.isArray(incorrectAnswers)
+      ? incorrectAnswers
+      : incorrectAnswers.split(',').map(a => a.trim()).filter(Boolean);
+
+    const newQuestion = {
+      questionType: questionType,  // 타입 저장
+      text: questionText,
+      answers: rawAnswers,
+      incorrectAnswers: rawIncorrectAnswers,
+      imageBase64: imageBase64?.trim() || null,
+      answerImageBase64: answerImageBase64?.trim() || null,
+      youtubeUrl: youtubeUrl?.trim() || null,
+      youtubeStartTime: parseInt(youtubeStartTime) || 0,
+      youtubeEndTime: parseInt(youtubeEndTime) || 0,
+      youtubeLoop: youtubeLoop || false,
+      order,
+      timeLimit: parsedTimeLimit
+    };
+
+    quiz.questions.push(newQuestion);
     await quiz.save();
 
-    res.json({ message: '문제 수정 완료' });
+    res.status(201).json({ message: '문제 추가 성공', order });
   } catch (err) {
-    res.status(500).json({ message: '문제 수정 실패', error: err.message });
+    console.error('문제 추가 오류:', err);
+    res.status(500).json({ message: '문제 추가 실패', error: err.message });
   }
 });
 
@@ -290,36 +320,44 @@ router.put('/quiz/:quizId/questions', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
     
-    // 문제 데이터 처리 - isChoice 필드 추가
-    const processedQuestions = questions.map((q, index) => {
-      const processedQ = {
-        text: q.text || '',
-        answers: q.answers || [],
-        incorrectAnswers: q.incorrectAnswers || [],
-        imageBase64: q.imageBase64 || null,
-        answerImageBase64: q.answerImageBase64 || null,
-        youtubeUrl: q.youtubeUrl || null,
-        youtubeStartTime: q.youtubeStartTime || 0,
-        youtubeEndTime: q.youtubeEndTime || 0,
-        youtubeLoop: q.youtubeLoop || false,
-        answerYoutubeUrl: q.answerYoutubeUrl || null,
-        answerYoutubeStartTime: q.answerYoutubeStartTime || 0,
-        answerYoutubeEndTime: q.answerYoutubeEndTime || 0,
-        order: index + 1,
-        timeLimit: q.timeLimit || 90,
-        // isChoice 필드 추가: 전달되지 않으면 incorrectAnswers로 판단
-        isChoice: q.isChoice !== undefined ? q.isChoice : (q.incorrectAnswers && q.incorrectAnswers.length > 0)
-      };
+    // 문제 목록 업데이트 (order 필드 자동 설정)
+    quiz.questions = questions.map((q, index) => ({
+      // questionType 필드 추가
+      questionType: q.questionType || 'text',
       
-      return processedQ;
-    });
+      text: q.text,
+      answers: q.answers,
+      incorrectAnswers: q.incorrectAnswers || [],
+      isChoice: q.isChoice || false,
+      
+      // 이미지 관련
+      imageBase64: q.imageBase64 || null,
+      answerImageBase64: q.answerImageBase64 || null,
+      incorrectImagesBase64: q.incorrectImagesBase64 || [],
+      
+      // 문제 영상
+      youtubeUrl: q.youtubeUrl || null,
+      youtubeStartTime: q.youtubeStartTime || 0,
+      youtubeEndTime: q.youtubeEndTime || 0,
+      youtubeLoop: q.youtubeLoop || false,
+      
+      // 정답 공개 영상
+      answerYoutubeUrl: q.answerYoutubeUrl || null,
+      answerYoutubeStartTime: q.answerYoutubeStartTime || 0,
+      answerYoutubeEndTime: q.answerYoutubeEndTime || 0,
+      
+      order: index + 1,
+      timeLimit: q.timeLimit || 90
+    }));
     
-    quiz.questions = processedQuestions;
     await quiz.save();
     
-    res.json({ message: '문제 목록 업데이트 성공' });
+    res.json({ 
+      message: '문제 목록이 업데이트되었습니다.', 
+      questionCount: quiz.questions.length 
+    });
   } catch (err) {
-    console.error('문제 목록 업데이트 오류:', err);
+    console.error('문제 목록 업데이트 실패:', err);
     res.status(500).json({ message: '문제 목록 업데이트 실패', error: err.message });
   }
 });
