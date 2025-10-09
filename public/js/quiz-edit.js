@@ -44,7 +44,6 @@ async function initNavbar() {
 
 // 문제 타입 선택 함수 (버튼 클릭 시 호출)
 export function selectQuestionType(type) {
-    console.log('선택된 문제 타입:', type);
     currentQuestionType = type; // 전역 변수 업데이트
     
     // 모든 버튼의 스타일 초기화
@@ -66,25 +65,87 @@ export function selectQuestionType(type) {
 
 // 폼 표시 업데이트 함수
 function updateFormVisibility() {
-    const imageSection = document.getElementById('imageSection');
-    const youtubeSection = document.getElementById('youtubeSection');
-    const answerYoutubeSection = document.getElementById('answerYoutubeSection');
+    const isMultipleChoice = document.getElementById('isMultipleChoice')?.checked || false;
     
-    // 모든 섹션 숨김
-    imageSection?.classList.add('hidden');
-    youtubeSection?.classList.add('hidden');
-    answerYoutubeSection?.classList.add('hidden');
+    // 모든 섹션 요소 가져오기
+    const sections = {
+        questionText: document.getElementById('questionTextSection'),
+        questionImage: document.getElementById('questionImageSection'),
+        youtube: document.getElementById('youtubeSection'),
+        answerText: document.getElementById('answerTextSection'),
+        answerImage: document.getElementById('answerImageSection'),
+        answerYoutube: document.getElementById('answerYoutubeSection'),
+        incorrect: document.getElementById('incorrectSection'),
+        incorrectImage: document.getElementById('incorrectImageSection')
+    };
     
-    // 선택된 타입에 따라 표시
-    if (currentQuestionType === 'image') {
-        imageSection?.classList.remove('hidden');
-    } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
-        youtubeSection?.classList.remove('hidden');
-        answerYoutubeSection?.classList.remove('hidden');
+    // 디버깅: 어떤 섹션이 없는지 확인
+    Object.entries(sections).forEach(([key, element]) => {
+        if (!element) {
+            console.warn(`${key} 섹션을 찾을 수 없습니다`);
+        }
+    });
+    
+    // 모든 섹션 숨김 (초기화)
+    Object.values(sections).forEach(section => {
+        if (section) section.style.display = 'none';
+    });
+    
+    
+    // 문제 타입별로 표시할 섹션 결정
+    switch(currentQuestionType) {
+        case 'text':
+            // 텍스트 문제: 문제 텍스트, 정답 텍스트만
+            if (sections.questionText) sections.questionText.style.display = 'block';
+            if (sections.answerText) sections.answerText.style.display = 'block';
+            break;
+            
+        case 'image':
+            // 이미지 문제: 문제 텍스트 + 문제 이미지 + 정답 텍스트 + 정답 이미지
+            if (sections.questionText) sections.questionText.style.display = 'block';
+            if (sections.questionImage) sections.questionImage.style.display = 'block';
+            if (sections.answerText) sections.answerText.style.display = 'block';
+            if (sections.answerImage) sections.answerImage.style.display = 'block';
+            
+            // 객관식이면 오답 이미지도 표시
+            if (isMultipleChoice && sections.incorrectImage) {
+                sections.incorrectImage.style.display = 'block';
+            }
+            break;
+            
+        case 'video':
+            // 영상 문제: 문제 텍스트 + 유튜브 편집 + 정답 텍스트 + 정답 유튜브
+            if (sections.questionText) sections.questionText.style.display = 'block';
+            if (sections.youtube) sections.youtube.style.display = 'block';
+            if (sections.answerText) sections.answerText.style.display = 'block';
+            if (sections.answerYoutube) sections.answerYoutube.style.display = 'block';
+            
+            const youtubeTitle = document.getElementById('youtubeSectionTitle');
+            if (youtubeTitle) youtubeTitle.textContent = '유튜브 영상 문제 편집';
+            
+            break;
+            
+        case 'audio':
+            // 소리 문제: 영상 문제와 동일 (CSS로 숨김 처리는 게임 세션에서)
+            if (sections.questionText) sections.questionText.style.display = 'block';
+            if (sections.youtube) sections.youtube.style.display = 'block';
+            if (sections.answerText) sections.answerText.style.display = 'block';
+            if (sections.answerYoutube) sections.answerYoutube.style.display = 'block';
+            
+            const audioTitle = document.getElementById('youtubeSectionTitle');
+            if (audioTitle) audioTitle.textContent = '유튜브 소리 문제 편집 (영상은 게임에서 가려짐)';
+            
+            break;
+            
+        default:
+            console.warn('알 수 없는 문제 타입:', currentQuestionType);
     }
-    // text는 기본 필드만 사용하므로 추가 섹션 불필요
+    
+    // 객관식 섹션은 타입과 관계없이 처리
+    if (sections.incorrect) {
+        sections.incorrect.style.display = isMultipleChoice ? 'block' : 'none';
+    }
 }
-
 // 객관식 토글
 export function toggleMultipleChoice() {
     const isChecked = document.getElementById('isMultipleChoice').checked;
@@ -721,11 +782,6 @@ export async function saveQuestion() {
     const timeLimitInput = document.getElementById('timeLimit');
     const timeLimitValue = timeLimitInput.value;
     const timeLimit = parseInt(timeLimitValue);
-    
-    console.log('=== 저장 디버깅 ===');
-    console.log('선택된 questionType:', currentQuestionType);
-    console.log('timeLimit:', timeLimit);
-    
     const isChoice = document.getElementById('isMultipleChoice').checked;
     
     // 유효성 검사
@@ -804,9 +860,7 @@ export async function saveQuestion() {
     
     // 문제 데이터 업데이트
     questions[currentEditingIndex] = finalQuestionData;
-    
-    console.log('저장될 문제 데이터:', questions[currentEditingIndex]);
-    
+
     try {
         await saveToServer();
         alert('✅ 저장되었습니다!');
@@ -853,10 +907,7 @@ export async function deleteCurrentQuestion() {
 
 // 서버에 저장
 async function saveToServer() {
-    console.log('=== 서버 저장 시작 ===');
-    console.log('Quiz ID:', quizId);
-    console.log('Questions:', questions);
-    
+
     const response = await fetch(`/api/quiz/${quizId}/questions`, {
         method: 'PUT',
         headers: {
@@ -866,8 +917,6 @@ async function saveToServer() {
         body: JSON.stringify({ questions })
     });
     
-    console.log('Response status:', response.status);
-    
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('서버 오류:', errorData);
@@ -875,7 +924,6 @@ async function saveToServer() {
     }
     
     const result = await response.json();
-    console.log('저장 성공:', result);
     return result;
 }
 
@@ -945,3 +993,4 @@ window.deleteCurrentQuestion = deleteCurrentQuestion;
 window.renderQuestions = renderQuestions;
 window.extractYoutubeVideoId = extractYoutubeVideoId;
 window.detectQuestionType = detectQuestionType;
+window.updateFormVisibility = updateFormVisibility;
