@@ -6,6 +6,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/common.css">
+  <style>
+    /* 유튜브 플레이어 래퍼 */
+    .youtube-player-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    /* 유튜브 제목 가리기 오버레이 */
+    .youtube-title-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 50px;
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 70%, transparent 100%);
+        z-index: 20;
+        pointer-events: none;
+        border-radius: 8px 8px 0 0;
+    }
+
+    /* 유튜브 iframe 기본 스타일 */
+    .youtube-player-wrapper iframe {
+        border-radius: 8px;
+    }
+
+    /* 반응형 처리 */
+    @media (max-width: 768px) {
+        .youtube-player-wrapper {
+            max-width: 100% !important;
+        }
+        
+        .youtube-title-overlay {
+            height: 40px;
+        }
+    }
+  </style>
 </head>
 <body class="bg-[#222230] text-white min-h-screen">
 

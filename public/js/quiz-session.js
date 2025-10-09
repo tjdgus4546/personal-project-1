@@ -125,11 +125,6 @@ async function loadSessionData() {
                 showQuestion({ silent: true });
                 renderScoreboard(data.players, false);
 
-                const correctUsernames = data.correctUsers?.[currentIndex];
-                if (correctUsernames && Array.isArray(correctUsernames) && correctUsernames.length > 0) {
-                    CorrectUserManager.restoreFromData(correctUsernames);
-                }
-
                 const answers = questions[currentIndex]?.answers;
                 if (answers) {
                     const answerDiv = document.createElement('div');
@@ -441,24 +436,85 @@ function showQuestion({ silent = false } = {}) {
     hasAnswered = false;
 
     let html = '';
-
     updateQuestionNumber();
     
-    // 문제 이미지
+    // 문제 타입 확인
+    const questionType = question.questionType || 'text';
+    
+    // ========== 이미지 문제 (기존 로직 유지) ==========
     if (question.imageBase64) {
         html += `<img src="${question.imageBase64}" alt="문제 이미지" class="w-auto h-auto max-h-[300px] mx-auto rounded-lg shadow-lg my-4">`;
     }
 
-    // YouTube 비디오
+    // ========== YouTube 비디오 처리 (수정) ==========
     if (question.youtubeUrl) {
-        html += `<div class="max-w-2xl mx-auto my-6">
-                  <iframe width="100%" height="315"
-                    src="${question.youtubeUrl}"
-                    frameborder="0" allowfullscreen class="rounded-lg"></iframe>
-                </div>`;
+        const videoId = extractYoutubeVideoId(question.youtubeUrl);
+        const startTime = question.youtubeStartTime || 0;
+        const endTime = question.youtubeEndTime || 0;
+        
+        if (videoId) {
+            // 영상 문제 (video)
+            if (questionType === 'video') {
+                html += `
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6">
+                        <div class="youtube-title-overlay"></div>
+                        <iframe width="100%" height="315"
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen 
+                            class="rounded-lg"
+                            style="pointer-events: none;">
+                        </iframe>
+                    </div>
+                `;
+            }
+            // 소리 문제 (audio) - 영상 가리기
+            else if (questionType === 'audio') {
+                html += `
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                        <div class="youtube-title-overlay"></div>
+                        <div style="position: relative; padding-bottom: 56.25%; height: 0;">
+                            <!-- 영상 가리는 오버레이 -->
+                            <div style="position: absolute; inset: 0; background: linear-gradient(to bottom right, rgb(88, 28, 135), rgb(30, 58, 138)); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; z-index: 10;">
+                                <div style="text-align: center;">
+                                    <svg style="width: 6rem; height: 6rem; color: white; margin: 0 auto 1rem; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                                    </svg>
+                                    <p style="font-size: 1.5rem; font-weight: bold; color: white;">🎵 소리를 듣고 맞춰보세요!</p>
+                                </div>
+                            </div>
+                            <iframe width="100%" height="100%"
+                                src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowfullscreen
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 0.5rem; pointer-events: none;">
+                            </iframe>
+                        </div>
+                    </div>
+                `;
+            }
+            // questionType이 없는 기존 유튜브 문제 (기본: video 처리)
+            else {
+                html += `
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6">
+                        <div class="youtube-title-overlay"></div>
+                        <iframe width="100%" height="315"
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            class="rounded-lg"
+                            style="pointer-events: none;">
+                        </iframe>
+                    </div>
+                `;
+            }
+        }
     }
 
-    // 객관식 문제
+    // ========== 객관식 문제 (기존 로직 유지) ==========
     if (question.isChoice && question.choices && question.choices.length > 0) {
         currentSendFunction = choiceQuestionSendMessage;
         html += `<div class="text-gray-200 mb-1">${question.text}</div>`;
@@ -466,7 +522,7 @@ function showQuestion({ silent = false } = {}) {
         
         try {
             question.choices.forEach((choice, index) => {
-                const keyNumber = index + 1; // 1부터 시작
+                const keyNumber = index + 1;
                 html += `
                     <button                          
                     onclick="selectChoice('${choice}')"
@@ -494,32 +550,16 @@ function showQuestion({ silent = false } = {}) {
     if (questionTimer) clearTimeout(questionTimer);
     if (countdownInterval) clearInterval(countdownInterval);
 
-    const timeLimit = question.timeLimit || 90;
-    const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
-    let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
-
-    const timerDisplay = document.getElementById('timerDisplay');
-    if (timerDisplay) {
-        timerDisplay.textContent = `남은 시간: ${remaining}초`;
-    }
-
-    countdownInterval = setInterval(() => {
-        remaining--;
-        if (timerDisplay) {
-            timerDisplay.textContent = `남은 시간: ${remaining}초`;
-        }
-        
-        if (remaining <= 0) {
-            clearInterval(countdownInterval);
-        }
-    }, 1000);
-
+    const timeLimit = (question.timeLimit || 90) * 1000;
     questionTimer = setTimeout(() => {
         if (isHost()) {
             socket.emit('revealAnswer', { sessionId });
         }
-    }, remaining * 1000);
+    }, timeLimit);
+
+    startCountdown(question.timeLimit || 90);
 }
+
 
 // 객관식 선택 처리
 function selectChoice(choice) {
@@ -996,7 +1036,6 @@ function setupSocketListeners() {
         }
 
         const { nickname, profileImage } = data;
-        CorrectUserManager.addUser(nickname);
         
         addChatMessage(nickname, profileImage, `${nickname}님이 정답을 맞혔습니다!`, true);
     });
@@ -1018,10 +1057,6 @@ function setupSocketListeners() {
 
         renderScoreboard(data.players);
 
-        if (data.correctUsers && data.correctUsers.length > 0) {
-            CorrectUserManager.setUsers(data.correctUsers);
-        }
-
         if (isHost()) {
             socket.emit('revealAnswer', { sessionId });
         }
@@ -1035,19 +1070,15 @@ function setupSocketListeners() {
 
         const { answers, answerImage, revealedAt, correctUsers } = data;
 
-        // ✅ 1. CorrectUserManager에 정답자 저장
-        if (correctUsers && correctUsers.length > 0) {
-            CorrectUserManager.setUsers(correctUsers);
-        }
-
         // ✅ 2. 채팅창에 정답자 표시
         displayCorrectUsersInChat(correctUsers);
 
-        // ✅ 3. 정답 공개 화면 표시
-        showAnswer({
+        // ✅ 3. 정답 공개 화면 표시 (유튜브 포함)
+        showAnswerWithYoutube({
             answers,
             answerImageBase64: answerImage,
-            revealedAt
+            revealedAt,
+            index: data.index
         });
     });
 
@@ -1408,6 +1439,111 @@ function handleChoiceKeyPress(e) {
     }
 }
 
+// 유튜브 비디오 ID 추출
+function extractYoutubeVideoId(url) {
+    if (!url) return null;
+    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[7].length === 11) ? match[7] : null;
+}
+
+function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }) {
+    const box = document.getElementById('questionBox');
+    
+    if (questionTimer) clearTimeout(questionTimer);
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    let html = `
+        <div class="bg-green-500/20 border-green-400 rounded-xl p-6 mb-4">
+            <h3 class=" font-bold text-green-400 mb-2">정답</h3>
+            <div class="text-white">
+                ${Array.isArray(answers) ? answers.join(', ') : answers}
+            </div>
+        </div>
+    `;
+
+    // 정답 이미지
+    if (answerImageBase64) {
+        html += `
+            <div class="mb-4">
+                <h4 class="text-lg font-semibold text-gray-300 mb-2">정답 이미지</h4>
+                <img src="${answerImageBase64}" 
+                     alt="정답 이미지" 
+                     class="w-auto h-auto max-h-[300px] mx-auto rounded-lg shadow-lg">
+            </div>
+        `;
+    }
+
+    // 정답 유튜브 영상
+    const question = questions[index];
+    if (question && question.answerYoutubeUrl) {
+        const videoId = extractYoutubeVideoId(question.answerYoutubeUrl);
+        const startTime = question.answerYoutubeStartTime || 0;
+        
+        if (videoId) {
+            html += `
+                <div class="mb-4">
+                    <h4 class="text-lg font-semibold text-gray-300 mb-2">정답 영상</h4>
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto">
+                        <div class="youtube-title-overlay"></div>
+                        <iframe width="100%" height="315"
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}&controls=1"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            class="rounded-lg">
+                        </iframe>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    box.innerHTML = html;
+
+    window.__isRevealingAnswer = true;
+
+    const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
+    const waitTime = Math.max(0, 5 - elapsed);
+
+    setTimeout(() => {
+        window.__isRevealingAnswer = false;
+        if (isHost()) {
+            socket.emit('nextQuestion', { sessionId, userId });
+        }
+    }, waitTime * 1000);
+}
+
+function startCountdown(timeLimit) {
+    if (questionTimer) clearTimeout(questionTimer);
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
+    let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
+
+    const timerDisplay = document.getElementById('timerDisplay');
+    if (timerDisplay) {
+        timerDisplay.textContent = `남은 시간: ${remaining}초`;
+    }
+
+    countdownInterval = setInterval(() => {
+        remaining--;
+        if (timerDisplay) {
+            timerDisplay.textContent = `남은 시간: ${remaining}초`;
+        }
+        
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+
+    questionTimer = setTimeout(() => {
+        if (isHost()) {
+            socket.emit('revealAnswer', { sessionId });
+        }
+    }, remaining * 1000);
+}
+
 // 전역 함수로 등록 (HTML onclick에서 사용)
 window.toggleCodeVisibility = toggleCodeVisibility;
 window.copyInviteCode = copyInviteCode;
@@ -1415,6 +1551,7 @@ window.selectChoice = selectChoice;
 window.currentSendFunction = () => currentSendFunction();
 window.currentWaitingSendFunction = () => currentWaitingSendFunction();
 window.handleChoiceKeyPress = handleChoiceKeyPress;
+window.extractYoutubeVideoId = extractYoutubeVideoId;
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
