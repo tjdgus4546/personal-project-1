@@ -181,28 +181,6 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// 게임 세션 시작
-async function openGameSession(quizId) {
-    try {
-        const response = await fetchWithAuth('/game/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quizId }),
-        });
-        
-        const data = await response.json();
-        
-        if (data.sessionId) {
-            window.location.href = `/quiz/${data.sessionId}`;
-        } else {
-            alert('게임 세션 생성에 실패했습니다.');
-        }
-    } catch (error) {
-        console.error('게임 세션 생성 실패:', error);
-        alert('게임을 시작하는 중 오류가 발생했습니다.');
-    }
-}
-
 // 수정 모달 열기
 function openEditModal(quizId, title, description) {
     currentEditQuizId = quizId;
@@ -326,7 +304,6 @@ function showError() {
 }
 
 // 전역 함수로 등록
-window.openGameSession = openGameSession;
 window.openEditModal = openEditModal;
 window.closeEditModal = closeEditModal;
 window.saveEdit = saveEdit;

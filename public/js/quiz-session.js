@@ -129,9 +129,10 @@ async function loadSessionData() {
 
                 const answers = questions[currentIndex]?.answers;
                 if (answers) {
+                    const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
                     const answerDiv = document.createElement('div');
                     answerDiv.className = 'answer-reveal';
-                    answerDiv.innerHTML = `<h3> 정답 공개</h3><p>${answers.join(', ')}</p>`;
+                    answerDiv.innerHTML = `<h3>정답 공개</h3><p>${displayAnswer}</p>`;
                     document.getElementById('questionBox').appendChild(answerDiv);
                 }
 
@@ -896,7 +897,7 @@ function showAnswer({ answers, answerImageBase64, revealedAt }) {
             <div class="flex answer-reveal justify-center text-center mb-1">
                 <h3 class="text-green-400 font-bold">정답 :&nbsp</h3>
                 <div class="text-green-200 font-semibold">
-                    ${Array.isArray(answers) ? answers.join(', ') : answers}
+                    ${displayAnswer}
                 </div>
             </div>
         `;
@@ -1614,11 +1615,13 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     if (questionTimer) clearTimeout(questionTimer);
     if (countdownInterval) clearInterval(countdownInterval);
 
+    const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
+
     let html = `
         <div class="bg-green-500/20 border-green-400 rounded-xl p-6 mb-4">
             <h3 class=" font-bold text-green-400 mb-2">정답</h3>
             <div class="text-white">
-                ${Array.isArray(answers) ? answers.join(', ') : answers}
+                ${displayAnswer}
             </div>
         </div>
     `;
