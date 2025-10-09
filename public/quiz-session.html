@@ -5,6 +5,7 @@
   <title>퀴즈 세션</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
   <link rel="stylesheet" href="/css/common.css">
   <style>
     /* 유튜브 플레이어 래퍼 */
@@ -78,22 +79,44 @@
                 </p>
               </div>
               
-              <!-- 하단 그룹: 문제 수 + 버튼 -->
-              <div class="space-y-4">
-                <!-- 총 문제 수 -->
-                <div class="flex justify-center md:justify-start font-bold">
-                  <div class="text-blue-400 mb-2" id="totalQuestions">-</div>
-                  <div class="text-gray-400 ml-2">문제</div>
+
+                <!-- 하단 그룹: 볼륨 조절 + 문제 수 + 버튼 -->
+                <div class="space-y-4">
+                  <!-- 볼륨 조절 컨트롤 -->
+                  <div class="flex flex-col items-center md:items-start space-y-2">
+                    <label class="text-gray-300 text-sm font-medium">유튜브 볼륨</label>
+                    <div class="flex items-center gap-3 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-600 w-full max-w-xs">
+                      <svg class="w-5 h-5 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                      </svg>
+                      <input 
+                        type="range" 
+                        id="waitingVolumeSlider"
+                        class="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" 
+                        min="0" 
+                        max="100" 
+                        value="50"
+                        oninput="setYoutubeVolume(this.value); document.getElementById('waitingVolumePercent').textContent = this.value + '%'"
+                        style="pointer-events: auto;"
+                      >
+                      <span id="waitingVolumePercent" class="text-white font-medium text-sm min-w-[45px]">50%</span>
+                    </div>
+                  </div>
+                  
+                  <!-- 이 문제 수 -->
+                  <div class="flex justify-center md:justify-start font-bold">
+                    <div class="text-blue-400 mb-2" id="totalQuestions">-</div>
+                    <div class="text-gray-400 ml-2">문제</div>
+                  </div>
+                  
+                  <!-- 게임 시작 버튼 -->
+                  <div class="flex justify-center md:justify-start">
+                    <button id="startBtn" class="hidden whitespace-nowrap w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-12 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg">
+                      게임시작
+                    </button>
+                  </div>
                 </div>
                 
-                <!-- 게임 시작 버튼 -->
-                <div class="flex justify-center md:justify-start">
-                  <button id="startBtn" class="hidden whitespace-nowrap w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-12 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg">
-                    게임시작
-                  </button>
-                </div>
-
-              </div>
             </div>
           </div>
 

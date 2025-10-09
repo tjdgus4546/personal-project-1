@@ -16,6 +16,8 @@ let isDataLoaded = false; // 데이터 로딩 상태 추가
 let isCodeVisible = false;
 let actualInviteCode = '';
 let currentWaitingSendFunction = sendWaitingMessage;
+let youtubePlayer = null;
+let globalYoutubeVolume = 50;
 
 // Socket.IO 연결
 const socket = io();
@@ -324,6 +326,17 @@ function renderPlayerList(players) {
             scrollHint.classList.add('hidden');
         }
     }
+
+    // 대기실 볼륨 슬라이더에 저장된 값 적용
+    const waitingVolumeSlider = document.getElementById('waitingVolumeSlider');
+    const waitingVolumePercent = document.getElementById('waitingVolumePercent');
+    
+    if (waitingVolumeSlider) {
+        waitingVolumeSlider.value = globalYoutubeVolume;
+    }
+    if (waitingVolumePercent) {
+        waitingVolumePercent.textContent = `${globalYoutubeVolume}%`;
+    }
 }
 
 // 플레이어 아바타 생성 함수
@@ -446,75 +459,224 @@ function showQuestion({ silent = false } = {}) {
         html += `<img src="${question.imageBase64}" alt="문제 이미지" class="w-auto h-auto max-h-[300px] mx-auto rounded-lg shadow-lg my-4">`;
     }
 
-    // ========== YouTube 비디오 처리 (수정) ==========
+    // ========== YouTube 비디오 처리 (YouTube API 사용) ==========
     if (question.youtubeUrl) {
         const videoId = extractYoutubeVideoId(question.youtubeUrl);
         const startTime = question.youtubeStartTime || 0;
         const endTime = question.youtubeEndTime || 0;
         
         if (videoId) {
-            // 영상 문제 (video)
+            // 영상 문제 (video) - YouTube API 사용
             if (questionType === 'video') {
                 html += `
-                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6">
-                        <div class="youtube-title-overlay"></div>
-                        <iframe width="100%" height="315"
-                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowfullscreen 
-                            class="rounded-lg"
-                            style="pointer-events: none;">
-                        </iframe>
-                    </div>
-                `;
-            }
-            // 소리 문제 (audio) - 영상 가리기
-            else if (questionType === 'audio') {
-                html += `
                     <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
-                        <div class="youtube-title-overlay"></div>
-                        <div style="position: relative; padding-bottom: 56.25%; height: 0;">
-                            <!-- 영상 가리는 오버레이 -->
-                            <div style="position: absolute; inset: 0; background: linear-gradient(to bottom right, rgb(88, 28, 135), rgb(30, 58, 138)); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; z-index: 10;">
-                                <div style="text-align: center;">
-                                    <svg style="width: 6rem; height: 6rem; color: white; margin: 0 auto 1rem; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                        <div class="relative" style="padding-bottom: 56.25%; height: 0;">
+                            <!-- YouTube 플레이어가 여기에 생성됨 -->
+                            <div id="youtubePlayerVideo" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
+                            
+                            <!-- 제목 가리는 검은색 오버레이 + 볼륨 컨트롤 -->
+                            <div class="absolute top-0 left-0 w-full h-16 bg-black flex items-center justify-end px-4 rounded-t-lg z-10">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
                                     </svg>
-                                    <p style="font-size: 1.5rem; font-weight: bold; color: white;">🎵 소리를 듣고 맞춰보세요!</p>
+                                    <input 
+                                        type="range" 
+                                        id="youtubeVolumeSlider"
+                                        class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-white" 
+                                        min="0" 
+                                        max="100" 
+                                        value="${globalYoutubeVolume}"
+                                        oninput="setYoutubeVolume(this.value)"
+                                        style="pointer-events: auto;"
+                                    >
+                                    <span id="volumePercent" class="text-white font-medium text-sm min-w-[45px]">${globalYoutubeVolume}%</span>
                                 </div>
                             </div>
-                            <iframe width="100%" height="100%"
-                                src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
-                                frameborder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowfullscreen
-                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 0.5rem; pointer-events: none;">
-                            </iframe>
                         </div>
                     </div>
                 `;
+                
+                // DOM 업데이트 후 플레이어 생성
+                box.innerHTML = html;
+                
+                // 객관식/주관식 문제 UI 추가
+                if (question.isChoice && question.choices && question.choices.length > 0) {
+                    currentSendFunction = choiceQuestionSendMessage;
+                    html = `<div class="text-gray-200 mb-1">${question.text}</div>`;
+                    html += `<div class="grid grid-cols-2 md:grid-cols-3 gap-1 justify-items-center w-full max-w-[660px] mx-auto px-4">`;
+                    
+                    question.choices.forEach((choice, index) => {
+                        const keyNumber = index + 1;
+                        html += `
+                            <button                          
+                            onclick="selectChoice('${choice}')"
+                            data-choice-index="${index}"
+                            class="choice-btn w-full max-w-[200px] min-h-[20px] lg:max-h-[52px] hover:bg-blue-600 border-2 border-gray-600 text-white py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg text-[14px] disabled:transform-none break-words leading-tight relative"                     
+                            >
+                            <span class="absolute top-1 left-2 text-xs text-gray-400 font-bold">${keyNumber}</span>
+                            ${choice}
+                            </button>
+                        `;
+                    });
+                    html += `</div>`;
+                    box.innerHTML += html;
+                } else {
+                    currentSendFunction = sendMessage;
+                    box.innerHTML += `<div class="text-gray-200 mb-2 max-h-[38px]">${question.text}</div>`;
+                }
+                
+                setTimeout(() => {
+                    createYoutubePlayer(videoId, startTime, endTime, 'youtubePlayerVideo');
+                }, 100);
+                
+                // 타이머 시작
+                if (!silent) {
+                    if (questionTimer) clearTimeout(questionTimer);
+                    if (countdownInterval) clearInterval(countdownInterval);
+
+                    const timeLimit = (question.timeLimit || 90) * 1000;
+                    questionTimer = setTimeout(() => {
+                        if (isHost()) {
+                            socket.emit('revealAnswer', { sessionId });
+                        }
+                    }, timeLimit);
+
+                    startCountdown(question.timeLimit || 90);
+                }
+                return;
+            }
+            // 소리 문제 (audio) - 영상 가리기 + YouTube API 사용
+            else if (questionType === 'audio') {
+                html += `
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                        <div class="relative" style="padding-bottom: 56.25%; height: 0;">
+                            <!-- YouTube 플레이어 (보이지 않음) -->
+                            <div id="youtubePlayerAudio" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
+                            
+                            <!-- 영상 가리는 검은색 오버레이 -->
+                            <div class="absolute inset-0 bg-black rounded-lg flex flex-col items-center justify-center z-10">
+                                <div class="text-center mb-8">
+                                    <svg class="w-24 h-24 text-white mx-auto mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                                    </svg>
+                                    <p class="text-2xl font-bold text-white">소리를 듣고 맞춰보세요!</p>
+                                </div>
+                                
+                                <!-- 볼륨 컨트롤 -->
+                                <div class="flex items-center gap-3 bg-gray-800/80 px-6 py-3 rounded-full border-2 border-gray-600">
+                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                                    </svg>
+                                    <input 
+                                        type="range" 
+                                        id="youtubeVolumeSlider"
+                                        class="w-32 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-white" 
+                                        min="0" 
+                                        max="100" 
+                                        value="${globalYoutubeVolume}"
+                                        oninput="setYoutubeVolume(this.value)"
+                                        style="pointer-events: auto;"
+                                    >
+                                    <span id="volumePercent" class="text-white font-bold text-lg min-w-[50px]">${globalYoutubeVolume}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // DOM 업데이트 후 플레이어 생성
+                box.innerHTML = html;
+                
+                // 객관식/주관식 문제 UI 추가
+                if (question.isChoice && question.choices && question.choices.length > 0) {
+                    currentSendFunction = choiceQuestionSendMessage;
+                    html = `<div class="text-gray-200 mb-1">${question.text}</div>`;
+                    html += `<div class="grid grid-cols-2 md:grid-cols-3 gap-1 justify-items-center w-full max-w-[660px] mx-auto px-4">`;
+                    
+                    question.choices.forEach((choice, index) => {
+                        const keyNumber = index + 1;
+                        html += `
+                            <button                          
+                            onclick="selectChoice('${choice}')"
+                            data-choice-index="${index}"
+                            class="choice-btn w-full max-w-[200px] min-h-[20px] lg:max-h-[52px] hover:bg-blue-600 border-2 border-gray-600 text-white py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg text-[14px] disabled:transform-none break-words leading-tight relative"                     
+                            >
+                            <span class="absolute top-1 left-2 text-xs text-gray-400 font-bold">${keyNumber}</span>
+                            ${choice}
+                            </button>
+                        `;
+                    });
+                    html += `</div>`;
+                    box.innerHTML += html;
+                } else {
+                    currentSendFunction = sendMessage;
+                    box.innerHTML += `<div class="text-gray-200 mb-2 max-h-[38px]">${question.text}</div>`;
+                }
+                
+                setTimeout(() => {
+                    createYoutubePlayer(videoId, startTime, endTime, 'youtubePlayerAudio');
+                }, 100);
+                
+                // 타이머 시작
+                if (!silent) {
+                    if (questionTimer) clearTimeout(questionTimer);
+                    if (countdownInterval) clearInterval(countdownInterval);
+
+                    const timeLimit = (question.timeLimit || 90) * 1000;
+                    questionTimer = setTimeout(() => {
+                        if (isHost()) {
+                            socket.emit('revealAnswer', { sessionId });
+                        }
+                    }, timeLimit);
+
+                    startCountdown(question.timeLimit || 90);
+                }
+                return;
             }
             // questionType이 없는 기존 유튜브 문제 (기본: video 처리)
             else {
                 html += `
-                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6">
-                        <div class="youtube-title-overlay"></div>
-                        <iframe width="100%" height="315"
-                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}${endTime > 0 ? `&end=${endTime}` : ''}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
-                            frameborder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowfullscreen
-                            class="rounded-lg"
-                            style="pointer-events: none;">
-                        </iframe>
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                        <div class="relative" style="padding-bottom: 56.25%; height: 0;">
+                            <!-- YouTube 플레이어가 여기에 생성됨 -->
+                            <div id="youtubePlayerVideo" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
+                            
+                            <!-- 제목 가리는 검은색 오버레이 + 볼륨 컨트롤 -->
+                            <div class="absolute top-0 left-0 w-full h-16 bg-black flex items-center justify-end px-4 rounded-t-lg z-10">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                                    </svg>
+                                    <input 
+                                        type="range" 
+                                        id="youtubeVolumeSlider"
+                                        class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-white" 
+                                        min="0" 
+                                        max="100" 
+                                        value="${globalYoutubeVolume}"
+                                        oninput="setYoutubeVolume(this.value)"
+                                        style="pointer-events: auto;"
+                                    >
+                                    <span id="volumePercent" class="text-white font-medium text-sm min-w-[45px]">${globalYoutubeVolume}%</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `;
+                
+                // DOM 업데이트
+                box.innerHTML = html;
+                
+                // 플레이어 생성
+                setTimeout(() => {
+                    createYoutubePlayer(videoId, startTime, endTime, 'youtubePlayerVideo');
+                }, 100);
             }
         }
     }
 
-    // ========== 객관식 문제 (기존 로직 유지) ==========
+    // ========== 객관식 문제 ==========
     if (question.isChoice && question.choices && question.choices.length > 0) {
         currentSendFunction = choiceQuestionSendMessage;
         html += `<div class="text-gray-200 mb-1">${question.text}</div>`;
@@ -559,7 +721,6 @@ function showQuestion({ silent = false } = {}) {
 
     startCountdown(question.timeLimit || 90);
 }
-
 
 // 객관식 선택 처리
 function selectChoice(choice) {
@@ -1483,7 +1644,6 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
         if (videoId) {
             html += `
                 <div class="mb-4">
-                    <h4 class="text-lg font-semibold text-gray-300 mb-2">정답 영상</h4>
                     <div class="youtube-player-wrapper max-w-2xl mx-auto">
                         <div class="youtube-title-overlay"></div>
                         <iframe width="100%" height="315"
@@ -1544,6 +1704,74 @@ function startCountdown(timeLimit) {
     }, remaining * 1000);
 }
 
+// YouTube API 준비 완료 콜백
+window.onYouTubeIframeAPIReady = function() {
+    console.log('YouTube IFrame API 준비 완료');
+};
+
+// 유튜브 플레이어 생성 함수
+function createYoutubePlayer(videoId, startTime, endTime, elementId) {
+    // 기존 플레이어 제거
+    if (youtubePlayer) {
+        youtubePlayer.destroy();
+        youtubePlayer = null;
+    }
+    
+    // 새 플레이어 생성
+    youtubePlayer = new YT.Player(elementId, {
+        videoId: videoId,
+        playerVars: {
+            autoplay: 1,
+            start: startTime,
+            end: endTime > 0 ? endTime : undefined,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            showinfo: 0,
+            iv_load_policy: 3
+        },
+        events: {
+            onReady: function(event) {
+                // 저장된 볼륨 적용
+                event.target.setVolume(globalYoutubeVolume);
+            }
+        }
+    });
+}
+
+// 볼륨 설정 함수 (실시간 적용)
+function setYoutubeVolume(volume) {
+    globalYoutubeVolume = parseInt(volume);
+    
+    // 화면 표시 업데이트
+    const volumePercent = document.getElementById('volumePercent');
+    if (volumePercent) {
+        volumePercent.textContent = `${globalYoutubeVolume}%`;
+    }
+    
+    // YouTube 플레이어에 즉시 적용
+    if (youtubePlayer && youtubePlayer.setVolume) {
+        youtubePlayer.setVolume(globalYoutubeVolume);
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem('youtubeVolume', globalYoutubeVolume);
+}
+
+// 저장된 볼륨 불러오기
+function loadSavedVolume() {
+    const savedVolume = localStorage.getItem('youtubeVolume');
+    if (savedVolume !== null) {
+        globalYoutubeVolume = parseInt(savedVolume);
+    }
+}
+
+// 초기화
+loadSavedVolume();
+
+
 // 전역 함수로 등록 (HTML onclick에서 사용)
 window.toggleCodeVisibility = toggleCodeVisibility;
 window.copyInviteCode = copyInviteCode;
@@ -1552,6 +1780,8 @@ window.currentSendFunction = () => currentSendFunction();
 window.currentWaitingSendFunction = () => currentWaitingSendFunction();
 window.handleChoiceKeyPress = handleChoiceKeyPress;
 window.extractYoutubeVideoId = extractYoutubeVideoId;
+window.setYoutubeVolume = setYoutubeVolume;
+window.createYoutubePlayer = createYoutubePlayer;
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
