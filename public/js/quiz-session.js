@@ -1739,6 +1739,13 @@ function createYoutubePlayer(videoId, startTime, endTime, elementId) {
             onReady: function(event) {
                 // 저장된 볼륨 적용
                 event.target.setVolume(globalYoutubeVolume);
+            },
+            onStateChange: function(event) {
+                // 영상이 종료되면 다시 시작 지점부터 재생
+                if (event.data === YT.PlayerState.ENDED) {
+                    event.target.seekTo(startTime);
+                    event.target.playVideo();
+                }
             }
         }
     });

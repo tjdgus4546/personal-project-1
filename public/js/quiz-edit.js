@@ -956,6 +956,49 @@ async function loadQuestions() {
     }
 }
 
+export function formatTimeOnBlur(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input || !input.value.trim()) return;
+    
+    // 숫자만 추출
+    let numbers = input.value.replace(/\D/g, '');
+    if (!numbers) {
+        input.value = '';
+        return;
+    }
+    
+    // 최대 6자리까지만 (hhmmss)
+    numbers = numbers.slice(0, 6);
+    const len = numbers.length;
+    
+    let formatted = '';
+    
+    if (len <= 2) {
+        // 1~2자리: 초만 (예: 5 → 5, 45 → 45)
+        formatted = numbers;
+    } else if (len <= 4) {
+        // 3~4자리: 분:초 (예: 120 → 1:20, 152 → 1:52, 1234 → 12:34)
+        const minutes = parseInt(numbers.slice(0, len - 2));
+        const seconds = numbers.slice(len - 2);
+        formatted = `${minutes}:${seconds}`;
+    } else {
+        // 5~6자리: 시:분:초 (예: 12011 → 01:20:11, 123456 → 12:34:56)
+        const hours = numbers.slice(0, len - 4).padStart(2, '0');
+        const minutes = numbers.slice(len - 4, len - 2);
+        const seconds = numbers.slice(len - 2);
+        formatted = `${hours}:${minutes}:${seconds}`;
+    }
+    
+    input.value = formatted;
+    
+    // 미리보기 업데이트
+    if (inputId === 'startTime' || inputId === 'endTime') {
+        updateYoutubePreview();
+    } else if (inputId === 'answerStartTime' || inputId === 'answerEndTime') {
+        updateAnswerYoutubePreview();
+    }
+}
+
 // 초기화
 (async function init() {
     const authenticated = await initNavbar();
@@ -994,3 +1037,4 @@ window.renderQuestions = renderQuestions;
 window.extractYoutubeVideoId = extractYoutubeVideoId;
 window.detectQuestionType = detectQuestionType;
 window.updateFormVisibility = updateFormVisibility;
+window.formatTimeOnBlur = formatTimeOnBlur;

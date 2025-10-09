@@ -242,6 +242,7 @@
                                                id="youtubeUrl" 
                                                placeholder="https://www.youtube.com/watch?v=..."
                                                oninput="updateYoutubePreview()"
+                                               
                                                class="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-200">
                                     </div>
                                     
@@ -253,6 +254,7 @@
                                                    placeholder="30 또는 2:30"
                                                    maxlength="20"
                                                    oninput="updateYoutubePreview()"
+                                                   onblur="formatTimeOnBlur('startTime')"
                                                    class="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20">
                                             <p class="text-xs text-gray-500 mt-1">예: 30, 2:30</p>
                                         </div>
@@ -263,6 +265,7 @@
                                                    placeholder="미지정"
                                                    maxlength="20"
                                                    oninput="updateYoutubePreview()"
+                                                   onblur="formatTimeOnBlur('endTime')"
                                                    class="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20">
                                             <p class="text-xs text-gray-500 mt-1">선택사항</p>
                                         </div>
@@ -367,6 +370,7 @@
                                                 placeholder="30 또는 2:30"
                                                 maxlength="20"
                                                 oninput="updateAnswerYoutubePreview()"
+                                                onblur="formatTimeOnBlur('answerStartTime')"
                                                 class="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500/20">
                                             <p class="text-xs text-gray-500 mt-1">예: 30, 2:30</p>
                                         </div>
