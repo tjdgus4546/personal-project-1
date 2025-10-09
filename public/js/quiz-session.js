@@ -470,7 +470,7 @@ function showQuestion({ silent = false } = {}) {
             // 영상 문제 (video) - YouTube API 사용
             if (questionType === 'video') {
                 html += `
-                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-3 relative">
                         <div class="relative" style="padding-bottom: 56.25%; height: 0;">
                             <!-- YouTube 플레이어가 여기에 생성됨 -->
                             <div id="youtubePlayerVideo" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
@@ -550,7 +550,7 @@ function showQuestion({ silent = false } = {}) {
             // 소리 문제 (audio) - 영상 가리기 + YouTube API 사용
             else if (questionType === 'audio') {
                 html += `
-                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-3 relative">
                         <div class="relative" style="padding-bottom: 56.25%; height: 0;">
                             <!-- YouTube 플레이어 (보이지 않음) -->
                             <div id="youtubePlayerAudio" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
@@ -638,7 +638,7 @@ function showQuestion({ silent = false } = {}) {
             // questionType이 없는 기존 유튜브 문제 (기본: video 처리)
             else {
                 html += `
-                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-6 relative">
+                    <div class="youtube-player-wrapper max-w-2xl mx-auto my-3 relative">
                         <div class="relative" style="padding-bottom: 56.25%; height: 0;">
                             <!-- YouTube 플레이어가 여기에 생성됨 -->
                             <div id="youtubePlayerVideo" class="absolute top-0 left-0 w-full h-full rounded-lg" style="pointer-events: none;"></div>
@@ -1619,7 +1619,7 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
 
     let html = `
         <div class="bg-green-500/20 border-green-400 rounded-xl p-6 mb-4">
-            <h3 class=" font-bold text-green-400 mb-2">정답</h3>
+            <h3 class="font-bold text-green-400 mb-2">정답</h3>
             <div class="text-white">
                 ${displayAnswer}
             </div>
@@ -1648,14 +1648,10 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
             html += `
                 <div class="mb-4">
                     <div class="youtube-player-wrapper max-w-2xl mx-auto">
-                        <div class="youtube-title-overlay"></div>
-                        <iframe width="100%" height="315"
-                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startTime}&controls=1"
-                            frameborder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowfullscreen
-                            class="rounded-lg">
-                        </iframe>
+                        <div class="relative" style="padding-bottom: 56.25%; height: 0;">
+                            <!-- YouTube 플레이어가 여기에 생성됨 -->
+                            <div id="youtubePlayerAnswer" class="absolute top-0 left-0 w-full h-full rounded-lg"></div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1663,6 +1659,18 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     }
 
     box.innerHTML = html;
+
+    // 정답 유튜브 영상이 있으면 플레이어 생성
+    if (question && question.answerYoutubeUrl) {
+        const videoId = extractYoutubeVideoId(question.answerYoutubeUrl);
+        const startTime = question.answerYoutubeStartTime || 0;
+        
+        if (videoId) {
+            setTimeout(() => {
+                createYoutubePlayer(videoId, startTime, 0, 'youtubePlayerAnswer');
+            }, 100);
+        }
+    }
 
     window.__isRevealingAnswer = true;
 
@@ -1724,7 +1732,7 @@ function createYoutubePlayer(videoId, startTime, endTime, elementId) {
     youtubePlayer = new YT.Player(elementId, {
         videoId: videoId,
         playerVars: {
-            autoplay: 1,
+            autoplay: 0,  // ← 자동 재생 끄기
             start: startTime,
             end: endTime > 0 ? endTime : undefined,
             controls: 0,
@@ -1737,11 +1745,12 @@ function createYoutubePlayer(videoId, startTime, endTime, elementId) {
         },
         events: {
             onReady: function(event) {
-                // 저장된 볼륨 적용
+                // 볼륨 먼저 설정
                 event.target.setVolume(globalYoutubeVolume);
+                // 그 다음 재생
+                event.target.playVideo();
             },
             onStateChange: function(event) {
-                // 영상이 종료되면 다시 시작 지점부터 재생
                 if (event.data === YT.PlayerState.ENDED) {
                     event.target.seekTo(startTime);
                     event.target.playVideo();

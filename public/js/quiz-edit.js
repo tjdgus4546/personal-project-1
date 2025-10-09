@@ -1,6 +1,7 @@
 // quiz-edit.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { fetchWithAuth } from './quiz-init-modal.js'; 
 
 // 전역 변수
 let currentView = 'overview';
@@ -386,6 +387,11 @@ export function addAnswer() {
         alert('정답을 입력하세요.');
         return;
     }
+
+    if (currentAnswers.length >= 20) {
+        alert('정답은 최대 20개까지 추가할 수 있습니다.');
+        return;
+    }
     
     if (currentAnswers.includes(answer)) {
         alert('이미 추가된 정답입니다.');
@@ -673,6 +679,11 @@ function updateQuestionCount() {
 
 // 새 문제 만들기
 export function createNewQuestion() {
+    if (questions.length >= 30) {
+        alert('퀴즈에는 최대 30개의 문제만 추가할 수 있습니다.');
+        return;
+    }
+
     const newQuestion = {
         questionType: 'text', // 기본값: 텍스트 문제
         text: '',

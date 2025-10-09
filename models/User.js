@@ -4,12 +4,14 @@ const { Schema, model } = mongoose;
 const userSchema = new Schema({
   username: {
     type: String,
+    maxlength: 20,
   },
   nickname: {
     type: String,
     required: true,
     unique: true,
     trim: true,
+    maxlength: 11,
   },
   email: {
     type: String,
@@ -22,6 +24,7 @@ const userSchema = new Schema({
     required: function() {
       return !this.provider;
     },
+    maxlength: 20,
   },
   naverId: {
     type: String,
