@@ -114,27 +114,52 @@ router.post('/start', authMiddleware, async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
-    const inviteCode = Math.random().toString(36).substring(2, 8);
+    let session;
+    let inviteCode;
+    const maxRetries = 10; // 최대 10번 재시도
 
-    const session = await GameSession.create({
-      quizId,
-      players: [{
-        userId,
-        username,
-        score: 0,
-        answered: {},
-        connected: true,
-        lastSeen: new Date(),
-        socketId: null
-      }],
-      startedAt: new Date(),
-      questionStartAt: null,
-      isActive: true,
-      currentQuestionIndex: 0,
-      inviteCode,
-      isStarted: false,
-      host: userId,
-    });
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        inviteCode = Math.random().toString(36).substring(2, 8);
+        
+        session = await GameSession.create({
+          quizId,
+          players: [{
+            userId,
+            username,
+            score: 0,
+            answered: {},
+            connected: true,
+            lastSeen: new Date(),
+            socketId: null
+          }],
+          startedAt: new Date(),
+          questionStartAt: null,
+          isActive: true,
+          currentQuestionIndex: 0,
+          inviteCode,
+          isStarted: false,
+          host: userId,
+        });
+
+        // 성공 시 루프 탈출
+        break;
+
+      } catch (err) {
+        if (err.code === 11000) { // 중복 키 오류인 경우
+          console.warn(`Invite code collision detected: ${inviteCode}. Retrying... (${i + 1}/${maxRetries})`);
+          // 루프 계속
+        } else {
+          // 다른 종류의 오류는 즉시 던짐
+          throw err;
+        }
+      }
+    }
+
+    if (!session) {
+      // 모든 재시도 실패 시
+      throw new Error('Failed to generate a unique invite code after several attempts.');
+    }
 
     res.status(201).json({
       message: 'Game session created successfully',
