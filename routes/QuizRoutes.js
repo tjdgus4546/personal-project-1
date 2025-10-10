@@ -7,10 +7,6 @@ const path = require('path');
 // JWT 인증 미들웨어 (GameRoutes.js와 중복되므로, 별도 파일로 분리하는 것을 권장합니다)
 const authenticateToken = require('../middlewares/AuthMiddleware');
 
-router.get('/quiz/create', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/quiz-create.html'));
-});
-
 router.get('/quiz/my-list', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-my-list.html'))
 });
