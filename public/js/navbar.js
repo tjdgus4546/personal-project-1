@@ -51,7 +51,7 @@ function createNavbarHTML(user = null) {
           <div class="flex items-center">
             <a href="/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity flex-shrink-0">
               <img 
-                src="/images/logo.png" 
+                src="images/logo.png" 
                 alt="QuizApp 로고" 
                 class="h-8 w-auto sm:h-10"
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
