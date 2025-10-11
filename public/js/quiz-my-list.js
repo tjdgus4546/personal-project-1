@@ -1,7 +1,9 @@
 // quiz-my-list.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
+import { resizeImageToBase64 } from './quiz-init-modal.js';
 
 let currentEditQuizId = null;
+let editThumbnailBase64 = null; 
 
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
@@ -23,6 +25,22 @@ async function fetchWithAuth(url, options = {}) {
         }
     }
     return response;
+}
+
+// 썸네일 변경 핸들러
+async function handleEditThumbnailChange(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        // imageResizer의 resizeImageToBase64 사용 (maxKB=240, minKB=40)
+        editThumbnailBase64 = await resizeImageToBase64(file, 240, 40);
+        const preview = document.getElementById('editThumbnailImage');
+        preview.src = editThumbnailBase64;
+    } catch (error) {
+        console.error('이미지 처리 실패:', error);
+        alert('이미지 처리 실패: ' + error.message);
+    }
 }
 
 // 페이지 초기화
@@ -154,7 +172,7 @@ function createQuizCard(quiz) {
                     onclick="event.stopPropagation(); openEditModal('${quiz._id}', '${escapeHtml(quiz.title)}', '${escapeHtml(quiz.description || '')}')" 
                     class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
                 >
-                    제목 수정
+                    퀴즈 수정
                 </button>
                 <button 
                     onclick="event.stopPropagation(); deleteQuiz('${quiz._id}')" 
@@ -181,20 +199,51 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// 수정 모달 열기
-function openEditModal(quizId, title, description) {
-    currentEditQuizId = quizId;
-    document.getElementById('editTitle').value = title;
-    document.getElementById('editDescription').value = description;
-    document.getElementById('editModal').classList.remove('hidden');
-    document.getElementById('editModal').classList.add('flex');
+// 수정 모달 열기 (썸네일 포함)
+async function openEditModal(quizId) {
+    try {
+        currentEditQuizId = quizId;
+        
+        // 퀴즈 정보 가져오기
+        const response = await fetchWithAuth(`/api/quiz/${quizId}`);
+        if (!response.ok) {
+            throw new Error('퀴즈 정보를 불러오는데 실패했습니다.');
+        }
+        
+        const quiz = await response.json();
+        
+        // 폼에 데이터 설정
+        document.getElementById('editTitle').value = quiz.title || '';
+        document.getElementById('editDescription').value = quiz.description || '';
+        
+        // 썸네일 이미지 설정
+        editThumbnailBase64 = quiz.titleImageBase64 || null;
+        const thumbnailImage = document.getElementById('editThumbnailImage');
+        
+        if (editThumbnailBase64) {
+            thumbnailImage.src = editThumbnailBase64;
+        } else {
+            // 기본 이미지 설정
+            thumbnailImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect width="400" height="300" fill="%234F46E5"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="white"%3E썸네일 없음%3C/text%3E%3C/svg%3E';
+        }
+        
+        // 모달 열기
+        document.getElementById('editModal').classList.remove('hidden');
+        document.getElementById('editModal').classList.add('flex');
+        
+    } catch (error) {
+        console.error('모달 열기 실패:', error);
+        alert('퀴즈 정보를 불러오는데 실패했습니다.');
+    }
 }
 
 // 수정 모달 닫기
 function closeEditModal() {
     currentEditQuizId = null;
+    editThumbnailBase64 = null;
     document.getElementById('editModal').classList.add('hidden');
     document.getElementById('editModal').classList.remove('flex');
+    document.getElementById('editThumbnailInput').value = '';
 }
 
 // 수정 저장
@@ -207,11 +256,20 @@ async function saveEdit() {
         return;
     }
     
+    if (!editThumbnailBase64) {
+        alert('썸네일 이미지는 필수입니다.');
+        return;
+    }
+    
     try {
         const response = await fetchWithAuth(`/api/quiz/${currentEditQuizId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, description })
+            body: JSON.stringify({ 
+                title, 
+                description,
+                titleImageBase64: editThumbnailBase64
+            })
         });
         
         const result = await response.json();
@@ -309,6 +367,7 @@ window.closeEditModal = closeEditModal;
 window.saveEdit = saveEdit;
 window.deleteQuiz = deleteQuiz;
 window.toggleQuizPublic = toggleQuizPublic;
+window.handleEditThumbnailChange = handleEditThumbnailChange;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
