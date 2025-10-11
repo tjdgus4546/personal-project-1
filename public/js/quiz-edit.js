@@ -147,6 +147,7 @@ function updateFormVisibility() {
         sections.incorrect.style.display = isMultipleChoice ? 'block' : 'none';
     }
 }
+
 // 객관식 토글
 export function toggleMultipleChoice() {
     const isChecked = document.getElementById('isMultipleChoice').checked;
@@ -161,8 +162,6 @@ export function toggleMultipleChoice() {
     // 문제 타입에 따라 추가 업데이트
     updateFormVisibility();
 }
-
-// ========== 기존 기능 ==========
 
 // 뷰 전환
 export function switchView(view) {
@@ -188,24 +187,41 @@ export function switchView(view) {
 }
 
 // 이미지 미리보기
-export function previewImage(input, previewId) {
+export async function previewImage(input, previewId) {
     const preview = document.getElementById(previewId);
     const img = preview.querySelector('img');
     
     if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            img.src = e.target.result;
+        const file = input.files[0];
+        
+        // 파일 크기 체크 (6MB)
+        const maxSizeInBytes = 6 * 1024 * 1024;
+        if (file.size > maxSizeInBytes) {
+            alert('파일 크기가 너무 큽니다! (최대 6MB)');
+            input.value = '';
+            return;
+        }
+        
+        try {
+            // resizeImageToBase64 사용하여 이미지 압축
+            const resizedBase64 = await resizeImageToBase64(file, 240, 40);
+            
+            img.src = resizedBase64;
             preview.classList.remove('hidden');
             
-            // Base64 저장
             if (previewId === 'questionImagePreview') {
-                questionImageBase64 = e.target.result;
+                questionImageBase64 = resizedBase64;
             } else if (previewId === 'answerImagePreview') {
-                answerImageBase64 = e.target.result;
+                answerImageBase64 = resizedBase64;
             }
-        };
-        reader.readAsDataURL(input.files[0]);
+            
+            const sizeKB = Math.round((resizedBase64.length * 3) / 4 / 1024);
+            console.log(`✔ 이미지 압축 완료: ${sizeKB}KB`);
+            
+        } catch (error) {
+            alert('이미지 처리 실패: ' + error.message);
+            input.value = '';
+        }
     }
 }
 
@@ -824,7 +840,6 @@ export async function saveQuestion() {
         answers: [...currentAnswers],
         incorrectAnswers: isChoice ? [...currentIncorrects] : [],
         isChoice: isChoice,
-        // 모든 선택적 데이터를 기본값으로 초기화
         imageBase64: null,
         answerImageBase64: null,
         incorrectImagesBase64: [],
