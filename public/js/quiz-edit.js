@@ -76,7 +76,6 @@ function updateFormVisibility() {
         answerImage: document.getElementById('answerImageSection'),
         answerYoutube: document.getElementById('answerYoutubeSection'),
         incorrect: document.getElementById('incorrectSection'),
-        incorrectImage: document.getElementById('incorrectImageSection')
     };
     
     // 디버깅: 어떤 섹션이 없는지 확인
@@ -106,11 +105,7 @@ function updateFormVisibility() {
             if (sections.questionImage) sections.questionImage.style.display = 'block';
             if (sections.answerText) sections.answerText.style.display = 'block';
             if (sections.answerImage) sections.answerImage.style.display = 'block';
-            
-            // 객관식이면 오답 이미지도 표시
-            if (isMultipleChoice && sections.incorrectImage) {
-                sections.incorrectImage.style.display = 'block';
-            }
+
             break;
             
         case 'video':

@@ -304,22 +304,36 @@ module.exports = (io, app) => {
           
         if (session.host?.toString() !== socket.userId) return; // 방장만 시작 가능
           
+        const quiz = await Quiz.findById(session.quizId);
+        if (!quiz) return;
+
+        // ✅ 문제 순서 생성 로직
+        const questionCount = quiz.questions.length;
+        let questionOrder = Array.from(Array(questionCount).keys()); // [0, 1, 2, ...]
+
+        if (quiz.isRandomOrder) {
+          // Fisher-Yates (aka Knuth) Shuffle
+          let currentIndex = questionOrder.length, randomIndex;
+          while (currentIndex !== 0) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            [questionOrder[currentIndex], questionOrder[randomIndex]] = [
+              questionOrder[randomIndex], questionOrder[currentIndex]];
+          }
+        }
+        
         session.isStarted = true;
         session.isActive = true;
         session.questionStartAt = new Date();
-        session.currentQuestionIndex = 0; // 첫 문제 준비
+        session.questionOrder = questionOrder; // 세션에 문제 순서 저장
+        session.currentQuestionIndex = 0; // currentQuestionIndex는 questionOrder 배열의 위치(0부터 시작)
+
         const success = await safeSaveSession(session);
-          if (!success) {
+        if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - startGame');
             return;
-          }
+        }
           
-        const quiz = await Quiz.findById(session.quizId);
-
-        // ✅ 문제 순서 생성
-        const questionCount = quiz.questions.length;
-        let questionOrder;
-
         await addPlayedQuizzes(quiz._id, socket.userId, app);
 
         io.to(sessionId).emit('game-started', {
@@ -328,7 +342,9 @@ module.exports = (io, app) => {
             quiz: quiz.toObject(),
             host: session.host?.toString() || '__NONE__',
             questionStartAt: session.questionStartAt,
-            questionOrder: questionOrder
+            // 클라이언트가 첫 문제 인덱스를 알 수 있도록 전체 순서와 첫 인덱스를 전달
+            questionOrder: session.questionOrder,
+            currentQuestionIndex: session.questionOrder[0]
           }
         });
 
@@ -370,15 +386,15 @@ module.exports = (io, app) => {
         if (!session || !session.isActive) return;
 
         const username = socket.username;
-
         const playerIndex = session.players.findIndex(p => p.username === username);
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
-
         if (!player) return;
 
-        const qIndex = String(session.currentQuestionIndex);
+        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        const qIndex = String(actualQuestionIndex);
+
         if (player.answered?.[qIndex]) return;
 
         const displayName = player.nickname || username;
@@ -459,15 +475,15 @@ module.exports = (io, app) => {
         if (!session || !session.isActive) return;
 
         const username = socket.username;
-
         const playerIndex = session.players.findIndex(p => p.username === username);
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
-
         if (!player) return;
 
-        const qIndex = String(session.currentQuestionIndex);
+        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        const qIndex = String(actualQuestionIndex);
+
         if (player.answered?.[qIndex]) return;
 
         const displayName = player.nickname || username;
@@ -504,15 +520,15 @@ module.exports = (io, app) => {
         if (!session || !session.isActive) return;
 
         const username = socket.username;
-
         const playerIndex = session.players.findIndex(p => p.username === username);
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
-
         if (!player) return;
 
-        const qIndex = String(session.currentQuestionIndex);
+        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        const qIndex = String(actualQuestionIndex);
+
         if (player.answered?.[qIndex]) return;
 
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
@@ -569,7 +585,8 @@ module.exports = (io, app) => {
             return;
           }
 
-          const qIndex = String(session.currentQuestionIndex);
+          const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+          const qIndex = String(actualQuestionIndex);
           const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
                                         session.choiceQuestionCorrectUsers[qIndex] && 
                                         session.choiceQuestionCorrectUsers[qIndex].length > 0;
@@ -597,7 +614,8 @@ module.exports = (io, app) => {
         return;
       }
 
-      const qIndex = String(session.currentQuestionIndex);
+      const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+      const qIndex = String(actualQuestionIndex);
       const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
                                     session.choiceQuestionCorrectUsers[qIndex] && 
                                     session.choiceQuestionCorrectUsers[qIndex].length > 0;
@@ -624,11 +642,12 @@ module.exports = (io, app) => {
       if (session.revealedAt) return;
 
       const quiz = await Quiz.findById(session.quizId);
-      const index = session.currentQuestionIndex;
-      const question = quiz.questions[index];
-      const qIndex = String(index);
+      const orderIndex = session.currentQuestionIndex;
+      const actualIndex = session.questionOrder[orderIndex];
+      const question = quiz.questions[actualIndex];
+      const qIndex = String(actualIndex);
       
-      if (!quiz || !quiz.questions || !quiz.questions[index]) return;
+      if (!quiz || !quiz.questions || !quiz.questions[actualIndex]) return;
 
       session.revealedAt = new Date();
 
@@ -659,7 +678,7 @@ module.exports = (io, app) => {
         data: {
           answers: question.answers,
           answerImage: question.answerImageBase64,
-          index,
+          index: actualIndex,
           revealedAt: session.revealedAt,
           correctUsers: correctUsers
         }
@@ -733,8 +752,10 @@ module.exports = (io, app) => {
         if (session.revealedAt) return;
 
         const quiz = await Quiz.findById(session.quizId);
-        const question = quiz.questions[session.currentQuestionIndex];
-        const qIndex = String(session.currentQuestionIndex);
+        const orderIndex = session.currentQuestionIndex;
+        const actualIndex = session.questionOrder[orderIndex];
+        const question = quiz.questions[actualIndex];
+        const qIndex = String(actualIndex);
 
         const revealedAt = new Date();
 
@@ -766,7 +787,7 @@ module.exports = (io, app) => {
           data: {
             answers: question.answers,
             answerImage: question.answerImageBase64,
-            index: session.currentQuestionIndex,
+            index: actualIndex,
             revealedAt,
             correctUsers: correctUsers
           }
@@ -794,12 +815,12 @@ module.exports = (io, app) => {
       const quiz = await Quiz.findById(session.quizId);
 
       session.revealedAt = null;
-      session.currentQuestionIndex += 1;
+      session.currentQuestionIndex += 1; // questionOrder 배열의 다음 위치로 이동
       session.skipVotes = [];
       session.questionStartAt = new Date();
 
       // 모든 문제를 완료한 경우
-      if (session.currentQuestionIndex >= quiz.questions.length) {
+      if (session.currentQuestionIndex >= session.questionOrder.length) {
         session.isActive = false;
         session.endedAt = new Date()
         const success = await safeSaveSession(session);
@@ -827,10 +848,12 @@ module.exports = (io, app) => {
             return;
           }
 
+      const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+
       io.to(sessionId).emit('next', {
         success: true,
         data: {
-          index: session.currentQuestionIndex,
+          index: actualQuestionIndex, // 실제 문제 인덱스를 전송
           questionStartAt: session.questionStartAt,
           totalPlayers: session.players.length,
         }
@@ -846,7 +869,9 @@ module.exports = (io, app) => {
       const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || !session.isActive) return;
 
-      const qIndex = String(session.currentQuestionIndex);
+      const orderIndex = session.currentQuestionIndex;
+      const actualIndex = session.questionOrder[orderIndex];
+      const qIndex = String(actualIndex);
       const connectedPlayers = session.players.filter(p => p.connected);
       
       // 완료 조건 확인
@@ -915,14 +940,14 @@ module.exports = (io, app) => {
         // 퀴즈 정보 가져오기
         const Quiz = require('../models/Quiz')(app.get('quizDb'));
         const quiz = await Quiz.findById(session.quizId);
-        const question = quiz.questions[session.currentQuestionIndex];
+        const question = quiz.questions[actualIndex];
 
         io.to(sessionId).emit('revealAnswer_Emit', {
           success: true,
           data: {
             answers: question.answers,
             answerImage: question.answerImageBase64,
-            index: session.currentQuestionIndex,
+            index: actualIndex,
             revealedAt,
             correctUsers: correctDisplayNames
           }
