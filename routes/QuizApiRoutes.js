@@ -428,22 +428,41 @@ router.delete('/quiz/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 퀴즈 제목/설명 수정
+// 퀴즈 제목/설명/썸네일 수정
 router.put('/quiz/:id', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
-  const { title, description } = req.body;
+  const { title, description, titleImageBase64 } = req.body;
 
   try {
+    // 업데이트할 필드 준비
+    const updateFields = {};
+    
+    if (title !== undefined) {
+      updateFields.title = title;
+    }
+    
+    if (description !== undefined) {
+      updateFields.description = description;
+    }
+    
+    if (titleImageBase64 !== undefined) {
+      updateFields.titleImageBase64 = titleImageBase64;
+    }
+
     const quiz = await Quiz.findOneAndUpdate(
       { _id: req.params.id, creatorId: req.user.id },
-      { title, description },
+      updateFields,
       { new: true }
     );
 
-    if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    if (!quiz) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    }
+    
     res.json({ message: '퀴즈 수정 완료', quiz });
   } catch (err) {
+    console.error('퀴즈 수정 실패:', err);
     res.status(500).json({ message: '퀴즈 수정 실패', error: err.message });
   }
 });
