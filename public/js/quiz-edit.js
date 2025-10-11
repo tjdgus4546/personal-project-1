@@ -12,7 +12,6 @@ let currentIncorrects = [];
 let currentQuestionType = 'text'; // 'text', 'image', 'video', 'audio'
 let questionImageBase64 = '';
 let answerImageBase64 = '';
-let incorrectImagesBase64 = []; // 오답 이미지 배열
 const quizId = new URLSearchParams(window.location.search).get('quizId');
 
 // 문제 타입 자동 감지 (기존 문제용)
@@ -238,67 +237,6 @@ export function removeImage(inputId, previewId) {
     } else if (previewId === 'answerImagePreview') {
         answerImageBase64 = '';
     }
-}
-
-// 오답 이미지 추가
-export function addIncorrectImage(input) {
-    if (input.files && input.files[0]) {
-        const incorrectImageList = document.getElementById('incorrectImageList');
-        
-        if (incorrectImageList.children.length >= 4) {
-            alert('오답 이미지는 최대 4개까지만 추가할 수 있습니다.');
-            input.value = '';
-            return;
-        }
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64 = e.target.result;
-            incorrectImagesBase64.push(base64);
-            
-            const div = document.createElement('div');
-            div.className = 'relative border-2 border-red-500/50 rounded-lg overflow-hidden';
-            div.innerHTML = `
-                <img src="${base64}" alt="오답 이미지" class="w-full h-32 object-cover">
-                <button onclick="window.removeIncorrectImage(${incorrectImagesBase64.length - 1})" 
-                        class="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            `;
-            incorrectImageList.appendChild(div);
-        };
-        reader.readAsDataURL(input.files[0]);
-        input.value = '';
-    }
-}
-
-// 오답 이미지 제거
-export function removeIncorrectImage(index) {
-    incorrectImagesBase64.splice(index, 1);
-    renderIncorrectImages();
-}
-
-// 오답 이미지 렌더링
-function renderIncorrectImages() {
-    const incorrectImageList = document.getElementById('incorrectImageList');
-    incorrectImageList.innerHTML = '';
-    
-    incorrectImagesBase64.forEach((base64, index) => {
-        const div = document.createElement('div');
-        div.className = 'relative border-2 border-red-500/50 rounded-lg overflow-hidden';
-        div.innerHTML = `
-            <img src="${base64}" alt="오답 이미지" class="w-full h-32 object-cover">
-            <button onclick="window.removeIncorrectImage(${index})" 
-                    class="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        `;
-        incorrectImageList.appendChild(div);
-    });
 }
 
 // 유튜브 미리보기 업데이트
@@ -711,7 +649,6 @@ export function createNewQuestion() {
         answerYoutubeStartTime: 0,
         imageBase64: '',
         answerImageBase64: '',
-        incorrectImagesBase64: [],
         answers: [],
         incorrectAnswers: [],
         isChoice: false
@@ -768,9 +705,6 @@ export function editQuestion(index) {
     } else {
         document.getElementById('answerImagePreview').classList.add('hidden');
     }
-    
-    incorrectImagesBase64 = question.incorrectImagesBase64 || [];
-    renderIncorrectImages();
     
     // 유튜브 설정 로드
     document.getElementById('youtubeUrl').value = question.youtubeUrl || '';
@@ -842,7 +776,6 @@ export async function saveQuestion() {
         isChoice: isChoice,
         imageBase64: null,
         answerImageBase64: null,
-        incorrectImagesBase64: [],
         youtubeUrl: null,
         youtubeStartTime: null,
         youtubeEndTime: null,
@@ -863,7 +796,6 @@ export async function saveQuestion() {
         }
         finalQuestionData.imageBase64 = questionImageBase64;
         finalQuestionData.answerImageBase64 = answerImageBase64 || null;
-        finalQuestionData.incorrectImagesBase64 = incorrectImagesBase64.length > 0 ? [...incorrectImagesBase64] : [];
         
     } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
         // 영상/소리 문제
@@ -915,7 +847,6 @@ export async function deleteCurrentQuestion() {
         currentIncorrects = [];
         questionImageBase64 = '';
         answerImageBase64 = '';
-        incorrectImagesBase64 = [];
         
         renderQuestions();
         renderSidebar();
@@ -1053,8 +984,6 @@ window.addIncorrect = addIncorrect;
 window.removeIncorrect = removeIncorrect;
 window.previewImage = previewImage;
 window.removeImage = removeImage;
-window.addIncorrectImage = addIncorrectImage;
-window.removeIncorrectImage = removeIncorrectImage;
 window.updateYoutubePreview = updateYoutubePreview;
 window.updateAnswerYoutubePreview = updateAnswerYoutubePreview;
 window.saveQuestion = saveQuestion;
