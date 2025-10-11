@@ -62,6 +62,10 @@ const quizSchema = new Schema({
   type: Number,
   default: 0
   },
+  isRandomOrder: {
+    type: Boolean,
+    default: false
+  },
 });
 
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);

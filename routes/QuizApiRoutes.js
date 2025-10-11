@@ -432,7 +432,7 @@ router.delete('/quiz/:id', authenticateToken, async (req, res) => {
 router.put('/quiz/:id', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
-  const { title, description, titleImageBase64 } = req.body;
+  const { title, description, titleImageBase64, isRandomOrder } = req.body;
 
   try {
     // 업데이트할 필드 준비
@@ -448,6 +448,10 @@ router.put('/quiz/:id', authenticateToken, async (req, res) => {
     
     if (titleImageBase64 !== undefined) {
       updateFields.titleImageBase64 = titleImageBase64;
+    }
+
+    if (isRandomOrder !== undefined) {
+      updateFields.isRandomOrder = isRandomOrder;
     }
 
     const quiz = await Quiz.findOneAndUpdate(

@@ -56,7 +56,27 @@
         <!-- 전체보기 모드 -->
         <div id="overviewView" class="space-y-6">
             <div class="flex justify-between items-center">
-                <h2 class="text-xl font-bold text-white">문제 목록</h2>
+
+                <!-- quiz-edit.html - 랜덤 순서 토글 섹션에 저장 버튼 추가 -->
+                <div class="mt-4 bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <p class="font-medium text-white">문제 랜덤 순서</p>
+                            <p class="text-sm text-gray-400 mt-1">매 게임마다 문제 순서가 무작위로 섞입니다</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="isRandomOrder" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                            </label>
+                            <button onclick="saveRandomOrderSetting()" 
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200">
+                                저장
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <button onclick="createNewQuestion()" 
                         class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -392,26 +412,6 @@
                                             </iframe>
                                         </div>
                                         <p class="text-xs text-green-400">정답 공개 시간은 5초입니다</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 오답 이미지 (이미지 문제 + 객관식일 때만 표시) -->
-                            <div id="incorrectImageSection" class="hidden">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">오답 이미지 (최대 4개)</label>
-                                <div class="space-y-3">
-                                    <div class="flex items-center space-x-3">
-                                        <label class="flex-1 cursor-pointer">
-                                            <div class="border-2 border-dashed border-gray-600 hover:border-red-500 rounded-lg p-4 text-center transition-colors duration-200">
-                                                <svg class="w-6 h-6 mx-auto mb-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                                </svg>
-                                                <p class="text-xs text-gray-400">오답 이미지 추가</p>
-                                            </div>
-                                            <input type="file" id="incorrectImageInput" accept="image/*" class="hidden" onchange="addIncorrectImage(this)">
-                                        </label>
-                                    </div>
-                                    <div id="incorrectImageList" class="grid grid-cols-2 gap-2">
                                     </div>
                                 </div>
                             </div>

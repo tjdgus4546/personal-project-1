@@ -316,6 +316,10 @@ module.exports = (io, app) => {
           
         const quiz = await Quiz.findById(session.quizId);
 
+        // ✅ 문제 순서 생성
+        const questionCount = quiz.questions.length;
+        let questionOrder;
+
         await addPlayedQuizzes(quiz._id, socket.userId, app);
 
         io.to(sessionId).emit('game-started', {
@@ -323,7 +327,8 @@ module.exports = (io, app) => {
           data: {
             quiz: quiz.toObject(),
             host: session.host?.toString() || '__NONE__',
-            questionStartAt: session.questionStartAt
+            questionStartAt: session.questionStartAt,
+            questionOrder: questionOrder
           }
         });
 

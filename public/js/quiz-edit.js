@@ -926,6 +926,8 @@ async function loadQuestions() {
         const quiz = await response.json();
         document.getElementById('quizTitle').textContent = quiz.title || '퀴즈 편집';
         questions = quiz.questions || [];
+
+        document.getElementById('isRandomOrder').checked = quiz.isRandomOrder || false;
         
         // 기존 문제들의 타입을 자동으로 감지하여 업데이트
         questions.forEach(q => {
@@ -984,6 +986,26 @@ export function formatTimeOnBlur(inputId) {
     }
 }
 
+export async function saveRandomOrderSetting() {
+    const isRandomOrder = document.getElementById('isRandomOrder').checked;
+    
+    try {
+        const response = await fetchWithAuth(`/api/quiz/${quizId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isRandomOrder })
+        });
+        
+        if (response.ok) {
+            alert('✅ 랜덤 순서 설정이 저장되었습니다!');
+        } else {
+            throw new Error('저장 실패');
+        }
+    } catch (error) {
+        alert('❌ 저장 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
 // 초기화
 (async function init() {
     const authenticated = await initNavbar();
@@ -1021,3 +1043,4 @@ window.extractYoutubeVideoId = extractYoutubeVideoId;
 window.detectQuestionType = detectQuestionType;
 window.updateFormVisibility = updateFormVisibility;
 window.formatTimeOnBlur = formatTimeOnBlur;
+window.saveRandomOrderSetting = saveRandomOrderSetting;

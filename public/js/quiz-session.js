@@ -5,6 +5,7 @@ import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 // 전역 변수들
 let currentSendFunction = sendMessage;
 let questions = [];
+let quizData = null;
 let currentIndex = 0;
 let questionTimer = null;
 let host = null;
@@ -12,12 +13,13 @@ let questionStartAt = null;
 let countdownInterval = null;
 let hasAnswered = false;
 let sessionData = null;
-let isDataLoaded = false; // 데이터 로딩 상태 추가
+let isDataLoaded = false;
 let isCodeVisible = false;
 let actualInviteCode = '';
 let currentWaitingSendFunction = sendWaitingMessage;
 let youtubePlayer = null;
 let globalYoutubeVolume = 50;
+let questionOrder = [];
 
 // Socket.IO 연결
 const socket = io();
@@ -412,7 +414,8 @@ function sendMessage() {
 
     if (!message) return;
 
-    const rawAnswers = questions[currentIndex].answers || [];
+    const actualIndex = questionOrder[currentIndex];
+    const rawAnswers = questions[actualIndex].answers || [];
     const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
     const userInput = message.replace(/\s+/g, '').toLowerCase();
     
@@ -438,8 +441,9 @@ function choiceQuestionSendMessage() {
 // 문제 표시
 function showQuestion({ silent = false } = {}) {
     const box = document.getElementById('questionBox');
-    const question = questions[currentIndex];
-    const answers = questions[currentIndex]?.answers;
+    const actualIndex = questionOrder[currentIndex];
+    const question = questions[actualIndex];
+    const answers = questions[actualIndex]?.answers;
 
     if (!question) {
         console.error('문제를 찾을 수 없습니다:', currentIndex);
@@ -768,6 +772,7 @@ function selectChoice(choice) {
         socket.emit('choiceQuestionIncorrect', { sessionId });
     }
 }
+
 // 게임 채팅 메시지 추가 (프로필 이미지 포함)
 function addChatMessage(displayName, profileImage, message, isCorrect = false) {
     try {
@@ -1079,7 +1084,7 @@ function setupSocketListeners() {
             return;
         }
 
-        const { quiz, host: newHost, questionStartAt: startAt } = data;
+        const { quiz, host: newHost, questionStartAt: startAt, questionOrder: order } = data;
 
         if (!quiz || !Array.isArray(quiz.questions)) {
             console.error('잘못된 퀴즈 구조:', quiz);
@@ -1088,7 +1093,14 @@ function setupSocketListeners() {
         }
 
         host = newHost;
+
+        // quizData 저장
+        quizData = quiz;
         
+        // 문제 순서 배열 저장 (서버에서 전송받은 순서 또는 기본 순서)
+        questionOrder = order || Array.from({ length: quiz.questions.length }, (_, i) => i);
+        
+        // 객관식 문제의 선택지 섞기
         questions = quiz.questions.map(question => {
             if (question.incorrectAnswers && question.incorrectAnswers.length > 0) {
                 // 정답 + 오답 섞기

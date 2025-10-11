@@ -30,6 +30,7 @@ const gameSessionSchema = new Schema({
   host: { type: Schema.Types.ObjectId, ref: 'User' },
   skipVotes: {type: [String], default: []},
   endedAt: { type: Date, default: null, },
+  questionOrder: { type: [Number], default: [] },
 });
 
 module.exports = (quizDb) => {
