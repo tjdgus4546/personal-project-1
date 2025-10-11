@@ -559,6 +559,11 @@ module.exports = (io, app) => {
         const voteRatio = session.skipVotes.length / totalPlayers;
 
         if (voteRatio >= 0.5) {
+
+          if (session.revealedAt) {
+            return;
+          }
+
           const qIndex = String(session.currentQuestionIndex);
           const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
                                         session.choiceQuestionCorrectUsers[qIndex] && 
@@ -582,6 +587,10 @@ module.exports = (io, app) => {
       if (!ObjectId.isValid(sessionId)) return;
       const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || session.host?.toString() !== socket.userId) return;
+
+      if (session.revealedAt) {
+        return;
+      }
 
       const qIndex = String(session.currentQuestionIndex);
       const hasChoiceQuestionData = session.choiceQuestionCorrectUsers && 
