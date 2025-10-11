@@ -983,7 +983,8 @@ export function formatTimeOnBlur(inputId) {
 
 export async function saveRandomOrderSetting() {
     const isRandomOrder = document.getElementById('isRandomOrder').checked;
-    
+    const feedbackEl = document.getElementById('randomOrderSaveFeedback');
+
     try {
         const response = await fetchWithAuth(`/api/quiz/${quizId}`, {
             method: 'PUT',
@@ -992,12 +993,23 @@ export async function saveRandomOrderSetting() {
         });
         
         if (response.ok) {
-            alert('✅ 랜덤 순서 설정이 저장되었습니다!');
+            if(feedbackEl) {
+                feedbackEl.textContent = '저장됨!';
+                feedbackEl.classList.remove('opacity-0');
+                setTimeout(() => {
+                    feedbackEl.classList.add('opacity-0');
+                }, 2000);
+            }
         } else {
+            if(feedbackEl) feedbackEl.textContent = '저장 실패';
             throw new Error('저장 실패');
         }
     } catch (error) {
-        alert('❌ 저장 중 오류가 발생했습니다: ' + error.message);
+        if(feedbackEl) {
+            feedbackEl.textContent = '오류 발생';
+            feedbackEl.classList.remove('opacity-0');
+        }
+        console.error('❌ 저장 중 오류가 발생했습니다: ', error.message);
     }
 }
 
@@ -1011,8 +1023,15 @@ export async function saveRandomOrderSetting() {
     } else {
         alert('퀴즈 ID가 없습니다.');
         window.location.href = '/quiz/my-list';
+        return;
     }
     
+    // isRandomOrder 토글 자동 저장 리스너 추가
+    const randomOrderToggle = document.getElementById('isRandomOrder');
+    if (randomOrderToggle) {
+        randomOrderToggle.addEventListener('change', saveRandomOrderSetting);
+    }
+
     // 초기 폼 상태 업데이트
     updateFormVisibility();
 })();
