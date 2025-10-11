@@ -504,6 +504,60 @@ router.get('/user/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// 개별 문제 수정 API
+router.put('/quiz/:quizId/question/:questionIndex', authenticateToken, async (req, res) => {
+  const quizDb = req.app.get('quizDb');
+  const Quiz = require('../models/Quiz')(quizDb);
+  
+  try {
+    const { questionIndex } = req.params;
+    const questionData = req.body;
+    
+    const quiz = await Quiz.findById(req.params.quizId);
+    if (!quiz) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    }
+    
+    if (quiz.creatorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+    
+    const index = parseInt(questionIndex);
+    if (index < 0 || index >= quiz.questions.length) {
+      return res.status(400).json({ message: '잘못된 문제 인덱스입니다.' });
+    }
+    
+    // 해당 인덱스의 문제만 업데이트
+    quiz.questions[index] = {
+      questionType: questionData.questionType || 'text',
+      text: questionData.text,
+      answers: questionData.answers,
+      incorrectAnswers: questionData.incorrectAnswers || [],
+      isChoice: questionData.isChoice || false,
+      imageBase64: questionData.imageBase64 || null,
+      answerImageBase64: questionData.answerImageBase64 || null,
+      youtubeUrl: questionData.youtubeUrl || null,
+      youtubeStartTime: questionData.youtubeStartTime || 0,
+      youtubeEndTime: questionData.youtubeEndTime || 0,
+      answerYoutubeUrl: questionData.answerYoutubeUrl || null,
+      answerYoutubeStartTime: questionData.answerYoutubeStartTime || 0,
+      order: index + 1,
+      timeLimit: questionData.timeLimit || 90
+    };
+    
+    quiz.markModified('questions');
+    await quiz.save();
+    
+    res.json({ 
+      message: '문제가 수정되었습니다.',
+      question: quiz.questions[index]
+    });
+  } catch (err) {
+    console.error('문제 수정 실패:', err);
+    res.status(500).json({ message: '문제 수정 실패', error: err.message });
+  }
+});
+
 return router;
 
 };

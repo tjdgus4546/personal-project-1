@@ -766,7 +766,7 @@ export async function saveQuestion() {
         return;
     }
     
-    // 기본 문제 데이터 (모든 타입 공통)
+    // 기본 문제 데이터
     let finalQuestionData = {
         questionType: currentQuestionType,
         text: text,
@@ -820,13 +820,61 @@ export async function saveQuestion() {
     questions[currentEditingIndex] = finalQuestionData;
 
     try {
-        await saveToServer();
+        await saveCurrentQuestion();
         alert('✅ 저장되었습니다!');
         renderQuestions();
         renderSidebar();
     } catch (error) {
         alert('❌ 저장 중 오류가 발생했습니다: ' + error.message);
     }
+}
+
+// 개별 문제 저장 (수정 시 사용)
+async function saveCurrentQuestion() {
+    if (currentEditingIndex === null) {
+        throw new Error('저장할 문제가 선택되지 않았습니다.');
+    }
+    
+    const questionData = questions[currentEditingIndex];
+    
+    const response = await fetchWithAuth(
+        `/api/quiz/${quizId}/question/${currentEditingIndex}`, 
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(questionData)  // ✅ 현재 문제만 전송
+        }
+    );
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('서버 오류:', errorData);
+        throw new Error(errorData.message || '서버 저장 실패');
+    }
+    
+    const result = await response.json();
+    return result;
+}
+
+// 전체 문제 목록 저장 (삭제 시 사용)
+async function saveAllQuestions() {
+    const response = await fetchWithAuth(
+        `/api/quiz/${quizId}/questions`, 
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ questions })  // ✅ 전체 배열 전송 (삭제 시만)
+        }
+    );
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('서버 오류:', errorData);
+        throw new Error(errorData.message || '서버 저장 실패');
+    }
+    
+    const result = await response.json();
+    return result;
 }
 
 // 현재 문제 삭제
@@ -838,7 +886,7 @@ export async function deleteCurrentQuestion() {
     questions.splice(currentEditingIndex, 1);
     
     try {
-        await saveToServer();
+        await saveAllQuestions();
         alert('삭제되었습니다!');
         
         // UI 초기화
@@ -862,17 +910,22 @@ export async function deleteCurrentQuestion() {
     }
 }
 
-// 서버에 저장
+// 개별 문제만 저장 (수정됨)
 async function saveToServer() {
-
-    const response = await fetch(`/api/quiz/${quizId}/questions`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ questions })
-    });
+    if (currentEditingIndex === null) {
+        throw new Error('저장할 문제가 선택되지 않았습니다.');
+    }
+    
+    const questionData = questions[currentEditingIndex];
+    
+    const response = await fetchWithAuth(
+        `/api/quiz/${quizId}/question/${currentEditingIndex}`, 
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(questionData)  // ✅ 현재 문제 데이터만 전송
+        }
+    );
     
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
