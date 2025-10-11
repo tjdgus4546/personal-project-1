@@ -735,7 +735,6 @@ export function editQuestion(index) {
     renderSidebar();
 }
 
-// 문제 저장 함수 (수정됨)
 export async function saveQuestion() {
     if (currentEditingIndex === null) return;
     
@@ -820,7 +819,7 @@ export async function saveQuestion() {
     questions[currentEditingIndex] = finalQuestionData;
 
     try {
-        await saveCurrentQuestion();
+        await saveCurrentQuestion();  // ✅ 개별 문제만 저장
         alert('✅ 저장되었습니다!');
         renderQuestions();
         renderSidebar();
@@ -842,13 +841,13 @@ async function saveCurrentQuestion() {
         {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(questionData)  // ✅ 현재 문제만 전송
+            body: JSON.stringify(questionData)
         }
     );
     
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('서버 오류:', errorData);
+        console.error('❌ 서버 오류:', errorData);
         throw new Error(errorData.message || '서버 저장 실패');
     }
     
@@ -858,22 +857,25 @@ async function saveCurrentQuestion() {
 
 // 전체 문제 목록 저장 (삭제 시 사용)
 async function saveAllQuestions() {
+    console.log('📤 전체 문제 저장:', questions.length + '개');
+    
     const response = await fetchWithAuth(
         `/api/quiz/${quizId}/questions`, 
         {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questions })  // ✅ 전체 배열 전송 (삭제 시만)
+            body: JSON.stringify({ questions })
         }
     );
     
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('서버 오류:', errorData);
+        console.error('❌ 서버 오류:', errorData);
         throw new Error(errorData.message || '서버 저장 실패');
     }
     
     const result = await response.json();
+    console.log('✅ 전체 저장 성공:', result);
     return result;
 }
 
@@ -908,33 +910,6 @@ export async function deleteCurrentQuestion() {
     } catch (error) {
         alert('삭제 중 오류가 발생했습니다: ' + error.message);
     }
-}
-
-// 개별 문제만 저장 (수정됨)
-async function saveToServer() {
-    if (currentEditingIndex === null) {
-        throw new Error('저장할 문제가 선택되지 않았습니다.');
-    }
-    
-    const questionData = questions[currentEditingIndex];
-    
-    const response = await fetchWithAuth(
-        `/api/quiz/${quizId}/question/${currentEditingIndex}`, 
-        {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(questionData)  // ✅ 현재 문제 데이터만 전송
-        }
-    );
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('서버 오류:', errorData);
-        throw new Error(errorData.message || '서버 저장 실패');
-    }
-    
-    const result = await response.json();
-    return result;
 }
 
 // 서버에서 문제 목록 로드
