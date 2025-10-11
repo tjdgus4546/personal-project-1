@@ -504,7 +504,7 @@ router.get('/user/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// 개별 문제 수정 API
+// QuizApiRoutes.js - 개별 문제 수정 API
 router.put('/quiz/:quizId/question/:questionIndex', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const Quiz = require('../models/Quiz')(quizDb);
@@ -523,12 +523,13 @@ router.put('/quiz/:quizId/question/:questionIndex', authenticateToken, async (re
     }
     
     const index = parseInt(questionIndex);
-    if (index < 0 || index >= quiz.questions.length) {
+    
+    // ✅ 수정: 새 문제 추가도 허용 (index === length)
+    if (index < 0 || index > quiz.questions.length) {
       return res.status(400).json({ message: '잘못된 문제 인덱스입니다.' });
     }
     
-    // 해당 인덱스의 문제만 업데이트
-    quiz.questions[index] = {
+    const questionToSave = {
       questionType: questionData.questionType || 'text',
       text: questionData.text,
       answers: questionData.answers,
@@ -545,11 +546,19 @@ router.put('/quiz/:quizId/question/:questionIndex', authenticateToken, async (re
       timeLimit: questionData.timeLimit || 90
     };
     
+    if (index === quiz.questions.length) {
+      // 새 문제 추가
+      quiz.questions.push(questionToSave);
+    } else {
+      // 기존 문제 수정
+      quiz.questions[index] = questionToSave;
+    }
+    
     quiz.markModified('questions');
     await quiz.save();
     
     res.json({ 
-      message: '문제가 수정되었습니다.',
+      message: index === quiz.questions.length - 1 ? '문제가 추가되었습니다.' : '문제가 수정되었습니다.',
       question: quiz.questions[index]
     });
   } catch (err) {
