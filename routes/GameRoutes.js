@@ -4,28 +4,10 @@ const router = express.Router();
 const { ObjectId } = require('mongoose').Types;
 const jwt = require('jsonwebtoken');
 
-// JWT 인증 미들웨어 (다른 파일에 있다면 가져와서 사용하세요)
-const authMiddleware = (req, res, next) => {
-  const token = req.cookies.accessToken;
-  if (!token) {
-    // AJAX 요청일 경우 JSON으로, 일반 페이지 요청일 경우 리다이렉트
-    if (req.headers['x-requested-with'] === 'XMLHttpRequest') {
-      return res.status(401).json({ message: '인증이 필요합니다. 로그인해주세요.' });
-    }
-    return res.status(401).redirect('/login');
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // req.user에 사용자 정보 저장
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: '유효하지 않은 토큰입니다.' });
-  }
-};
+const authenticateToken = require('../middlewares/AuthMiddleware');
 
 // 세션 정보 조회
-router.get('/session/:id', authMiddleware, async (req, res) => {
+router.get('/session/:id', authenticateToken, async (req, res) => {
   const id = req.params.id;
   if (!ObjectId.isValid(id)) {
     return res.status(400).json({ message: '잘못된 세션 ID 형식' });
@@ -94,13 +76,13 @@ router.get('/session/:id', authMiddleware, async (req, res) => {
 });
 
 // 세션 생성
-router.post('/start', authMiddleware, async (req, res) => {
+router.post('/start', authenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
 
   const { quizId } = req.body;
-  const { id: userId, username } = req.user;
+  const { id: userId } = req.user;
 
   if (!ObjectId.isValid(quizId)) {
 
@@ -126,7 +108,6 @@ router.post('/start', authMiddleware, async (req, res) => {
           quizId,
           players: [{
             userId,
-            username,
             score: 0,
             answered: {},
             connected: true,
@@ -173,9 +154,9 @@ router.post('/start', authMiddleware, async (req, res) => {
 });
 
 // 세션 참여 라우트
-router.post('/join', authMiddleware, async (req, res) => {
+router.post('/join', authenticateToken, async (req, res) => {
   const { inviteCode } = req.body;
-  const { id: userId, username } = req.user;
+  const { id: userId } = req.user;
   const quizDb = req.app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
 
@@ -208,7 +189,6 @@ router.post('/join', authMiddleware, async (req, res) => {
     // 새 플레이어 추가
     session.players.push({
       userId,
-      username,
       score: 0,
       answered: {},
       connected: true, // 초기 연결 상태
@@ -228,7 +208,6 @@ router.post('/join', authMiddleware, async (req, res) => {
     res.status(500).json({ message: '세션 참여에 실패했습니다.', error: err.message });
   }
 });
-
 
 router.get('/invite/:code', async (req, res) => {
   const quizDb = req.app.get('quizDb');

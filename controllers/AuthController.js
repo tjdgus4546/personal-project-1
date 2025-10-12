@@ -1,3 +1,5 @@
+// controllers/AuthController.js
+
 const bcrypt = require('bcrypt'); 
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
@@ -11,7 +13,7 @@ const signup = async (req, res) => {
 
   const { username, nickname, email, password } = req.body;
 
-  if (!username || !nickname || !email || !password) {
+  if ( !nickname || !email || !password) {
     return res.status(400).json({ message: '모든 필드를 입력해주세요.' });
   }
 
@@ -31,7 +33,7 @@ const signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({ 
-      username: username.trim(),
+      username: username.trim(),  // DB에는 저장하지만 사용 안 함
       nickname: nickname.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword 
@@ -52,7 +54,6 @@ const signup = async (req, res) => {
   }
 };
 
-// 로그인
 const login = async (req, res) => {
   const userDb = req.app.get('userDb');
   const User = require('../models/User')(userDb);
@@ -76,9 +77,9 @@ const login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: '잘못된 비밀번호입니다.' });
     }
-    
+
     const accessToken = jwt.sign(
-      { id: user._id, username: user.username, nickname: user.nickname }, 
+      { id: user._id, nickname: user.nickname }, 
       JWT_SECRET, 
       { expiresIn: '15m' }
     );
@@ -99,12 +100,10 @@ const login = async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      // path 제거로 미들웨어에서 접근 가능하도록 함
     });
 
     res.json({
       message: 'Login successful',
-      username: user.username,
       nickname: user.nickname,
       userId: user._id
     });
@@ -154,7 +153,7 @@ const refreshToken = async (req, res) => {
     }
 
     const newAccessToken = jwt.sign(
-      { id: user._id, username: user.username, nickname: user.nickname }, 
+      { id: user._id, nickname: user.nickname }, 
       JWT_SECRET, 
       { expiresIn: '15m' }
     );

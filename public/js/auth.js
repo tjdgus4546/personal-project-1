@@ -1,4 +1,4 @@
-
+// public/js/navbar.js (또는 유틸 파일)
 // 401 에러 시 자동으로 토큰 재발급을 시도하는 fetch 래퍼 함수
 async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
@@ -28,13 +28,12 @@ async function fetchWithAuth(url, options = {}) {
     return response;
 }
 
-// 사용자 정보를 가져오는 전용 함수
 async function getUserData() {
     try {
         const response = await fetchWithAuth('/my-info');
         if (response.ok) {
             const user = await response.json();
-            return user && user.username ? user : null;
+            return user && user.nickname ? user : null;
         }
         return null;
     } catch (err) {

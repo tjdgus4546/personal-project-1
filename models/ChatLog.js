@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const messageSchema = new Schema({
-  username: String,
+  nickname: { type: String, required: true },
   message: String,
   createdAt: { type: Date, default: Date.now }
 }, { _id: false });

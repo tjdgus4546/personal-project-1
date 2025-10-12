@@ -1,3 +1,6 @@
+// middlewares/AuthMiddleware.js
+// JWT 토큰에서 username 필드 제거
+
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -17,11 +20,9 @@ const authenticateToken = async (req, res, next) => {
   if (accessToken) {
     try {
       const decoded = jwt.verify(accessToken, JWT_SECRET);
-      req.user = decoded; // 사용자 정보를 요청 객체에 저장
+      req.user = decoded; // 사용자 정보를 요청 객체에 저장 (username 없이)
       return next(); // 다음 미들웨어로 이동
     } catch (err) {
-      // 액세스 토큰이 만료된 경우(TokenExpiredError)에만 리프레시 로직으로 넘어갑니다.
-      // 그 외의 오류(예: 변조된 토큰)는 바로 에러 처리합니다.
       if (err.name !== 'TokenExpiredError') {
         console.error('유효하지 않은 액세스 토큰:', err.message);
         res.clearCookie('accessToken');
@@ -47,11 +48,9 @@ const authenticateToken = async (req, res, next) => {
         return res.status(403).json({ message: '사용자를 찾을 수 없습니다. 다시 로그인해주세요.' });
       }
 
-      // 새로운 액세스 토큰 발급
       const newAccessToken = jwt.sign(
         { 
           id: user._id, 
-          username: user.username,
           nickname: user.nickname 
         }, 
         JWT_SECRET, 
@@ -66,10 +65,8 @@ const authenticateToken = async (req, res, next) => {
         maxAge: 15 * 60 * 1000,
       });
 
-      // 새로 발급된 토큰의 정보를 요청 객체에 저장하여 다음 미들웨어에서 사용
       req.user = { 
         id: user._id, 
-        username: user.username,
         nickname: user.nickname 
       };
       return next();

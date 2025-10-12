@@ -25,7 +25,6 @@ let questionOrder = [];
 const socket = io();
 const sessionId = window.location.pathname.split('/').pop();
 let userId = null;
-let username = null;
 
 // 인증 확인 함수
 async function fetchWithAuth(url, options = {}) {
@@ -57,7 +56,6 @@ async function initializeUser() {
         }
         const userData = await response.json();
         userId = userData._id;
-        username = userData.username;
 
         // Socket이 연결될 때까지 기다린 후 joinSession 실행
         if (socket.connected) {
@@ -92,7 +90,7 @@ async function loadSessionData() {
 
         const profileImageLog = data.players.map(player => {
             return {
-                username: player.username,
+                nickname: player.nickname,
                 hasImage: !!player.profileImage,
                 imageType: player.profileImage ? 
                     (player.profileImage.startsWith('data:') ? 'Base64' : 'URL') : 'None',
@@ -114,7 +112,7 @@ async function loadSessionData() {
         displayQuizInfo(data.quiz);
         
        if (data.inviteCode) {
-            setInviteCode(data.inviteCode); // 새로운 함수 사용
+            setInviteCode(data.inviteCode);
         } else {
             document.getElementById('inviteCodeDisplay').textContent = '없음';
         }
@@ -252,7 +250,7 @@ function renderScoreboard(players) {
         li.className = 'flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 border-blue-400';
         
         const avatarHTML = createPlayerAvatar(p);
-        const displayName = p.nickname || p.username;
+        const displayName = p.nickname || 'Unknown';
         
         li.innerHTML = `
             <div class="flex items-center justify-center gap-3 mb-2">
@@ -296,8 +294,7 @@ function renderPlayerList(players) {
         // 프로필 이미지 또는 이니셜 아바타 생성
         const avatarHTML = createPlayerAvatar(player);
         
-        // ✅ nickname 우선 사용, 없으면 username
-        const displayName = player.nickname || player.username;
+        const displayName = player.nickname || 'Unknown';
         
         li.innerHTML = `
             <div class="flex items-center space-x-3">
@@ -344,7 +341,7 @@ function renderPlayerList(players) {
 
 // 플레이어 아바타 생성 함수
 function createPlayerAvatar(player) {
-    const displayName = player.nickname || player.username || 'U';
+    const displayName = player.nickname || 'Unknown';
     const initial = displayName.charAt(0).toUpperCase();
     
     // 프로필 이미지가 있고 네이버 기본 이미지가 아닌 경우
@@ -395,7 +392,10 @@ async function loadChatHistory() {
         data.messages.forEach(msg => {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'p-3 rounded-lg bg-gray-700/50 border-l-4 border-blue-400';
-            messageDiv.innerHTML = `<span class="text-blue-400 font-medium">${msg.username}:</span> <span class="text-gray-200">${msg.message}</span>`;
+            
+            const displayName = msg.nickname || 'Unknown';
+            
+            messageDiv.innerHTML = `<span class="text-blue-400 font-medium">${displayName}:</span> <span class="text-gray-200">${msg.message}</span>`;
             fragment.appendChild(messageDiv);
         });
         
@@ -1041,7 +1041,7 @@ function setupSocketListeners() {
     // Socket 연결 상태 모니터링
     socket.on('connect', () => {
         // 이미 사용자 정보가 있다면 즉시 joinSession 실행
-        if (userId && username) {
+        if (userId ) {
             socket.emit('joinSession', { sessionId });
         }
     });
@@ -1194,7 +1194,7 @@ function setupSocketListeners() {
 
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
         const displayName = nickname || user;
-        const isMyMessage = user === username;
+        const isMyMessage = user === socket.userId;;
         
         if (gameSection.classList.contains('hidden')) {
             displayWaitingChat(displayName, profileImage, message, isMyMessage);
@@ -1539,14 +1539,14 @@ function getUserProfileFromDOM() {
             const displayName = nameElement ? nameElement.textContent.trim() : null;
             
             return {
-                nickname: displayName || username, 
+                nickname: displayName || 'Unknown',
                 profileImage: profileImage
             };
         }
     }
     
     return {
-        nickname: username,
+        nickname: 'Unknown',
         profileImage: null
     };
 }

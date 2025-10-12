@@ -1,4 +1,5 @@
 const express = require('express');
+const { ObjectId } = require('mongoose').Types;
 
 module.exports = (quizDb) => {
   const publicRouter = express.Router();
@@ -69,6 +70,27 @@ module.exports = (quizDb) => {
     } catch (err) {
         console.error('검색 API 에러:', err);
         res.status(500).json({ message: '검색 중 오류가 발생했습니다', error: err.message });
+    }
+  });
+
+  // ✅ 퀴즈 정보 조회 - 맨 위에 배치 (누구나 접근 가능)
+  publicRouter.get('/quiz/:id', async (req, res, next) => {
+    
+    try {
+        if (!ObjectId.isValid(req.params.id)) {
+          return next();  // privateRouter로 넘어감
+        }
+        
+        const quiz = await Quiz.findById(req.params.id);
+        
+        if (!quiz) {
+          return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+        }
+
+        res.json(quiz);
+    } catch (err) {
+        console.error('퀴즈 불러오기 실패:', err);
+        res.status(500).json({ message: '퀴즈 불러오기 실패', error: err.message });
     }
   });
 
@@ -208,19 +230,6 @@ module.exports = (quizDb) => {
     }
   });
 
-  // (편집용) 개별 퀴즈 정보 조회
-  privateRouter.get('/quiz/:id', async (req, res) => {
-    try {
-        const quiz = await Quiz.findById(req.params.id);
-        if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-        if (quiz.creatorId.toString() !== req.user.id) {
-            return res.status(403).json({ message: '이 퀴즈를 편집할 권한이 없습니다.' });
-        }
-        res.json(quiz);
-    } catch (err) {
-        res.status(500).json({ message: '퀴즈 불러오기 실패', error: err.message });
-    }
-  });
 
   // 개별 문제 수정/추가
   privateRouter.put('/quiz/:quizId/question/:questionIndex', async (req, res) => {

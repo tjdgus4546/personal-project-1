@@ -23,7 +23,6 @@ module.exports = (io, app) => {
       success: true,
       data: {
         players: players.map(p => ({
-          username: p.username,
           nickname: p.nickname,
           score: p.score,
           correctAnswersCount: p.correctAnswersCount || 0,
@@ -55,7 +54,6 @@ module.exports = (io, app) => {
 
       const decoded = jwt.verify(token, JWT_SECRET);
       socket.userId = decoded.id;
-      socket.username = decoded.username;
       next();
     } catch (err) {
       console.error('Socket.IO: JWT verification failed:', err.message);
@@ -73,7 +71,6 @@ module.exports = (io, app) => {
         const User = require('../models/User')(userDb);
         
         const userId = socket.userId;
-        const username = socket.username;
         
         if (!ObjectId.isValid(sessionId)) return;
         
@@ -97,7 +94,6 @@ module.exports = (io, app) => {
         if (!player) {
           session.players.push({
             userId,
-            username,
             nickname: user?.nickname || null,
             profileImage: user?.profileImage || null,
             score: 0,
@@ -139,7 +135,6 @@ module.exports = (io, app) => {
         
         socket.join(sessionId);
         socket.sessionId = sessionId;
-        socket.username = username;
         socket.userId = userId;
         socket.firstCorrectUser = null;
 
@@ -171,7 +166,6 @@ module.exports = (io, app) => {
           data: {
             host: session.host?.toString() || '__NONE__',
             players: session.players.map(p => ({
-              username: p.username,
               nickname: p.nickname,
               userId: p.userId.toString(),
               connected: p.connected,
@@ -197,8 +191,8 @@ module.exports = (io, app) => {
 
     socket.on('disconnect', async () => {
       try {
-        const { sessionId, username, userId } = socket;
-        if (!sessionId || !username) return;
+        const { sessionId, userId } = socket;
+        if (!sessionId, userId) return;
 
         const quizDb = app.get('quizDb');
         const GameSession = require('../models/GameSession')(quizDb);
@@ -277,7 +271,6 @@ module.exports = (io, app) => {
                 data: {
                   host: session.host?.toString() || '__NONE__',
                   players: session.players.map(p => ({
-                    username: p.username,
                     nickname: p.nickname,
                     userId: p.userId.toString(),
                     connected: p.connected,
@@ -372,7 +365,7 @@ module.exports = (io, app) => {
         
         // 즉시 브로드캐스트
         io.to(sessionId).emit('chat', {
-            nickname: userInfo.nickname || userInfo.username,
+            nickname: userInfo.nickname || 'Unknown',
             profileImage: userInfo.profileImage,
             message
         });
@@ -385,8 +378,8 @@ module.exports = (io, app) => {
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
-        const username = socket.username;
-        const playerIndex = session.players.findIndex(p => p.username === username);
+        const userId = socket.userId;
+        const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
@@ -397,7 +390,7 @@ module.exports = (io, app) => {
 
         if (player.answered?.[qIndex]) return;
 
-        const displayName = player.nickname || username;
+        const displayName = player.nickname || 'Unknown';
 
         if (!app.firstCorrectUsers) {
           app.firstCorrectUsers = {};
@@ -441,7 +434,7 @@ module.exports = (io, app) => {
               {
                 $push: {
                   messages: {
-                    username,
+                    nickname: displayName,
                     message: `${displayName}님이 정답을 맞혔습니다! 🎉`,
                     createdAt: new Date()
                   }
@@ -474,8 +467,8 @@ module.exports = (io, app) => {
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
-        const username = socket.username;
-        const playerIndex = session.players.findIndex(p => p.username === username);
+        const userId = socket.userId;
+        const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
@@ -486,7 +479,7 @@ module.exports = (io, app) => {
 
         if (player.answered?.[qIndex]) return;
 
-        const displayName = player.nickname || username;
+        const displayName = player.nickname || 'Unknown';
 
         session.choiceQuestionCorrectUsers = session.choiceQuestionCorrectUsers || {};
         if (!session.choiceQuestionCorrectUsers[qIndex]) {
@@ -519,8 +512,8 @@ module.exports = (io, app) => {
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
-        const username = socket.username;
-        const playerIndex = session.players.findIndex(p => p.username === username);
+        const userId = socket.userId;
+        const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
         if (playerIndex === -1) return;
 
         const player = session.players[playerIndex];
@@ -554,9 +547,9 @@ module.exports = (io, app) => {
       const session = await safeFindSessionById(GameSession, sessionId);
       if (!session || !session.isActive) return;
 
-      const username = socket.username;
-      const player = session.players.find(p => p.username === username);
-      const displayName = player?.nickname || username;
+      const userId = socket.userId;
+      const player = session.players.find(p => p.userId.toString() === userId.toString());
+      const displayName = player?.nickname || 'Unknown';
 
       if (!session.skipVotes.includes(displayName)) {
         session.skipVotes.push(displayName);
@@ -905,7 +898,7 @@ module.exports = (io, app) => {
         if (correctDisplayNames.length > 0) {
           correctDisplayNames.forEach((displayName, index) => {
             const player = session.players.find(p => 
-              (p.nickname || p.username) === displayName
+              (p.nickname || 'Unknown') === displayName
             );
             if (player) {
               if (index === 0) {
