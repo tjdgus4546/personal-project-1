@@ -48,7 +48,7 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/auth', naverAuthRoutes);
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
-  app.use('/api', quizApiRoutes);
+  app.use('/api', authenticateToken, quizApiRoutes);
   app.use('/game', authenticateToken, gameRoutes);
 
   app.get('/', (req, res) => {
