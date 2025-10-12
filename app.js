@@ -41,14 +41,15 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
   
-  const quizApiRoutes = quizApiRoutesFactory(quizDb);
+  const { publicRouter, privateRouter } = quizApiRoutesFactory(quizDb);
 
   // 라우트 설정
   app.use('/auth', authRoutes);
   app.use('/auth', naverAuthRoutes);
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
-  app.use('/api', authenticateToken, quizApiRoutes);
+  app.use('/api', publicRouter); // 인증이 필요없는 API
+  app.use('/api', authenticateToken, privateRouter); // 인증이 필요한 API
   app.use('/game', authenticateToken, gameRoutes);
 
   app.get('/', (req, res) => {
