@@ -841,12 +841,10 @@ module.exports = (io, app) => {
             return;
           }
 
-      const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
-
       io.to(sessionId).emit('next', {
         success: true,
         data: {
-          index: actualQuestionIndex, // 실제 문제 인덱스를 전송
+          currentIndex: session.currentQuestionIndex, // 실제 문제 인덱스를 전송
           questionStartAt: session.questionStartAt,
           totalPlayers: session.players.length,
         }

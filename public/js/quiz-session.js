@@ -127,7 +127,7 @@ async function loadSessionData() {
                 showQuestion({ silent: true });
                 renderScoreboard(data.players, false);
 
-                const answers = questions[currentIndex]?.answers;
+                const answers = questions[actualIndex].answers;
                 if (answers) {
                     const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
                     const answerDiv = document.createElement('div');
@@ -265,9 +265,7 @@ function renderScoreboard(players) {
         `;
         board.appendChild(li);
     });
-    
-    // 문제 번호 업데이트
-    updateQuestionNumber();
+
 }
 
 function updateQuestionNumber() {
@@ -760,7 +758,8 @@ function selectChoice(choice) {
         });
     }
     
-    const rawAnswers = questions[currentIndex].answers || [];
+    const actualIndex = questionOrder[currentIndex];
+    const rawAnswers = questions[actualIndex].answers || [];
     const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
     const userInput = choice.replace(/\s+/g, '').toLowerCase();
     
@@ -1180,16 +1179,15 @@ function setupSocketListeners() {
 
     socket.on('next', ({ success, data, message }) => {
         if (!success) {
-            console.error('⌛ 다음 문제 전송 실패:', message);
+            console.error('다음 문제 전송 실패:', message);
             return;
         }
 
-        const { index, questionStartAt: startAt, totalPlayers } = data;
-        currentIndex = index;
+        const { currentIndex: newIndex, questionStartAt: startAt, totalPlayers } = data;
+        currentIndex = newIndex;
         questionStartAt = new Date(startAt);
         renderSkipStatus(0, totalPlayers);
-        showQuestion();
-        updateQuestionNumber();
+        showQuestion();  // showQuestion 안에서 updateQuestionNumber 호출
     });
 
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
