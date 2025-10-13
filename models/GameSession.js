@@ -31,6 +31,7 @@ const gameSessionSchema = new Schema({
   skipVotes: {type: [String], default: []},
   endedAt: { type: Date, default: null, },
   questionOrder: { type: [Number], default: [] },
+  readyPlayers: { type: [String], default: [] }, // 문제 로딩 완료한 플레이어 userId 배열
 });
 
 module.exports = (quizDb) => {

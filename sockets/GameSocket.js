@@ -192,7 +192,7 @@ module.exports = (io, app) => {
     socket.on('disconnect', async () => {
       try {
         const { sessionId, userId } = socket;
-        if (!sessionId, userId) return;
+        if (!sessionId || !userId) return;
 
         const quizDb = app.get('quizDb');
         const GameSession = require('../models/GameSession')(quizDb);
@@ -204,10 +204,10 @@ module.exports = (io, app) => {
             try {
               socketsInRoom = await io.in(sessionId).fetchSockets();
             } catch (err) {
-              console.error('❌ joinSession DB 조회 실패2:', err.message)
+              console.error('❌ disconnect - fetchSockets 실패:', err.message)
             }
-            
-            const stillConnected = socketsInRoom.some(s => s.userId  === userId);
+
+            const stillConnected = socketsInRoom.some(s => s.userId === userId);
 
             if (stillConnected) {
               return;
@@ -215,8 +215,6 @@ module.exports = (io, app) => {
 
             let session = await safeFindSessionById(GameSession, sessionId);
             if (!session) {
-              // 세션이 TTL 등으로 이미 삭제된 경우, 해당 클라이언트에게 리다이렉트 명령을 보냄
-              socket.emit('forceRedirect', { url: '/' });
               return;
             }
 
@@ -233,6 +231,7 @@ module.exports = (io, app) => {
             if (session.host?.toString() === userId.toString()) {
               const nextHost = session.players.find(p => p.connected);
               session.host = nextHost ? new ObjectId(nextHost.userId) : null;
+              session.markModified('host');
             }
 
             const success2 = await safeSaveSession(session);
@@ -241,12 +240,16 @@ module.exports = (io, app) => {
               return;
             }
 
+            // 최신 세션 다시 조회 (DB에 저장된 상태)
+            session = await safeFindSessionById(GameSession, sessionId);
+            if (!session) return;
+
             const connectedCount = session.players.filter(p => p.connected).length;
 
             // 분기 처리
             if (session.isStarted) {
               // 게임 중: 점수판 갱신
-            emitScoreboard(io, sessionId, session.players);
+              emitScoreboard(io, sessionId, session.players);
 
               io.to(sessionId).emit('host-updated', {
                 success: true,
@@ -262,6 +265,47 @@ module.exports = (io, app) => {
                   total: connectedCount
                 }
               });
+
+              // 나간 유저의 ready 상태 제거 및 재확인
+              const currentQuestionIndex = session.currentQuestionIndex;
+              const removedKeys = session.readyPlayers.filter(
+                key => key.includes(`_${userId}`)
+              );
+
+              if (removedKeys.length > 0) {
+                // 원자적 업데이트로 해당 유저의 ready 상태 제거
+                const updatedSession = await GameSession.findByIdAndUpdate(
+                  sessionId,
+                  { $pull: { readyPlayers: { $in: removedKeys } } },
+                  { new: true }
+                );
+
+                if (updatedSession) {
+                  // 남은 플레이어로 ready 체크
+                  const readyForThisQuestion = updatedSession.readyPlayers.filter(
+                    key => key.startsWith(`${currentQuestionIndex}_`)
+                  );
+                  const remainingConnected = updatedSession.players.filter(p => p.connected);
+
+                  if (readyForThisQuestion.length >= remainingConnected.length && remainingConnected.length > 0) {
+                    // 모든 남은 플레이어가 준비 완료
+                    const startResult = await GameSession.findByIdAndUpdate(
+                      sessionId,
+                      { $set: { questionStartAt: new Date() } },
+                      { new: true }
+                    );
+
+                    if (startResult) {
+                      io.to(sessionId).emit('question-start', {
+                        success: true,
+                        data: {
+                          questionStartAt: startResult.questionStartAt
+                        }
+                      });
+                    }
+                  }
+                }
+              }
 
             } else {
               // 대기 상태: 대기룸 갱신
@@ -294,9 +338,9 @@ module.exports = (io, app) => {
         if (!ObjectId.isValid(sessionId)) return;
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session || session.isStarted) return;
-          
+
         if (session.host?.toString() !== socket.userId) return; // 방장만 시작 가능
-          
+
         const quiz = await Quiz.findById(session.quizId);
         if (!quiz) return;
 
@@ -314,28 +358,27 @@ module.exports = (io, app) => {
               questionOrder[randomIndex], questionOrder[currentIndex]];
           }
         }
-        
+
         session.isStarted = true;
         session.isActive = true;
-        session.questionStartAt = new Date();
         session.questionOrder = questionOrder; // 세션에 문제 순서 저장
         session.currentQuestionIndex = 0; // currentQuestionIndex는 questionOrder 배열의 위치(0부터 시작)
+        session.readyPlayers = []; // 준비 상태 초기화
 
         const success = await safeSaveSession(session);
         if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - startGame');
             return;
         }
-          
+
         await addPlayedQuizzes(quiz._id, socket.userId, app);
 
+        // 문제 데이터만 전송 (타이머는 아직 시작하지 않음)
         io.to(sessionId).emit('game-started', {
           success: true,
           data: {
             quiz: quiz.toObject(),
             host: session.host?.toString() || '__NONE__',
-            questionStartAt: session.questionStartAt,
-            // 클라이언트가 첫 문제 인덱스를 알 수 있도록 전체 순서와 첫 인덱스를 전달
             questionOrder: session.questionOrder,
             currentQuestionIndex: session.questionOrder[0]
           }
@@ -352,6 +395,72 @@ module.exports = (io, app) => {
         });
       } catch (error) {
         handleSocketError(socket, error, 'startGame');
+      }
+    });
+
+    // 클라이언트 준비 완료 이벤트
+    socket.on('client-ready', async ({ sessionId }) => {
+      try {
+        if (!ObjectId.isValid(sessionId)) return;
+
+        const userId = socket.userId;
+
+        // 먼저 현재 세션 상태 확인
+        let session = await safeFindSessionById(GameSession, sessionId);
+        if (!session || !session.isActive) return;
+
+        const currentQuestionIndex = session.currentQuestionIndex;
+        const readyKey = `${currentQuestionIndex}_${userId}`;
+
+        // 원자적 업데이트: $addToSet으로 중복 없이 추가
+        const updateResult = await GameSession.findByIdAndUpdate(
+          sessionId,
+          { $addToSet: { readyPlayers: readyKey } },
+          { new: true } // 업데이트된 문서 반환
+        );
+
+        if (!updateResult) {
+          console.error('❌ 세션 업데이트 실패 - client-ready');
+          return;
+        }
+
+        session = updateResult;
+
+        // 현재 문제 인덱스에 대한 준비 완료 카운트
+        const readyForThisQuestion = session.readyPlayers.filter(
+          key => key.startsWith(`${currentQuestionIndex}_`)
+        );
+
+        const connectedPlayers = session.players.filter(p => p.connected);
+        const readyCount = readyForThisQuestion.length;
+        const totalCount = connectedPlayers.length;
+
+        // 모든 플레이어가 준비 완료했는지 확인
+        const allReady = readyCount >= totalCount;
+
+        if (allReady) {
+          // 문제 시작 시간 설정 (원자적 업데이트)
+          const startResult = await GameSession.findByIdAndUpdate(
+            sessionId,
+            { $set: { questionStartAt: new Date() } },
+            { new: true }
+          );
+
+          if (!startResult) {
+            console.error('❌ 세션 저장 중 에러 발생 - client-ready-all');
+            return;
+          }
+
+          // 모든 클라이언트에게 시작 신호 전송
+          io.to(sessionId).emit('question-start', {
+            success: true,
+            data: {
+              questionStartAt: startResult.questionStartAt
+            }
+          });
+        }
+      } catch (error) {
+        handleSocketError(socket, error, 'client-ready');
       }
     });
 
@@ -815,7 +924,7 @@ module.exports = (io, app) => {
       session.revealedAt = null;
       session.currentQuestionIndex += 1; // questionOrder 배열의 다음 위치로 이동
       session.skipVotes = [];
-      session.questionStartAt = new Date();
+      session.readyPlayers = []; // 준비 상태 초기화
 
       // 모든 문제를 완료한 경우
       if (session.currentQuestionIndex >= session.questionOrder.length) {
@@ -846,11 +955,11 @@ module.exports = (io, app) => {
             return;
           }
 
+      // 문제 데이터만 전송 (타이머 시작 X)
       io.to(sessionId).emit('next', {
         success: true,
         data: {
-          currentIndex: session.currentQuestionIndex, // 실제 문제 인덱스를 전송
-          questionStartAt: session.questionStartAt,
+          currentIndex: session.currentQuestionIndex,
           totalPlayers: session.players.length,
         }
       });

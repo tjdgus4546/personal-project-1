@@ -1084,7 +1084,7 @@ function setupSocketListeners() {
             return;
         }
 
-        const { quiz, host: newHost, questionStartAt: startAt, questionOrder: order } = data;
+        const { quiz, host: newHost, questionOrder: order } = data;
 
         if (!quiz || !Array.isArray(quiz.questions)) {
             console.error('잘못된 퀴즈 구조:', quiz);
@@ -1096,41 +1096,46 @@ function setupSocketListeners() {
 
         // quizData 저장
         quizData = quiz;
-        
+
         // 문제 순서 배열 저장 (서버에서 전송받은 순서 또는 기본 순서)
         questionOrder = order || Array.from({ length: quiz.questions.length }, (_, i) => i);
-        
+
         // 객관식 문제의 선택지 섞기
         questions = quiz.questions.map(question => {
             if (question.incorrectAnswers && question.incorrectAnswers.length > 0) {
                 // 정답 + 오답 섞기
                 const allChoices = [...question.answers, ...question.incorrectAnswers];
-                
+
                 // Fisher-Yates 셔플
                 for (let i = allChoices.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
                 }
-                
+
                 return {
                     ...question,
                     isChoice: true,
                     choices: allChoices
                 };
             }
-            
+
             return {
                 ...question,
                 isChoice: false
             };
         });
-        
+
         currentIndex = 0;
-        questionStartAt = new Date(startAt);
 
         showGameSection();
-        showQuestion();
+
+        // 문제 표시 (silent 모드: 타이머 시작하지 않음)
+        showQuestion({ silent: true });
         updateQuestionNumber();
+
+        // 로딩 완료 알림
+        socket.emit('client-ready', { sessionId });
+        console.log('✅ 문제 로딩 완료, 서버에 준비 신호 전송');
     });
 
     socket.on('host-updated', ({ success, data, message }) => {
@@ -1184,11 +1189,53 @@ function setupSocketListeners() {
             return;
         }
 
-        const { currentIndex: newIndex, questionStartAt: startAt, totalPlayers } = data;
+        const { currentIndex: newIndex, totalPlayers } = data;
         currentIndex = newIndex;
-        questionStartAt = new Date(startAt);
         renderSkipStatus(0, totalPlayers);
-        showQuestion();  // showQuestion 안에서 updateQuestionNumber 호출
+
+        // 문제 표시 (silent 모드: 타이머 시작하지 않음)
+        showQuestion({ silent: true });
+        updateQuestionNumber();
+
+        // 로딩 완료 알림
+        socket.emit('client-ready', { sessionId });
+        console.log('✅ 다음 문제 로딩 완료, 서버에 준비 신호 전송');
+    });
+
+    // 모든 플레이어 준비 완료 후 문제 시작
+    socket.on('question-start', ({ success, data }) => {
+        if (!success) {
+            console.error('❌ question-start 실패');
+            return;
+        }
+
+        const { questionStartAt: startAt } = data;
+        questionStartAt = new Date(startAt);
+
+        console.log('🚀 모든 플레이어 준비 완료! 문제 시작');
+        console.log('📅 questionStartAt:', questionStartAt);
+        console.log('📍 currentIndex:', currentIndex);
+        console.log('📋 questionOrder:', questionOrder);
+
+        // 타이머 시작
+        const actualIndex = questionOrder[currentIndex];
+        const question = questions[actualIndex];
+
+        console.log('⏱️ 문제 정보:', { actualIndex, timeLimit: question.timeLimit });
+
+        if (questionTimer) clearTimeout(questionTimer);
+        if (countdownInterval) clearInterval(countdownInterval);
+
+        const timeLimit = (question.timeLimit || 90) * 1000;
+        questionTimer = setTimeout(() => {
+            if (isHost()) {
+                socket.emit('revealAnswer', { sessionId });
+            }
+        }, timeLimit);
+
+        console.log('⏰ startCountdown 호출 시작');
+        startCountdown(question.timeLimit || 90);
+        console.log('✅ startCountdown 호출 완료');
     });
 
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
