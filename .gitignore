@@ -8,5 +8,8 @@ dist/
 .vscode/
 *.swp
 
+# Claude Code 설정
+.claude/
+
 # macOS/Linux 불필요한 파일
 .DS_Store

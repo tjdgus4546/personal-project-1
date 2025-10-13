@@ -728,27 +728,28 @@ function showQuestion({ silent = false } = {}) {
 // 객관식 선택 처리
 function selectChoice(choice) {
     if (hasAnswered) return;
-    
+
     hasAnswered = true;
-    
+
     // 모든 선택지 버튼 가져오기
     const allButtons = document.querySelectorAll('.choice-btn');
-    
-    // 클릭한 버튼 찾기
+
+    // 클릭한 버튼 찾기 (onclick 속성으로 비교)
     let selectedButton = null;
     allButtons.forEach(btn => {
-        if (btn.textContent.trim() === choice) {
+        const onclickAttr = btn.getAttribute('onclick');
+        if (onclickAttr && onclickAttr.includes(`'${choice}'`)) {
             selectedButton = btn;
         }
     });
-    
+
     // 선택한 버튼 강조 및 다른 버튼들 비활성화
     if (selectedButton) {
         // 선택한 버튼 스타일
         selectedButton.classList.remove('hover:bg-blue-600', 'border-gray-600');
         selectedButton.classList.add('bg-blue-600', 'border-blue-400', 'ring-2', 'ring-blue-400');
         selectedButton.disabled = true;
-        
+
         // 다른 버튼들 비활성화 스타일
         allButtons.forEach(btn => {
             if (btn !== selectedButton) {
