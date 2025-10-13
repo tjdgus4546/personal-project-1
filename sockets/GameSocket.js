@@ -388,6 +388,10 @@ module.exports = (io, app) => {
         const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
         const qIndex = String(actualQuestionIndex);
 
+        if (player.answered?.[qIndex]) {
+          return;
+        }
+
         if (player.answered?.[qIndex]) return;
 
         const displayName = player.nickname || 'Unknown';
@@ -413,8 +417,8 @@ module.exports = (io, app) => {
           session.correctUsers[qIndex].push(displayName);
         }
 
-        session.markModified('correctUsers');
         session.set(`players.${playerIndex}.answered.${qIndex}`, true);
+        session.markModified('correctUsers');
         session.markModified('players');
         
         const success = await safeSaveSession(session);
@@ -455,6 +459,7 @@ module.exports = (io, app) => {
         });
 
         emitScoreboard(io, sessionId, session.players);
+        await handleSubjectiveQuestionCompletion(sessionId, io, app);
       } catch (error) {
         handleSocketError(socket, error, 'correct');
       }
@@ -853,6 +858,33 @@ module.exports = (io, app) => {
       console.error('❌ Error in goToNextQuestion:', error);
     }
   };
+
+  // 주관식 문제 완료 체크 함수
+  async function handleSubjectiveQuestionCompletion(sessionId, io, app) {
+    try {
+      const GameSession = require('../models/GameSession')(app.get('quizDb'));
+      const session = await safeFindSessionById(GameSession, sessionId);
+      if (!session || !session.isActive) return;
+
+      const orderIndex = session.currentQuestionIndex;
+      const actualIndex = session.questionOrder[orderIndex];
+      const qIndex = String(actualIndex);
+      const connectedPlayers = session.players.filter(p => p.connected);
+      
+      // 모든 플레이어가 답변 완료했는지 체크
+      const allAnswered = connectedPlayers.every(player => 
+        player.answered && player.answered[qIndex] === true
+      );
+
+      if (allAnswered) {
+        
+        // 정답 공개
+        await revealAnswer(sessionId, io, app)();
+      }
+    } catch (error) {
+      console.error('❌ 주관식 완료 체크 에러:', error);
+    }
+  }
 
   async function handleChoiceQuestionCompletion(sessionId, io, app, triggerType = 'all_answered') {
     try {
