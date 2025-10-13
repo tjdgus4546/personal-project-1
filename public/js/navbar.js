@@ -197,14 +197,19 @@ async function handleLogout() {
       method: 'POST',
       credentials: 'include'
     });
-    
+
     if (response.ok) {
       alert('로그아웃 되었습니다.');
-      
-      const protectedPages = ['/quiz/my-list', '/quiz/init', '/quiz/edit'];
+
       const currentPath = window.location.pathname;
-      
-      if (protectedPages.some(page => currentPath.includes(page))) {
+
+      // 로그인이 필요한 페이지에서 로그아웃 시 메인으로 리다이렉트
+      // /quiz/로 시작하거나 마이페이지, 프로필 수정 페이지
+      const isProtectedPage = currentPath.startsWith('/quiz/') ||
+                              currentPath === '/my-page' ||
+                              currentPath === '/edit-profile';
+
+      if (isProtectedPage) {
         window.location.href = '/';
       } else {
         window.location.reload();
