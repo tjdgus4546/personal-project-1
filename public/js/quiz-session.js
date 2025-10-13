@@ -827,19 +827,19 @@ function addChatMessage(displayName, profileImage, message, isCorrect = false) {
             // 연속 메시지: 프로필 없이 텍스트만 표시
             messageElement.className = 'flex items-start text-left translate-y-[-3px] pl-[56px]';
             messageElement.innerHTML = `
-                <div class="text-white text-sm break-words max-w-[1000px]">
+                <div class="text-white text-sm break-words max-w-[1000px] text-left">
                     ${message}
                 </div>
             `;
         } else {
             // 새로운 메시지: 프로필과 함께 표시
-            messageElement.className = 'flex items-start mt-2';
-            
+            messageElement.className = 'flex items-start text-left mt-2';
+
             if (isCorrect) {
                 // 정답 메시지 스타일
                 if (profileImage && profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
                     messageElement.innerHTML = `
-                        <div class="flex items-start rounded-lg px-3 max-w-[1000px]">
+                        <div class="flex items-start text-left rounded-lg px-3 max-w-[1000px]">
                             <img src="${profileImage}"
                             class="mt-1 w-8 h-8 mr-3 rounded-full object-cover border-2 border-green-400/50 flex-shrink-0"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
@@ -847,21 +847,21 @@ function addChatMessage(displayName, profileImage, message, isCorrect = false) {
                             <div class="mt-1 w-8 h-8 mr-3 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm border-2 border-green-400/50 flex-shrink-0" style="display: none;">
                                 ${displayName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div class="flex items-start font-semibold text-sm text-green-400 mb-1">${displayName}</div>
-                                <div class="text-green-200 text-sm break-words flex items-start">${message}</div>
+                            <div class="text-left">
+                                <div class="font-semibold text-sm text-green-400 mb-1 text-left">${displayName}</div>
+                                <div class="text-green-200 text-sm break-words text-left">${message}</div>
                             </div>
                         </div>
                     `;
                 } else {
                     messageElement.innerHTML = `
-                        <div class="flex items-start rounded-lg px-3 max-w-[1000px]">
+                        <div class="flex items-start text-left rounded-lg px-3 max-w-[1000px]">
                             <div class="mt-1 w-8 h-8 mr-3 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm border-2 border-green-400/50 flex-shrink-0">
                                 ${displayName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div class="font-semibold text-sm text-green-400 mb-1">${displayName}</div>
-                                <div class="text-green-200 text-sm break-words flex items-start">${message}</div>
+                            <div class="text-left">
+                                <div class="font-semibold text-sm text-green-400 mb-1 text-left">${displayName}</div>
+                                <div class="text-green-200 text-sm break-words text-left">${message}</div>
                             </div>
                         </div>
                     `;
@@ -870,7 +870,7 @@ function addChatMessage(displayName, profileImage, message, isCorrect = false) {
                 // 일반 메시지 스타일
                 if (profileImage && profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
                     messageElement.innerHTML = `
-                        <div class="flex items-start rounded-lg px-3 max-w-[1000px]">
+                        <div class="flex items-start text-left rounded-lg px-3 max-w-[1000px]">
                             <img src="${profileImage}"
                             class="mt-1 w-8 h-8 mr-3 rounded-full object-cover border-2 border-white/20 flex-shrink-0"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
@@ -878,21 +878,21 @@ function addChatMessage(displayName, profileImage, message, isCorrect = false) {
                             <div class="mt-1 w-8 h-8 mr-3 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm border-2 border-white/20 flex-shrink-0" style="display: none;">
                                 ${displayName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div class="font-semibold text-sm text-white mt-1">${displayName}</div>
-                                <div class="text-white text-sm break-words flex items-start">${message}</div>
+                            <div class="text-left">
+                                <div class="font-semibold text-sm text-white mt-1 text-left">${displayName}</div>
+                                <div class="text-white text-sm break-words text-left">${message}</div>
                             </div>
                         </div>
                     `;
                 } else {
                     messageElement.innerHTML = `
-                        <div class="flex items-start rounded-lg px-3 max-w-[1000px]">
+                        <div class="flex items-start text-left rounded-lg px-3 max-w-[1000px]">
                             <div class="mt-1 w-8 h-8 mr-3 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm border-2 border-white/20 flex-shrink-0">
                                 ${displayName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div class="font-semibold text-sm text-white mb-1">${displayName}</div>
-                                <div class="text-white text-sm break-words flex items-start">${message}</div>
+                            <div class="text-left">
+                                <div class="font-semibold text-sm text-white mb-1 text-left">${displayName}</div>
+                                <div class="text-white text-sm break-words text-left">${message}</div>
                             </div>
                         </div>
                     `;
@@ -1260,7 +1260,8 @@ function setupSocketListeners() {
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
         const displayName = nickname || user;
         const isMyMessage = user === socket.userId;;
-        
+
+        const gameSection = document.getElementById('gameSection');
         if (gameSection.classList.contains('hidden')) {
             displayWaitingChat(displayName, profileImage, message, isMyMessage);
         } else {
@@ -1513,10 +1514,6 @@ function sendWaitingMessage() {
 
 function displayWaitingChat(user, profileImage, message, isMyMessage) {
     try {
-        if (isMyMessage) {
-            return;
-        }
-
         const chatLog = document.getElementById('waitingChatLog');
         const profileImageUrl = profileImage;
         
