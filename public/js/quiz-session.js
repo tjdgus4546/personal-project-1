@@ -103,10 +103,37 @@ async function loadSessionData() {
         }
 
         sessionData = data;
-        questions = data.quiz.questions;
         currentIndex = data.currentQuestionIndex;
         questionStartAt = new Date(data.questionStartAt);
         host = data.host;
+
+        // questionOrder 설정 (서버에서 온 순서 또는 기본 순서)
+        questionOrder = data.questionOrder || Array.from({ length: data.quiz.questions.length }, (_, i) => i);
+
+        // 객관식 문제의 선택지 섞기 (game-started와 동일한 로직)
+        questions = data.quiz.questions.map(question => {
+            if (question.incorrectAnswers && question.incorrectAnswers.length > 0) {
+                // 정답 + 오답 섞기
+                const allChoices = [...question.answers, ...question.incorrectAnswers];
+
+                // Fisher-Yates 셔플
+                for (let i = allChoices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
+                }
+
+                return {
+                    ...question,
+                    isChoice: true,
+                    choices: allChoices
+                };
+            }
+
+            return {
+                ...question,
+                isChoice: false
+            };
+        });
 
         // 퀴즈 정보 표시
         displayQuizInfo(data.quiz);
@@ -155,8 +182,12 @@ async function loadSessionData() {
                     }
                 }, wait * 1000);
             } else {
-                showQuestion();
+                // 정답 공개 중이 아닌 경우 - 문제를 표시하되 타이머는 시작하지 않음 (서버에서 question-start 이벤트를 기다림)
+                showQuestion({ silent: true });
                 renderScoreboard(data.players, false);
+
+                // 서버에 준비 완료 신호 전송
+                socket.emit('client-ready', { sessionId });
             }
         } else {
             showQuizInfoSection();
@@ -1135,7 +1166,6 @@ function setupSocketListeners() {
 
         // 로딩 완료 알림
         socket.emit('client-ready', { sessionId });
-        console.log('✅ 문제 로딩 완료, 서버에 준비 신호 전송');
     });
 
     socket.on('host-updated', ({ success, data, message }) => {
@@ -1199,29 +1229,20 @@ function setupSocketListeners() {
 
         // 로딩 완료 알림
         socket.emit('client-ready', { sessionId });
-        console.log('✅ 다음 문제 로딩 완료, 서버에 준비 신호 전송');
     });
 
     // 모든 플레이어 준비 완료 후 문제 시작
     socket.on('question-start', ({ success, data }) => {
         if (!success) {
-            console.error('❌ question-start 실패');
             return;
         }
 
         const { questionStartAt: startAt } = data;
         questionStartAt = new Date(startAt);
 
-        console.log('🚀 모든 플레이어 준비 완료! 문제 시작');
-        console.log('📅 questionStartAt:', questionStartAt);
-        console.log('📍 currentIndex:', currentIndex);
-        console.log('📋 questionOrder:', questionOrder);
-
         // 타이머 시작
         const actualIndex = questionOrder[currentIndex];
         const question = questions[actualIndex];
-
-        console.log('⏱️ 문제 정보:', { actualIndex, timeLimit: question.timeLimit });
 
         if (questionTimer) clearTimeout(questionTimer);
         if (countdownInterval) clearInterval(countdownInterval);
@@ -1233,9 +1254,7 @@ function setupSocketListeners() {
             }
         }, timeLimit);
 
-        console.log('⏰ startCountdown 호출 시작');
         startCountdown(question.timeLimit || 90);
-        console.log('✅ startCountdown 호출 완료');
     });
 
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
@@ -1780,17 +1799,31 @@ window.onYouTubeIframeAPIReady = function() {
 
 // 유튜브 플레이어 생성 함수
 function createYoutubePlayer(videoId, startTime, endTime, elementId) {
+    // YouTube API가 로드되었는지 확인
+    if (typeof YT === 'undefined' || typeof YT.Player === 'undefined') {
+        setTimeout(() => {
+            createYoutubePlayer(videoId, startTime, endTime, elementId);
+        }, 500);
+        return;
+    }
+
+    // 타겟 엘리먼트가 존재하는지 확인
+    const targetElement = document.getElementById(elementId);
+    if (!targetElement) {
+        return;
+    }
+
     // 기존 플레이어 제거
     if (youtubePlayer) {
         youtubePlayer.destroy();
         youtubePlayer = null;
     }
-    
+
     // 새 플레이어 생성
     youtubePlayer = new YT.Player(elementId, {
         videoId: videoId,
         playerVars: {
-            autoplay: 0,  // ← 자동 재생 끄기
+            autoplay: 1,
             start: startTime,
             end: endTime > 0 ? endTime : undefined,
             controls: 0,
@@ -1803,12 +1836,24 @@ function createYoutubePlayer(videoId, startTime, endTime, elementId) {
         },
         events: {
             onReady: function(event) {
-                // 볼륨 먼저 설정
-                event.target.setVolume(globalYoutubeVolume);
-                // 그 다음 재생
+                // 자동 재생을 위해 먼저 음소거 후 재생
+                event.target.mute();
                 event.target.playVideo();
+
+                // 재생이 시작되면 음소거 해제하고 볼륨 설정
+                setTimeout(() => {
+                    event.target.unMute();
+                    event.target.setVolume(globalYoutubeVolume);
+                }, 100);
             },
             onStateChange: function(event) {
+                // UNSTARTED 상태에서 재생 재시도
+                if (event.data === -1) {
+                    setTimeout(() => {
+                        event.target.playVideo();
+                    }, 500);
+                }
+
                 if (event.data === YT.PlayerState.ENDED) {
                     event.target.seekTo(startTime);
                     event.target.playVideo();
