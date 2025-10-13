@@ -239,27 +239,37 @@ export function updateYoutubePreview() {
     const url = document.getElementById('youtubeUrl').value.trim();
     const startTime = document.getElementById('startTime').value;
     const endTime = document.getElementById('endTime').value;
-    
+
+    // 정답 유튜브 URL에도 자동 복사
+    const answerYoutubeUrlInput = document.getElementById('answerYoutubeUrl');
+    if (url && answerYoutubeUrlInput) {
+        answerYoutubeUrlInput.value = url;
+        updateAnswerYoutubePreview(); // 정답 미리보기도 업데이트
+    }
+
     if (!url) {
         document.getElementById('youtubePreview').classList.add('hidden');
         return;
     }
-    
+
     const videoId = extractYoutubeVideoId(url);
     if (videoId) {
         const iframe = document.getElementById('youtubeIframe');
         let embedUrl = `https://www.youtube.com/embed/${videoId}?`;
-        
+
         if (startTime) {
             const startSeconds = parseTimeToSeconds(startTime);
             embedUrl += `start=${startSeconds}&`;
+        } else {
+            // 시작 시간이 없으면 0초부터
+            embedUrl += `start=0&`;
         }
-        
+
         if (endTime) {
             const endSeconds = parseTimeToSeconds(endTime);
             embedUrl += `end=${endSeconds}&`;
         }
-        
+
         iframe.src = embedUrl;
         document.getElementById('youtubePreview').classList.remove('hidden');
     }
