@@ -944,7 +944,16 @@ module.exports = (io, app) => {
 
         io.to(sessionId).emit('end', {
           success: true,
-          message: '퀴즈 종료!'
+          message: '퀴즈 종료!',
+          data: {
+            players: session.players.map(p => ({
+              nickname: p.nickname,
+              profileImage: p.profileImage,
+              score: p.score,
+              correctAnswersCount: p.correctAnswersCount || 0,
+              connected: p.connected
+            }))
+          }
         });
         return;
       }

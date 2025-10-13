@@ -309,6 +309,34 @@
 
     </div>
 
+    <!-- 퀴즈 종료 화면 -->
+    <div id="gameEndSection" class="hidden">
+      <div class="bg-black/30 rounded-2xl p-8 shadow-xl border border-gray-600">
+        <!-- 헤더 -->
+        <div class="text-center mb-8">
+          <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 mb-2">
+            퀴즈 종료!
+          </h1>
+          <p class="text-gray-300">수고하셨습니다! 최종 순위를 확인해보세요.</p>
+        </div>
+
+        <!-- 최종 순위 리스트 -->
+        <div class="bg-gray-800/50 rounded-xl p-6 mb-6">
+          <h2 class="text-xl font-bold text-white mb-6 text-center">최종 순위</h2>
+          <ul id="finalRankingList" class="space-y-4">
+            <!-- 순위가 여기에 표시됩니다 -->
+          </ul>
+        </div>
+
+        <!-- 하단 버튼 -->
+        <div class="flex justify-center gap-4">
+          <button onclick="window.location.href='/'" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg">
+            메인으로
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Socket.IO 및 스크립트 -->

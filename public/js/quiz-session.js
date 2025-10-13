@@ -1322,20 +1322,108 @@ function setupSocketListeners() {
         });
     });
 
-    socket.on('end', ({ success, message }) => {
+    socket.on('end', ({ success, message, data }) => {
         if (!success) {
             console.error('퀴즈 종료 오류:', message);
             return;
         }
-        alert('퀴즈가 모두 끝났습니다! 수고하셨습니다.');
-        setTimeout(() => {
-            window.location.href = '/';
-        }, 3000);
+
+        // 퀴즈 종료 화면 표시
+        showGameEndScreen(data.players);
     });
 
     socket.on('forceRedirect', (data) => {
         alert('세션이 종료되어 메인 페이지로 이동합니다.');
         window.location.href = data.url || '/';
+    });
+}
+
+// 퀴즈 종료 화면 표시
+function showGameEndScreen(players) {
+    // 모든 섹션 숨기기
+    document.getElementById('quizInfoSection').classList.add('hidden');
+    document.getElementById('gameSection').classList.add('hidden');
+
+    // 종료 화면 표시
+    const gameEndSection = document.getElementById('gameEndSection');
+    gameEndSection.classList.remove('hidden');
+
+    // 최종 순위 렌더링
+    renderFinalRanking(players);
+}
+
+// 최종 순위 렌더링
+function renderFinalRanking(players) {
+    const rankingList = document.getElementById('finalRankingList');
+    rankingList.innerHTML = '';
+
+    // 점수순으로 정렬 (내림차순)
+    const sortedPlayers = players
+        .filter(p => p.connected)
+        .slice()
+        .sort((a, b) => b.score - a.score);
+
+    sortedPlayers.forEach((player, index) => {
+        const rank = index + 1;
+        const displayName = player.nickname || 'Unknown';
+
+        // 1등, 2등, 3등에 특별한 스타일 적용
+        let rankBadgeClass = '';
+        let cardBorderClass = '';
+
+        if (rank === 1) {
+            rankBadgeClass = 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-yellow-900';
+            cardBorderClass = 'border-yellow-400';
+        } else if (rank === 2) {
+            rankBadgeClass = 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800';
+            cardBorderClass = 'border-gray-400';
+        } else if (rank === 3) {
+            rankBadgeClass = 'bg-gradient-to-r from-orange-400 to-orange-600 text-orange-900';
+            cardBorderClass = 'border-orange-400';
+        } else {
+            rankBadgeClass = 'bg-gray-600 text-gray-300';
+            cardBorderClass = 'border-gray-600';
+        }
+
+        // 프로필 이미지 또는 이니셜 아바타
+        const avatarHTML = createPlayerAvatar(player);
+
+        const li = document.createElement('li');
+        li.className = `bg-gray-700/50 rounded-xl p-4 border-2 ${cardBorderClass} transition-all duration-200 hover:scale-105 hover:shadow-lg`;
+
+        li.innerHTML = `
+            <div class="flex items-center gap-2">
+                <!-- 순위 배지 -->
+                <div class="${rankBadgeClass} w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 font-bold shadow-lg">
+                    ${rank}
+                </div>
+
+                <!-- 프로필 이미지 -->
+                <div class="flex-shrink-0">
+                    ${avatarHTML.replace('w-10 h-10', 'w-12 h-12').replace('text-sm', 'text')}
+                </div>
+
+                <!-- 사용자 정보 -->
+                <div class="flex-1">
+                    <div class="text-white font-bold mb-1">${displayName}</div>
+                    <div class="flex items-center gap-4 text-sm">
+                        <span class="text-green-400 font-semibold">
+                            <span class="text-gray-400">점수:</span> ${player.score}점
+                        </span>
+                        <span class="text-blue-400 font-semibold">
+                            <span class="text-gray-400">맞춘 문제:</span> ${player.correctAnswersCount || 0}개
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 순위 번호 (오른쪽) -->
+                <div class="text-gray-400 font-bold text-xl flex-shrink-0">
+                    #${rank}
+                </div>
+            </div>
+        `;
+
+        rankingList.appendChild(li);
     });
 }
 
