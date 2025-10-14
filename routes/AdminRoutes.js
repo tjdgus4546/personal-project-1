@@ -89,12 +89,23 @@ async function enrichQuizzesWithUserInfo(quizzes, User) {
       }));
     }
 
+    // questions 필드가 있으면 필요한 정보만 추출 (이미지, 순서)
+    let questionsPreview = null;
+    if (quiz.questions && Array.isArray(quiz.questions)) {
+      questionsPreview = quiz.questions.map(q => ({
+        order: q.order,
+        imageBase64: q.imageBase64,
+        answerImageBase64: q.answerImageBase64
+      }));
+    }
+
     return {
       ...quiz,
       creator,
       seizedBy,
       reports: reportsWithReporter || quiz.reports,
-      reportCount: quiz.reports?.length || 0
+      reportCount: quiz.reports?.length || 0,
+      questions: questionsPreview // 이미지와 순서만 포함
     };
   });
 }
@@ -150,7 +161,6 @@ router.get('/quizzes/search', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(searchQuery),
       Quiz.find(searchQuery)
-        .select('-questions') // questions 필드 제외 (불필요한 데이터 전송 방지)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -205,7 +215,6 @@ router.get('/quizzes', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(filterQuery),
       Quiz.find(filterQuery)
-        .select('-questions') // questions 필드 제외
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -390,7 +399,6 @@ router.get('/reported-quizzes', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments({ 'reports.0': { $exists: true } }),
       Quiz.find({ 'reports.0': { $exists: true } })
-        .select('-questions') // questions 필드 제외
         .sort({ 'reports.0.reportedAt': -1 })
         .skip(skip)
         .limit(limit)
