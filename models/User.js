@@ -67,8 +67,4 @@ const userSchema = new Schema({
 // 기존 인덱스
 userSchema.index({ email: 1, provider: 1 }, { unique: true });
 
-// 관리자 페이지 검색 최적화를 위한 인덱스
-userSchema.index({ nickname: 1 }); // 닉네임 검색용
-userSchema.index({ email: 1 }); // 이메일 검색용 (중복이지만 검색 성능 향상)
-
 module.exports = (userDb) => userDb.model('User', userSchema);
