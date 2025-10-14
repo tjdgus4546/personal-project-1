@@ -107,4 +107,30 @@ const quizSchema = new Schema({
   },
 });
 
+// ========== 성능 최적화를 위한 인덱스 ==========
+
+// 1. 작성자 조회용 (관리자 페이지에서 자주 사용)
+quizSchema.index({ creatorId: 1 });
+
+// 2. 압수된 퀴즈 조회용
+quizSchema.index({ originalCreatorId: 1 });
+
+// 3. 압수자 조회용
+quizSchema.index({ seizedById: 1 });
+
+// 4. 생성일 정렬용 (내림차순)
+quizSchema.index({ createdAt: -1 });
+
+// 5. 공개/비공개 필터 + 작성자 복합 인덱스
+quizSchema.index({ isComplete: 1, creatorId: 1 });
+
+// 6. 신고가 있는 퀴즈 조회용 (sparse: 신고가 있는 문서만 인덱싱)
+quizSchema.index({ 'reports.0': 1 }, { sparse: true });
+
+// 7. 제목 검색용 (text 인덱스)
+quizSchema.index({ title: 'text' });
+
+// 8. 압수 상태별 조회 최적화
+quizSchema.index({ creatorId: 1, isComplete: 1, createdAt: -1 });
+
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);

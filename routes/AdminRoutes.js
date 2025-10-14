@@ -3,9 +3,8 @@ const router = express.Router();
 const path = require('path');
 const { checkAdmin, checkSuperAdmin } = require('../middlewares/AdminMiddleware');
 
-// 모든 admin 라우트에 권한 검증 적용 (대시보드, 조회, 압수, 복구는 admin도 가능)
+// 모든 admin 라우트에 권한 검증 적용
 router.use((req, res, next) => {
-  // 삭제 API만 superadmin 권한 필요
   if (req.method === 'DELETE') {
     return checkSuperAdmin(req, res, next);
   }
@@ -22,83 +21,144 @@ router.get('/reports.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin-reports.html'));
 });
 
-// 퀴즈 검색 API (비공개 포함) - 페이지네이션 지원
+// ========== 최적화된 공통 함수 ==========
+
+/**
+ * 퀴즈 목록에 작성자/압수자 정보를 한 번에 추가 (N+1 문제 해결)
+ */
+async function enrichQuizzesWithUserInfo(quizzes, User) {
+  if (quizzes.length === 0) return [];
+
+  // 1. 모든 User ID 수집
+  const userIds = new Set();
+  quizzes.forEach(quiz => {
+    if (quiz.creatorId && quiz.creatorId !== 'seized') {
+      userIds.add(quiz.creatorId.toString());
+    }
+    if (quiz.originalCreatorId) {
+      userIds.add(quiz.originalCreatorId.toString());
+    }
+    if (quiz.seizedById) {
+      userIds.add(quiz.seizedById.toString());
+    }
+    // 신고자 ID도 수집
+    if (quiz.reports && quiz.reports.length > 0) {
+      quiz.reports.forEach(report => {
+        if (report.reporterId) {
+          userIds.add(report.reporterId.toString());
+        }
+      });
+    }
+  });
+
+  // 2. 한 번에 모든 User 조회 (단 1번의 쿼리!)
+  const users = await User.find({
+    _id: { $in: Array.from(userIds) }
+  })
+    .select('_id username nickname email')
+    .lean(); // Mongoose 오버헤드 제거
+
+  // 3. User ID를 키로 하는 Map 생성 (O(1) 조회)
+  const userMap = new Map();
+  users.forEach(user => {
+    userMap.set(user._id.toString(), user);
+  });
+
+  // 4. 각 퀴즈에 User 정보 매핑
+  return quizzes.map(quiz => {
+    let creator = null;
+    let seizedBy = null;
+
+    if (quiz.creatorId === 'seized' && quiz.originalCreatorId) {
+      creator = userMap.get(quiz.originalCreatorId.toString()) || { username: 'Unknown', nickname: 'Unknown', email: 'N/A' };
+      if (quiz.seizedById) {
+        seizedBy = userMap.get(quiz.seizedById.toString()) || null;
+      }
+    } else if (quiz.creatorId !== 'seized') {
+      creator = userMap.get(quiz.creatorId.toString()) || { username: 'Unknown', nickname: 'Unknown', email: 'N/A' };
+    } else {
+      creator = { username: 'Unknown', nickname: 'Unknown', email: 'N/A' };
+    }
+
+    // 신고자 정보 추가 (있는 경우)
+    let reportsWithReporter = null;
+    if (quiz.reports && quiz.reports.length > 0) {
+      reportsWithReporter = quiz.reports.map(report => ({
+        ...report,
+        reporter: userMap.get(report.reporterId?.toString()) || { nickname: 'Unknown', email: 'N/A' }
+      }));
+    }
+
+    return {
+      ...quiz,
+      creator,
+      seizedBy,
+      reports: reportsWithReporter || quiz.reports,
+      reportCount: quiz.reports?.length || 0
+    };
+  });
+}
+
+// ========== API 엔드포인트 ==========
+
+// 퀴즈 검색 API (최적화됨)
 router.get('/quizzes/search', async (req, res) => {
   try {
     const searchTerm = req.query.q || '';
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 40;
     const skip = (page - 1) * limit;
-    const filterStatus = req.query.status || 'all'; // all, public, private
+    const filterStatus = req.query.status || 'all';
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
     const User = require('../models/User')(req.app.get('userDb'));
 
-    // 검색 조건 구성
     let searchQuery = {};
 
     if (searchTerm) {
-      // 1. 작성자 검색 (닉네임, 이메일)
+      // 작성자 검색 (인덱스 사용)
       const matchingUsers = await User.find({
         $or: [
           { nickname: { $regex: searchTerm, $options: 'i' } },
           { email: { $regex: searchTerm, $options: 'i' } }
         ]
-      }).select('_id');
+      })
+        .select('_id')
+        .lean(); // lean() 추가
 
       const userIds = matchingUsers.map(user => user._id);
 
-      // 2. 제목 또는 작성자로 검색
       searchQuery.$or = [
         { title: { $regex: searchTerm, $options: 'i' } },
         { creatorId: { $in: userIds } },
-        { originalCreatorId: { $in: userIds } } // 압수된 퀴즈도 원작성자로 검색
+        { originalCreatorId: { $in: userIds } }
       ];
     }
 
-    // 상태 필터 추가
+    // 상태 필터
     if (filterStatus === 'public') {
       searchQuery.isComplete = true;
-      searchQuery.creatorId = { $ne: 'seized' }; // 압수되지 않은 것만
+      searchQuery.creatorId = { $ne: 'seized' };
     } else if (filterStatus === 'private') {
       searchQuery.isComplete = false;
-      searchQuery.creatorId = { $ne: 'seized' }; // 압수되지 않은 것만
+      searchQuery.creatorId = { $ne: 'seized' };
     } else if (filterStatus === 'seized') {
-      searchQuery.creatorId = 'seized'; // 압수된 것만
+      searchQuery.creatorId = 'seized';
     }
 
-    // 전체 퀴즈 개수
-    const totalCount = await Quiz.countDocuments(searchQuery);
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, quizzes] = await Promise.all([
+      Quiz.countDocuments(searchQuery),
+      Quiz.find(searchQuery)
+        .select('-questions') // questions 필드 제외 (불필요한 데이터 전송 방지)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
 
-    // 페이지별 퀴즈 조회
-    const quizzes = await Quiz.find(searchQuery)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // 작성자 및 압수자 정보 추가
-    const quizzesWithCreator = await Promise.all(
-      quizzes.map(async (quiz) => {
-        let creator = null;
-        let seizedBy = null;
-
-        if (quiz.creatorId === 'seized' && quiz.originalCreatorId) {
-          creator = await User.findById(quiz.originalCreatorId).select('username nickname email');
-          if (quiz.seizedById) {
-            seizedBy = await User.findById(quiz.seizedById).select('username nickname email');
-          }
-        } else if (quiz.creatorId !== 'seized') {
-          creator = await User.findById(quiz.creatorId).select('username nickname email');
-        }
-
-        return {
-          ...quiz,
-          creator: creator || { username: 'Unknown', nickname: 'Unknown', email: 'N/A' },
-          seizedBy: seizedBy || null
-        };
-      })
-    );
+    // 한 번에 User 정보 추가
+    const quizzesWithCreator = await enrichQuizzesWithUserInfo(quizzes, User);
 
     res.json({
       success: true,
@@ -119,18 +179,17 @@ router.get('/quizzes/search', async (req, res) => {
   }
 });
 
-// 모든 퀴즈 조회 (비공개 포함) - 페이지네이션 지원
+// 모든 퀴즈 조회 (최적화됨)
 router.get('/quizzes', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 40;
     const skip = (page - 1) * limit;
-    const filterStatus = req.query.status || 'all'; // all, public, private, seized
+    const filterStatus = req.query.status || 'all';
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
     const User = require('../models/User')(req.app.get('userDb'));
 
-    // 상태 필터 조건 구성
     let filterQuery = {};
     if (filterStatus === 'public') {
       filterQuery.isComplete = true;
@@ -142,40 +201,19 @@ router.get('/quizzes', async (req, res) => {
       filterQuery.creatorId = 'seized';
     }
 
-    // 전체 퀴즈 개수
-    const totalCount = await Quiz.countDocuments(filterQuery);
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, quizzes] = await Promise.all([
+      Quiz.countDocuments(filterQuery),
+      Quiz.find(filterQuery)
+        .select('-questions') // questions 필드 제외
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
 
-    // 페이지별 퀴즈 조회
-    const quizzes = await Quiz.find(filterQuery)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // 작성자 및 압수자 정보 추가
-    const quizzesWithCreator = await Promise.all(
-      quizzes.map(async (quiz) => {
-        let creator = null;
-        let seizedBy = null;
-
-        // creatorId가 'seized'인 경우 originalCreatorId에서 원래 작성자 조회
-        if (quiz.creatorId === 'seized' && quiz.originalCreatorId) {
-          creator = await User.findById(quiz.originalCreatorId).select('username nickname email');
-          // 압수자 정보도 조회
-          if (quiz.seizedById) {
-            seizedBy = await User.findById(quiz.seizedById).select('username nickname email');
-          }
-        } else if (quiz.creatorId !== 'seized') {
-          creator = await User.findById(quiz.creatorId).select('username nickname email');
-        }
-
-        return {
-          ...quiz,
-          creator: creator || { username: 'Unknown', nickname: 'Unknown', email: 'N/A' },
-          seizedBy: seizedBy || null
-        };
-      })
-    );
+    // 한 번에 User 정보 추가
+    const quizzesWithCreator = await enrichQuizzesWithUserInfo(quizzes, User);
 
     res.json({
       success: true,
@@ -218,38 +256,54 @@ router.patch('/quizzes/:quizId/visibility', async (req, res) => {
   }
 });
 
-// 퀴즈 압수 (작성자를 관리자로 변경하고 원본 작성자 백업)
+// 퀴즈 압수 (최적화: 단일 쿼리)
 router.post('/quizzes/:quizId/seize', async (req, res) => {
   try {
     const { quizId } = req.params;
     const { reason } = req.body;
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-    const quiz = await Quiz.findById(quizId);
+
+    // findByIdAndUpdate의 옵션으로 유효성 검사 포함
+    const quiz = await Quiz.findOneAndUpdate(
+      {
+        _id: quizId,
+        originalCreatorId: { $exists: false } // 이미 압수되지 않은 것만
+      },
+      {
+        $set: {
+          originalCreatorId: '$creatorId', // 현재 creatorId를 originalCreatorId로
+          creatorId: 'seized',
+          seizedAt: new Date(),
+          seizedById: req.user.id,
+          seizedReason: reason || '관리자 조치',
+          isComplete: false
+        }
+      },
+      {
+        new: false, // 업데이트 전 문서 반환
+        runValidators: true
+      }
+    );
 
     if (!quiz) {
-      return res.status(404).json({
-        success: false,
-        message: '퀴즈를 찾을 수 없습니다.'
-      });
-    }
-
-    // 이미 압수된 퀴즈인지 확인
-    if (quiz.originalCreatorId) {
+      // 퀴즈가 없거나 이미 압수됨
+      const existingQuiz = await Quiz.findById(quizId);
+      if (!existingQuiz) {
+        return res.status(404).json({
+          success: false,
+          message: '퀴즈를 찾을 수 없습니다.'
+        });
+      }
       return res.status(400).json({
         success: false,
         message: '이미 압수된 퀴즈입니다.'
       });
     }
 
-    // 원본 작성자 백업 후 creatorId를 'seized'로 변경
+    // originalCreatorId 수동 설정 (MongoDB의 $set: '$creatorId'가 작동하지 않을 수 있음)
     await Quiz.findByIdAndUpdate(quizId, {
-      originalCreatorId: quiz.creatorId,
-      creatorId: 'seized', // 압수된 퀴즈 표시
-      seizedAt: new Date(),
-      seizedById: req.user.id, // 압수한 관리자 ID 저장
-      seizedReason: reason || '관리자 조치',
-      isComplete: false // 압수 시 자동으로 비공개 처리
+      originalCreatorId: quiz.creatorId
     });
 
     res.json({
@@ -265,36 +319,57 @@ router.post('/quizzes/:quizId/seize', async (req, res) => {
   }
 });
 
-// 퀴즈 복구 (원본 작성자에게 되돌리기)
+// 퀴즈 복구 (최적화: 단일 쿼리)
 router.post('/quizzes/:quizId/restore', async (req, res) => {
   try {
     const { quizId } = req.params;
-
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-    const quiz = await Quiz.findById(quizId);
+
+    const quiz = await Quiz.findOneAndUpdate(
+      {
+        _id: quizId,
+        originalCreatorId: { $exists: true, $ne: null } // 압수된 것만
+      },
+      [
+        {
+          $set: {
+            creatorId: '$originalCreatorId', // originalCreatorId를 creatorId로 복구
+            originalCreatorId: '$$REMOVE', // 필드 제거
+            seizedAt: '$$REMOVE',
+            seizedById: '$$REMOVE',
+            seizedReason: '$$REMOVE'
+          }
+        }
+      ],
+      {
+        new: false, // 업데이트 전 문서 반환
+        runValidators: true
+      }
+    );
 
     if (!quiz) {
-      return res.status(404).json({
-        success: false,
-        message: '퀴즈를 찾을 수 없습니다.'
-      });
-    }
-
-    // 압수된 퀴즈가 아니면 복구 불가
-    if (!quiz.originalCreatorId) {
+      const existingQuiz = await Quiz.findById(quizId);
+      if (!existingQuiz) {
+        return res.status(404).json({
+          success: false,
+          message: '퀴즈를 찾을 수 없습니다.'
+        });
+      }
       return res.status(400).json({
         success: false,
         message: '압수되지 않은 퀴즈는 복구할 수 없습니다.'
       });
     }
 
-    // 원본 작성자로 복구
+    // 수동으로 복구 (aggregation pipeline이 작동하지 않을 경우)
     await Quiz.findByIdAndUpdate(quizId, {
-      creatorId: quiz.originalCreatorId, // 원본 작성자로 복구
-      originalCreatorId: null,
-      seizedAt: null,
-      seizedById: null,
-      seizedReason: null
+      creatorId: quiz.originalCreatorId,
+      $unset: {
+        originalCreatorId: '',
+        seizedAt: '',
+        seizedById: '',
+        seizedReason: ''
+      }
     });
 
     res.json({
@@ -314,9 +389,9 @@ router.post('/quizzes/:quizId/restore', async (req, res) => {
 router.delete('/quizzes/:quizId', async (req, res) => {
   try {
     const { quizId } = req.params;
-
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-    const quiz = await Quiz.findById(quizId);
+
+    const quiz = await Quiz.findByIdAndDelete(quizId);
 
     if (!quiz) {
       return res.status(404).json({
@@ -324,8 +399,6 @@ router.delete('/quizzes/:quizId', async (req, res) => {
         message: '퀴즈를 찾을 수 없습니다.'
       });
     }
-
-    await Quiz.findByIdAndDelete(quizId);
 
     res.json({
       success: true,
@@ -340,7 +413,7 @@ router.delete('/quizzes/:quizId', async (req, res) => {
   }
 });
 
-// 신고된 퀴즈 목록 조회 (신고 있는 퀴즈만)
+// 신고된 퀴즈 목록 조회 (최적화됨)
 router.get('/reported-quizzes', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -350,52 +423,19 @@ router.get('/reported-quizzes', async (req, res) => {
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
     const User = require('../models/User')(req.app.get('userDb'));
 
-    // 신고가 있는 퀴즈만 조회
-    const totalCount = await Quiz.countDocuments({ 'reports.0': { $exists: true } });
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, quizzes] = await Promise.all([
+      Quiz.countDocuments({ 'reports.0': { $exists: true } }),
+      Quiz.find({ 'reports.0': { $exists: true } })
+        .select('-questions') // questions 필드 제외
+        .sort({ 'reports.0.reportedAt': -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
 
-    const quizzes = await Quiz.find({ 'reports.0': { $exists: true } })
-      .sort({ 'reports.0.reportedAt': -1 }) // 최신 신고순
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // 작성자, 압수자 및 신고자 정보 추가
-    const quizzesWithDetails = await Promise.all(
-      quizzes.map(async (quiz) => {
-        let creator = null;
-        let seizedBy = null;
-
-        // creatorId가 'seized'인 경우 originalCreatorId에서 원래 작성자 조회
-        if (quiz.creatorId === 'seized' && quiz.originalCreatorId) {
-          creator = await User.findById(quiz.originalCreatorId).select('username nickname email');
-          // 압수자 정보도 조회
-          if (quiz.seizedById) {
-            seizedBy = await User.findById(quiz.seizedById).select('username nickname email');
-          }
-        } else if (quiz.creatorId !== 'seized') {
-          creator = await User.findById(quiz.creatorId).select('username nickname email');
-        }
-
-        // 신고자 정보 추가
-        const reportsWithReporter = await Promise.all(
-          quiz.reports.map(async (report) => {
-            const reporter = await User.findById(report.reporterId).select('nickname email');
-            return {
-              ...report,
-              reporter: reporter || { nickname: 'Unknown', email: 'N/A' }
-            };
-          })
-        );
-
-        return {
-          ...quiz,
-          creator: creator || { username: 'Unknown', nickname: 'Unknown', email: 'N/A' },
-          seizedBy: seizedBy || null,
-          reports: reportsWithReporter,
-          reportCount: quiz.reports.length
-        };
-      })
-    );
+    // 한 번에 User 정보 추가 (신고자 포함)
+    const quizzesWithDetails = await enrichQuizzesWithUserInfo(quizzes, User);
 
     res.json({
       success: true,
@@ -416,31 +456,21 @@ router.get('/reported-quizzes', async (req, res) => {
   }
 });
 
-// 신고 삭제 (조치 없이 신고만 삭제)
+// 신고 삭제
 router.delete('/quizzes/:quizId/reports', async (req, res) => {
   try {
     const { quizId } = req.params;
-    const { reportIds } = req.body; // 삭제할 신고 ID 배열
+    const { reportIds } = req.body;
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-    const quiz = await Quiz.findById(quizId);
-
-    if (!quiz) {
-      return res.status(404).json({
-        success: false,
-        message: '퀴즈를 찾을 수 없습니다.'
-      });
-    }
 
     if (reportIds && Array.isArray(reportIds)) {
-      // 특정 신고만 삭제 - $pull 사용
       await Quiz.findByIdAndUpdate(quizId, {
         $pull: {
           reports: { _id: { $in: reportIds } }
         }
       });
     } else {
-      // 모든 신고 삭제 - $set 사용
       await Quiz.findByIdAndUpdate(quizId, {
         $set: { reports: [] }
       });
