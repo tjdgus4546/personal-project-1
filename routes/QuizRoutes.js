@@ -30,7 +30,11 @@ router.get('/quiz/edit', authenticateToken, async (req, res) => {
       return res.status(404).send('<h1>퀴즈를 찾을 수 없습니다.</h1><p><a href="/">홈으로 돌아가기</a></p>');
     }
 
-    if (quiz.creatorId.toString() !== req.user.id) {
+    // 작성자이거나 관리자인지 확인
+    const isCreator = quiz.creatorId.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+
+    if (!isCreator && !isAdmin) {
       return res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>자신이 만든 퀴즈만 수정할 수 있습니다. <a href="/">홈으로 돌아가기</a></p>');
     }
 

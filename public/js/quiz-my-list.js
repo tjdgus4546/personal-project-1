@@ -103,19 +103,36 @@ function renderQuizList(quizzes) {
 // 퀴즈 카드 생성
 function createQuizCard(quiz) {
     const card = document.createElement('div');
-    card.className = 'bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl cursor-pointer';
-    card.onclick = () => window.location.href = `/quiz/edit?quizId=${quiz._id}`;
-    
+
+    // 압수된 퀴즈인지 확인
+    const isSeized = quiz.creatorId === 'seized';
+
+    // 압수된 퀴즈는 비활성화 스타일 적용
+    if (isSeized) {
+        card.className = 'bg-gray-300 rounded-2xl shadow-lg overflow-hidden opacity-60 cursor-not-allowed relative';
+        card.title = '압수됨 - 이 퀴즈는 관리자에 의해 압수되었습니다';
+    } else {
+        card.className = 'bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl cursor-pointer';
+        card.onclick = () => window.location.href = `/quiz/edit?quizId=${quiz._id}`;
+    }
+
     // 문제 수가 10개 미만인지 확인
     const isLessThan10 = quiz.questions.length < 10;
     const isComplete = quiz.isComplete || false;
     
     card.innerHTML = `
         <div class="relative h-48 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
-            <img src="${quiz.titleImageBase64}" alt="${quiz.title}" class="w-full h-full object-cover">
+            <img src="${quiz.titleImageBase64}" alt="${quiz.title}" class="w-full h-full object-cover ${isSeized ? 'grayscale' : ''}">
             <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-            
-            ${isComplete ? `
+
+            ${isSeized ? `
+                <div class="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
+                    </svg>
+                    압수됨
+                </div>
+            ` : isComplete ? `
                 <div class="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
@@ -152,35 +169,49 @@ function createQuizCard(quiz) {
             </div>
             
             <!-- 액션 버튼들 -->
-            <div class="flex gap-2">
-                <button 
-                    onclick="event.stopPropagation(); toggleQuizPublic('${quiz._id}', ${isComplete}, ${quiz.questions.length})" 
-                    class="flex-1 bg-blue-400 hover:to-blue-500 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-105"
-                >
-                    ${isComplete ? '비공개' : '퀴즈 공개'}
-                </button>
-                <button 
-                    onclick="event.stopPropagation(); window.location.href='/quiz/edit?quizId=${quiz._id}'" 
-                    class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
-                >
-                    문제 편집
-                </button>
-            </div>
-            
-            <div class="flex gap-2 mt-2">
-                <button 
-                    onclick="event.stopPropagation(); openEditModal('${quiz._id}', '${escapeHtml(quiz.title)}', '${escapeHtml(quiz.description || '')}')" 
-                    class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
-                >
-                    퀴즈 수정
-                </button>
-                <button 
-                    onclick="event.stopPropagation(); deleteQuiz('${quiz._id}')" 
-                    class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-lg transition-colors"
-                >
-                    삭제
-                </button>
-            </div>
+            ${isSeized ? `
+                <!-- 압수된 퀴즈는 모든 버튼 비활성화 -->
+                <div class="bg-red-100 border border-red-300 rounded-lg p-4 text-center">
+                    <svg class="w-12 h-12 mx-auto mb-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <p class="text-red-700 font-bold mb-1">압수된 퀴즈</p>
+                    <p class="text-red-600 text-sm">관리자에 의해 압수되어 수정 및 삭제가 불가능합니다.</p>
+                    ${quiz.seizedReason ? `
+                        <p class="text-red-600 text-xs mt-2">사유: ${quiz.seizedReason}</p>
+                    ` : ''}
+                </div>
+            ` : `
+                <div class="flex gap-2">
+                    <button
+                        onclick="event.stopPropagation(); toggleQuizPublic('${quiz._id}', ${isComplete}, ${quiz.questions.length})"
+                        class="flex-1 bg-blue-400 hover:to-blue-500 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-105"
+                    >
+                        ${isComplete ? '비공개' : '퀴즈 공개'}
+                    </button>
+                    <button
+                        onclick="event.stopPropagation(); window.location.href='/quiz/edit?quizId=${quiz._id}'"
+                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+                    >
+                        문제 편집
+                    </button>
+                </div>
+
+                <div class="flex gap-2 mt-2">
+                    <button
+                        onclick="event.stopPropagation(); openEditModal('${quiz._id}', '${escapeHtml(quiz.title)}', '${escapeHtml(quiz.description || '')}')"
+                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+                    >
+                        퀴즈 수정
+                    </button>
+                    <button
+                        onclick="event.stopPropagation(); deleteQuiz('${quiz._id}')"
+                        class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+                    >
+                        삭제
+                    </button>
+                </div>
+            `}
         </div>
     `;
     

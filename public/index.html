@@ -165,11 +165,23 @@
                 <div class="relative h-64 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
                     <img id="modalThumbnail" src="" alt="" class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                    
+
                     <!-- 플레이 횟수 배지 -->
                     <div id="modalPlayBadge" class="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
                         0회 플레이
                     </div>
+
+                    <!-- 신고 아이콘 버튼 (로그인한 사용자만) -->
+                    <button
+                        id="reportQuizIconBtn"
+                        onclick="reportQuiz()"
+                        class="absolute bottom-4 right-4 bg-white bg-opacity-40 hover:bg-red-500 text-white rounded-full p-2 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-110"
+                        title="이 퀴즈 신고하기"
+                    >
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
                 </div>
     
                 <!-- 모달 콘텐츠 -->
@@ -192,14 +204,14 @@
     
                     <!-- 게임 시작 버튼 -->
                     <div class="flex flex-col space-y-3">
-                        <button 
-                            id="createSessionBtn" 
-                            onclick="createGameSession()" 
+                        <button
+                            id="createSessionBtn"
+                            onclick="createGameSession()"
                             class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
                         >
                             게임 세션 만들기
                         </button>
-                        
+
                         <p class="text-center text-sm text-gray-500">
                             세션을 생성하면 다른 플레이어들이 참여할 수 있는 초대 코드가 생성됩니다
                         </p>

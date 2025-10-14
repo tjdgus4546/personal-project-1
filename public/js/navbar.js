@@ -67,6 +67,11 @@ function createNavbarHTML(user = null) {
                 <button onclick="openCreateQuizModal()" class="hover:text-blue-200 transition-colors text-sm lg:text-base whitespace-nowrap">
                   퀴즈 만들기
                 </button>
+                ${user.role === 'admin' || user.role === 'superadmin' ? `
+                  <a href="/admin/dashboard" class="text-red-400 hover:text-red-300 transition-colors text-sm lg:text-base whitespace-nowrap">
+                    관리자 페이지
+                  </a>
+                ` : ''}
               </div>
             ` : ''}
           </div>
@@ -132,8 +137,13 @@ function createNavbarHTML(user = null) {
               <button onclick="openCreateQuizModal()" class="w-full text-left px-2 py-2 hover:bg-gray-700 rounded-md transition-colors text-sm">
                 퀴즈 만들기
               </button>
-              
-              <button 
+              ${user.role === 'admin' || user.role === 'superadmin' ? `
+                <a href="/admin/dashboard" class="block px-2 py-2 text-red-400 hover:bg-gray-700 rounded-md transition-colors text-sm">
+                  관리자 페이지
+                </a>
+              ` : ''}
+
+              <button
                 id="logoutBtnMobile"
                 class="w-full text-left px-2 py-2 bg-red-500 hover:bg-red-600 rounded-md transition-colors text-sm font-medium mt-3"
               >

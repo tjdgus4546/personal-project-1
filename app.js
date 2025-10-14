@@ -8,6 +8,8 @@ const authRoutes = require('./routes/AuthRoutes');
 const naverAuthRoutes = require('./routes/NaverAuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
+const adminRoutes = require('./routes/AdminRoutes');
+const adminSetupRoutes = require('./routes/AdminSetupRoutes');
 const authenticateToken = require('./middlewares/AuthMiddleware');
 const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 
@@ -51,6 +53,8 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/api', publicRouter); // 인증이 필요없는 API
   app.use('/api', authenticateToken, privateRouter); // 인증이 필요한 API
   app.use('/game', authenticateToken, gameRoutes);
+  app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
+  app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

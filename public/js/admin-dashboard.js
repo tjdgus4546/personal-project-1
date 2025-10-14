@@ -1,0 +1,568 @@
+// admin-dashboard.js
+import { renderNavbar, highlightCurrentPage } from './navbar.js';
+
+let allQuizzes = [];
+let currentPage = 1;
+let isLoading = false;
+let hasMore = true;
+let currentUser = null; // 현재 사용자 정보 저장
+let currentSearchTerm = ''; // 현재 검색어
+let currentFilterStatus = 'all'; // 현재 필터 상태
+
+// 토큰 인증이 포함된 fetch 함수
+async function fetchWithAuth(url, options = {}) {
+    options.credentials = 'include';
+    let response = await fetch(url, options);
+
+    if (response.status === 401) {
+        const refreshResponse = await fetch('/auth/refresh', {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        if (refreshResponse.ok) {
+            response = await fetch(url, options);
+        } else {
+            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+            window.location.href = '/login';
+            return;
+        }
+    }
+    return response;
+}
+
+// 페이지 초기화
+async function initializePage() {
+  try {
+    // 네비바 렌더링
+    const user = await renderNavbar();
+    highlightCurrentPage();
+
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      window.location.href = '/login';
+      return;
+    }
+
+    // 관리자 권한 체크는 서버에서 하지만, 클라이언트에서도 확인
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      alert('관리자 권한이 필요합니다.');
+      window.location.href = '/';
+      return;
+    }
+
+    // 현재 사용자 정보 저장
+    currentUser = user;
+
+    // 퀴즈 목록 로드
+    await loadQuizzes();
+
+    // 검색 이벤트 리스너 설정
+    setupSearchListeners();
+
+    // 무한 스크롤 이벤트 리스너 추가
+    window.addEventListener('scroll', handleScroll);
+  } catch (error) {
+    console.error('페이지 초기화 실패:', error);
+    alert('페이지 초기화 중 오류가 발생했습니다.');
+  }
+}
+
+// 퀴즈 목록 로드
+async function loadQuizzes(reset = false) {
+  if (isLoading || (!hasMore && !reset)) return;
+
+  try {
+    isLoading = true;
+
+    // 리셋 시 초기화
+    if (reset) {
+      currentPage = 1;
+      allQuizzes = [];
+      hasMore = true;
+    }
+
+    // 로딩 인디케이터 표시
+    if (currentPage === 1) {
+      document.getElementById('loadingState').classList.remove('hidden');
+      document.getElementById('quizTableContainer').classList.add('hidden');
+    } else {
+      showLoadMoreIndicator();
+    }
+
+    // 검색어가 있으면 검색 API, 없으면 일반 목록 API
+    let url;
+    if (currentSearchTerm) {
+      url = `/admin/quizzes/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=40&status=${currentFilterStatus}`;
+    } else {
+      url = `/admin/quizzes?page=${currentPage}&limit=40&status=${currentFilterStatus}`;
+    }
+
+    const response = await fetchWithAuth(url);
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        alert('관리자 권한이 필요합니다.');
+        window.location.href = '/';
+        return;
+      }
+      throw new Error('퀴즈 목록 로드 실패');
+    }
+
+    const data = await response.json();
+
+    // 새로운 퀴즈 추가
+    allQuizzes = [...allQuizzes, ...data.quizzes];
+    hasMore = data.pagination.hasMore;
+
+    // 신고 카운트 업데이트 (첫 페이지만)
+    if (currentPage === 1) {
+      updateReportCount();
+    }
+
+    // 테이블 렌더링
+    renderQuizTable(allQuizzes);
+
+    // 로딩 상태 숨기고 테이블 표시
+    document.getElementById('loadingState').classList.add('hidden');
+    document.getElementById('quizTableContainer').classList.remove('hidden');
+    hideLoadMoreIndicator();
+
+    // 다음 페이지 준비
+    currentPage++;
+  } catch (err) {
+    console.error('퀴즈 로드 에러:', err);
+    if (currentPage === 1) {
+      document.getElementById('loadingState').innerHTML = `
+        <p class="text-red-400">퀴즈 목록을 불러오는데 실패했습니다.</p>
+        <button onclick="location.reload()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+          다시 시도
+        </button>
+      `;
+    }
+    hideLoadMoreIndicator();
+  } finally {
+    isLoading = false;
+  }
+}
+
+// 신고 카운트 업데이트
+async function updateReportCount() {
+  try {
+    const response = await fetchWithAuth('/admin/reported-quizzes?page=1&limit=1');
+
+    if (response.ok) {
+      const data = await response.json();
+      const reportCount = data.pagination.totalCount || 0;
+      document.getElementById('reportCount').textContent = reportCount;
+    } else {
+      document.getElementById('reportCount').textContent = '0';
+    }
+  } catch (err) {
+    console.error('Report count load error:', err);
+    document.getElementById('reportCount').textContent = '0';
+  }
+}
+
+// 미리보기 툴팁 타이머 관리
+let tooltipHideTimer = null;
+
+// 문제 이미지 미리보기 툴팁 생성
+function createImagePreviewTooltip(questions) {
+  if (!questions || questions.length === 0) {
+    return '';
+  }
+
+  // 이미지가 있는 문제만 필터링
+  const questionsWithImages = questions.filter(q => q.imageBase64 || q.answerImageBase64);
+
+  if (questionsWithImages.length === 0) {
+    return '<div class="image-preview-tooltip absolute left-full ml-2 top-0 hidden bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">이미지 없음</div>';
+  }
+
+  const imageItems = questionsWithImages.map((q, idx) => {
+    let html = '';
+    if (q.imageBase64) {
+      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">문제 ${q.order || idx + 1}</div><img src="${q.imageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
+    }
+    if (q.answerImageBase64) {
+      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">정답 ${q.order || idx + 1}</div><img src="${q.answerImageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
+    }
+    return html;
+  }).join('');
+
+  return `
+    <div class="image-preview-tooltip absolute left-full ml-2 top-0 hidden bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl z-50 max-h-96 overflow-y-auto" style="min-width: 150px;">
+      <div class="text-xs font-semibold text-gray-300 mb-2">문제 이미지 (${questionsWithImages.length})</div>
+      ${imageItems}
+    </div>
+  `;
+}
+
+// 툴팁 표시
+function showTooltip(tooltip) {
+  clearTimeout(tooltipHideTimer);
+  tooltip.classList.remove('hidden');
+}
+
+// 툴팁 숨기기 (딜레이 포함)
+function hideTooltip(tooltip, delay = 300) {
+  clearTimeout(tooltipHideTimer);
+  tooltipHideTimer = setTimeout(() => {
+    tooltip.classList.add('hidden');
+  }, delay);
+}
+
+// 툴팁 이벤트 설정
+function setupTooltipEvents(thumbnailElement, tooltip) {
+  // 썸네일에 마우스 올리면 표시
+  thumbnailElement.addEventListener('mouseenter', () => {
+    showTooltip(tooltip);
+  });
+
+  // 썸네일에서 마우스 벗어나면 딜레이 후 숨김
+  thumbnailElement.addEventListener('mouseleave', () => {
+    hideTooltip(tooltip);
+  });
+
+  // 툴팁에 마우스 올리면 계속 표시
+  tooltip.addEventListener('mouseenter', () => {
+    showTooltip(tooltip);
+  });
+
+  // 툴팁에서 마우스 벗어나면 딜레이 후 숨김
+  tooltip.addEventListener('mouseleave', () => {
+    hideTooltip(tooltip);
+  });
+}
+
+// 퀴즈 테이블 렌더링
+function renderQuizTable(quizzes) {
+  const tbody = document.getElementById('quizList');
+  tbody.innerHTML = '';
+
+  if (quizzes.length === 0) {
+    document.getElementById('quizTableContainer').classList.add('hidden');
+    document.getElementById('emptyState').classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('quizTableContainer').classList.remove('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+
+  quizzes.forEach(quiz => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-700 hover:bg-gray-800/50 transition-colors cursor-pointer';
+    tr.onclick = (e) => {
+      // 버튼 클릭 시에는 이동하지 않음
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+        return;
+      }
+      window.location.href = `/quiz/edit?quizId=${quiz._id}`;
+    };
+
+    const createdDate = new Date(quiz.createdAt).toLocaleDateString('ko-KR');
+    const isSeized = !!quiz.originalCreatorId; // 압수 여부 확인
+
+    tr.innerHTML = `
+      <td class="p-3">
+        <div class="flex items-center gap-3">
+          <div class="relative group">
+            ${quiz.titleImageBase64 ? `
+              <img src="${quiz.titleImageBase64}" alt="썸네일" class="w-12 h-12 rounded object-cover cursor-pointer">
+            ` : `
+              <div class="w-12 h-12 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold cursor-pointer">
+                Q
+              </div>
+            `}
+            ${createImagePreviewTooltip(quiz.questions)}
+          </div>
+          <div>
+            <div class="font-medium text-white">${quiz.title}</div>
+            <div class="text-xs text-gray-400">${quiz.description || '설명 없음'}</div>
+          </div>
+        </div>
+      </td>
+      <td class="p-3">
+        <div class="text-white">${quiz.creator.nickname}</div>
+        <div class="text-xs text-gray-400">${quiz.creator.email}</div>
+      </td>
+      <td class="p-3 text-gray-300 whitespace-nowrap">${quiz.questions?.length || 0}개</td>
+      <td class="p-3 whitespace-nowrap">
+        ${isSeized ? `
+          <div class="space-y-1">
+            <span class="px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500">
+              압수
+            </span>
+            ${quiz.seizedBy ? `
+              <div class="text-xs text-gray-300 mt-1">
+                <span class="text-gray-500">압수자:</span> ${quiz.seizedBy.nickname}
+              </div>
+            ` : ''}
+            ${quiz.seizedReason ? `
+              <div class="text-xs text-gray-300 mt-1">
+                <span class="text-gray-500">사유:</span> ${quiz.seizedReason}
+              </div>
+            ` : ''}
+          </div>
+        ` : `
+          <span class="px-2 py-1 rounded text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500">
+            정상
+          </span>
+        `}
+      </td>
+      <td class="p-3 text-gray-300 text-sm whitespace-nowrap">${createdDate}</td>
+      <td class="p-3">
+        <div class="flex items-center justify-center gap-2 flex-wrap">
+          ${!isSeized ? `
+            <button
+              onclick="toggleVisibility('${quiz._id}', ${!quiz.isComplete})"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+            >
+              ${quiz.isComplete ? '비공개' : '공개'}
+            </button>
+            <button
+              onclick="seizeQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+            >
+              압수
+            </button>
+          ` : `
+            <button
+              onclick="restoreQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+            >
+              복구
+            </button>
+            ${currentUser && currentUser.role === 'superadmin' ? `
+              <button
+                onclick="deleteQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
+                class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+              >
+                영구삭제
+              </button>
+            ` : ''}
+          `}
+        </div>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    // 툴팁 이벤트 설정
+    const thumbnailContainer = tr.querySelector('.relative.group');
+    const tooltip = tr.querySelector('.image-preview-tooltip');
+    if (thumbnailContainer && tooltip) {
+      // 썸네일 이미지 또는 기본 아이콘 요소 찾기
+      const thumbnailElement = thumbnailContainer.querySelector('img, div.w-12');
+      if (thumbnailElement) {
+        setupTooltipEvents(thumbnailElement, tooltip);
+      }
+    }
+  });
+}
+
+// 검색 실행 함수
+async function searchQuizzes() {
+  const searchInput = document.getElementById('searchInput');
+  currentSearchTerm = searchInput.value.trim();
+  currentFilterStatus = document.getElementById('filterStatus').value;
+
+  currentPage = 1;
+  hasMore = true;
+  allQuizzes = [];
+
+  await loadQuizzes();
+}
+
+// 검색 초기화 (상태 필터 변경 시)
+async function changeFilterStatus() {
+  currentFilterStatus = document.getElementById('filterStatus').value;
+
+  // 필터가 변경되면 항상 다시 로드 (검색어 유무 관계없이)
+  currentPage = 1;
+  hasMore = true;
+  allQuizzes = [];
+  await loadQuizzes();
+}
+
+// 검색 이벤트 리스너 설정
+function setupSearchListeners() {
+  const searchBtn = document.getElementById('searchBtn');
+  const searchInput = document.getElementById('searchInput');
+  const filterStatus = document.getElementById('filterStatus');
+
+  // 검색 버튼 클릭
+  if (searchBtn) {
+    searchBtn.addEventListener('click', searchQuizzes);
+  }
+
+  // 엔터 키로 검색
+  if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchQuizzes();
+      }
+    });
+  }
+
+  // 상태 필터 변경
+  if (filterStatus) {
+    filterStatus.addEventListener('change', changeFilterStatus);
+  }
+}
+
+// 퀴즈 공개/비공개 토글
+async function toggleVisibility(quizId, isComplete) {
+  const action = isComplete ? '공개' : '비공개';
+
+  if (!confirm(`이 퀴즈를 ${action} 처리하시겠습니까?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/quizzes/${quizId}/visibility`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isComplete })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침 (리셋)
+    } else {
+      alert(data.message || '처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Visibility toggle error:', err);
+    alert('처리 중 오류가 발생했습니다.');
+  }
+}
+
+// 퀴즈 압수
+async function seizeQuiz(quizId, title) {
+  const reason = prompt(`"${title}" 퀴즈를 압수하시겠습니까?\n\n압수 사유를 입력하세요 (선택사항):`);
+
+  // 취소 버튼을 누르면 null이 반환됨
+  if (reason === null) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/quizzes/${quizId}/seize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '관리자 조치' })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침 (리셋)
+    } else {
+      alert(data.message || '압수 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Quiz seize error:', err);
+    alert('압수 처리 중 오류가 발생했습니다.');
+  }
+}
+
+// 퀴즈 복구
+async function restoreQuiz(quizId, title) {
+  if (!confirm(`"${title}" 퀴즈를 원본 작성자에게 복구하시겠습니까?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/quizzes/${quizId}/restore`, {
+      method: 'POST'
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침 (리셋)
+    } else {
+      alert(data.message || '복구 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Quiz restore error:', err);
+    alert('복구 처리 중 오류가 발생했습니다.');
+  }
+}
+
+// 퀴즈 영구 삭제 (superadmin만 가능)
+async function deleteQuiz(quizId, title) {
+  if (!confirm(`"${title}" 퀴즈를 영구 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/quizzes/${quizId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침 (리셋)
+    } else {
+      alert(data.message || '삭제 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Quiz delete error:', err);
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+// 무한 스크롤 핸들러
+function handleScroll() {
+  // 페이지 하단에 도달했는지 확인
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const clientHeight = document.documentElement.clientHeight;
+
+  // 하단에서 200px 정도 남았을 때 로드
+  if (scrollTop + clientHeight >= scrollHeight - 200) {
+    loadQuizzes();
+  }
+}
+
+// 로딩 인디케이터 표시
+function showLoadMoreIndicator() {
+  let indicator = document.getElementById('loadMoreIndicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'loadMoreIndicator';
+    indicator.className = 'text-center py-8';
+    indicator.innerHTML = `
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <p class="text-gray-400 mt-2">추가 퀴즈를 불러오는 중...</p>
+    `;
+    document.getElementById('quizTableContainer').appendChild(indicator);
+  }
+  indicator.classList.remove('hidden');
+}
+
+// 로딩 인디케이터 숨기기
+function hideLoadMoreIndicator() {
+  const indicator = document.getElementById('loadMoreIndicator');
+  if (indicator) {
+    indicator.classList.add('hidden');
+  }
+}
+
+// 전역 함수로 등록
+window.toggleVisibility = toggleVisibility;
+window.seizeQuiz = seizeQuiz;
+window.restoreQuiz = restoreQuiz;
+window.deleteQuiz = deleteQuiz;
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', initializePage);

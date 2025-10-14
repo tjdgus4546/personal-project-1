@@ -79,8 +79,8 @@ const login = async (req, res) => {
     }
 
     const accessToken = jwt.sign(
-      { id: user._id, nickname: user.nickname }, 
-      JWT_SECRET, 
+      { id: user._id, nickname: user.nickname, role: user.role || 'user' },
+      JWT_SECRET,
       { expiresIn: '15m' }
     );
 
@@ -153,8 +153,8 @@ const refreshToken = async (req, res) => {
     }
 
     const newAccessToken = jwt.sign(
-      { id: user._id, nickname: user.nickname }, 
-      JWT_SECRET, 
+      { id: user._id, nickname: user.nickname, role: user.role || 'user' },
+      JWT_SECRET,
       { expiresIn: '15m' }
     );
 

@@ -24,7 +24,6 @@ const userSchema = new Schema({
     required: function() {
       return !this.provider;
     },
-    maxlength: 20,
   },
   naverId: {
     type: String,
@@ -58,6 +57,11 @@ const userSchema = new Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Quiz'
   }],
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'superadmin'],
+    default: 'user'
+  }
 });
 
 userSchema.index({ email: 1, provider: 1 }, { unique: true });

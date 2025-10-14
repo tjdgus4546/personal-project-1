@@ -468,13 +468,13 @@ async function createGameSession() {
         alert('퀴즈 정보를 찾을 수 없습니다.');
         return;
     }
-    
+
     const createBtn = document.getElementById('createSessionBtn');
     const originalText = createBtn.innerHTML;
-    
+
     createBtn.innerHTML = '세션 생성 중...';
     createBtn.disabled = true;
-    
+
     try {
         const response = await fetch('/game/start', {
             method: 'POST',
@@ -484,7 +484,7 @@ async function createGameSession() {
             body: JSON.stringify({ quizId: currentQuizId }),
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             if (response.status === 401) {
                 alert('로그인이 필요합니다.');
@@ -493,16 +493,16 @@ async function createGameSession() {
             }
             throw new Error('게임 세션 생성에 실패했습니다.');
         }
-        
+
         const data = await response.json();
-        
+
         if (data.sessionId) {
             closeQuizModal();
             window.location.href = `/quiz/${data.sessionId}`;
         } else {
             throw new Error('세션 ID를 받지 못했습니다.');
         }
-        
+
     } catch (error) {
         console.error('게임 세션 생성 실패:', error);
         alert('게임 세션을 생성하는 중 오류가 발생했습니다.');
@@ -512,10 +512,72 @@ async function createGameSession() {
     }
 }
 
+// 퀴즈 신고하기
+async function reportQuiz() {
+    if (!currentQuizId) {
+        alert('퀴즈 정보를 찾을 수 없습니다.');
+        return;
+    }
+
+    // 신고 사유 입력받기
+    const reason = prompt('신고 사유를 입력해주세요:\n\n(예: 부적절한 내용, 저작권 침해, 혐오 표현 등)');
+
+    // 취소 버튼을 누르면 null이 반환됨
+    if (reason === null) {
+        return;
+    }
+
+    // 빈 문자열 체크
+    if (!reason || reason.trim().length === 0) {
+        alert('신고 사유를 입력해주세요.');
+        return;
+    }
+
+    const reportBtn = document.getElementById('reportQuizIconBtn');
+
+    reportBtn.disabled = true;
+    reportBtn.style.opacity = '0.5';
+    reportBtn.style.cursor = 'not-allowed';
+
+    try {
+        const response = await fetch(`/api/quiz/${currentQuizId}/report`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reason: reason.trim() }),
+            credentials: 'include'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('신고가 접수되었습니다. 관리자가 검토 후 조치할 예정입니다.');
+            closeQuizModal();
+        } else {
+            if (response.status === 401) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+            alert(data.message || '신고 처리 중 오류가 발생했습니다.');
+        }
+
+    } catch (error) {
+        console.error('퀴즈 신고 실패:', error);
+        alert('신고 처리 중 오류가 발생했습니다.');
+    } finally {
+        reportBtn.disabled = false;
+        reportBtn.style.opacity = '1';
+        reportBtn.style.cursor = 'pointer';
+    }
+}
+
 // 전역 함수로 등록 (HTML onclick에서 사용)
 window.openQuizModal = openQuizModal;
 window.closeQuizModal = closeQuizModal;
-window.createGameSession = createGameSession; 
+window.createGameSession = createGameSession;
+window.reportQuiz = reportQuiz;
 window.loadQuizList = loadQuizList;
 window.joinByInvite = joinByInvite;
 window.changeSortOrder = changeSortOrder;

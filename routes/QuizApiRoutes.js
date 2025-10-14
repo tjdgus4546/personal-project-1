@@ -99,9 +99,19 @@ module.exports = (quizDb) => {
   // 나의 퀴즈 확인
   privateRouter.get('/quiz/my-list', async (req, res) => {
     try {
-      const quizzes = await Quiz.find({ creatorId: req.user.id }).sort({ createdAt: -1 });
+      const userId = req.user.id;
+
+      // 정상 퀴즈와 압수된 퀴즈 모두 조회
+      const quizzes = await Quiz.find({
+        $or: [
+          { creatorId: userId.toString() },                                    // 정상 퀴즈 (내가 만든 퀴즈)
+          { creatorId: 'seized', originalCreatorId: userId }                   // 압수된 퀴즈 (원래 내가 만들었던 것)
+        ]
+      }).sort({ createdAt: -1 });
+
       res.json(quizzes);
     } catch (err) {
+      console.error('퀴즈 조회 에러:', err);
       res.status(500).json({ message: '퀴즈 조회 실패', error: err.message });
     }
   });
@@ -138,7 +148,18 @@ module.exports = (quizDb) => {
         }
         const quiz = await Quiz.findById(req.params.quizId);
         if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-        if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+        // 압수된 퀴즈는 수정 불가
+        if (quiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 수정할 수 없습니다.' });
+        }
+
+        // 작성자이거나 관리자인지 확인
+        const isCreator = quiz.creatorId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isCreator && !isAdmin) {
+          return res.status(403).json({ message: '권한이 없습니다.' });
+        }
 
         quiz.questions = questions.map((q, index) => ({
             questionType: q.questionType || 'text',
@@ -170,7 +191,18 @@ module.exports = (quizDb) => {
     try {
         const quiz = await Quiz.findById(req.params.id);
         if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-        if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+        // 압수된 퀴즈는 공개 불가
+        if (quiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 공개할 수 없습니다.' });
+        }
+
+        // 작성자이거나 관리자인지 확인
+        const isCreator = quiz.creatorId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isCreator && !isAdmin) {
+          return res.status(403).json({ message: '권한이 없습니다.' });
+        }
         if (quiz.questions.length < 1) { // 최소 문제 수 1개로 수정
             return res.status(400).json({ message: '퀴즈를 공개하려면 최소 1개의 문제가 필요합니다.' });
         }
@@ -187,7 +219,18 @@ module.exports = (quizDb) => {
     try {
         const quiz = await Quiz.findById(req.params.id);
         if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-        if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+        // 압수된 퀴즈는 수정 불가
+        if (quiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 수정할 수 없습니다.' });
+        }
+
+        // 작성자이거나 관리자인지 확인
+        const isCreator = quiz.creatorId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isCreator && !isAdmin) {
+          return res.status(403).json({ message: '권한이 없습니다.' });
+        }
         quiz.isComplete = false;
         await quiz.save();
         res.json({ message: '퀴즈를 비공개로 전환했습니다.' });
@@ -199,8 +242,19 @@ module.exports = (quizDb) => {
   // 퀴즈 삭제
   privateRouter.delete('/quiz/:id', async (req, res) => {
     try {
-        const quiz = await Quiz.findOneAndDelete({ _id: req.params.id, creatorId: req.user.id });
-        if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없거나 삭제 권한이 없습니다.' });
+        const quiz = await Quiz.findById(req.params.id);
+        if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+
+        // 압수된 퀴즈는 원 작성자가 삭제할 수 없음
+        if (quiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 삭제할 수 없습니다.' });
+        }
+
+        if (quiz.creatorId.toString() !== req.user.id) {
+          return res.status(403).json({ message: '삭제 권한이 없습니다.' });
+        }
+
+        await Quiz.findByIdAndDelete(req.params.id);
         res.json({ message: '퀴즈 삭제 성공' });
     } catch (err) {
         res.status(500).json({ message: '퀴즈 삭제 실패', error: err.message });
@@ -211,18 +265,35 @@ module.exports = (quizDb) => {
   privateRouter.put('/quiz/:id', async (req, res) => {
     const { title, description, titleImageBase64, isRandomOrder } = req.body;
     try {
+        // 압수된 퀴즈인지 먼저 확인
+        const existingQuiz = await Quiz.findById(req.params.id);
+        if (!existingQuiz) {
+          return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+        }
+
+        if (existingQuiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 수정할 수 없습니다.' });
+        }
+
         const updateFields = {};
         if (title !== undefined) updateFields.title = title;
         if (description !== undefined) updateFields.description = description;
         if (titleImageBase64 !== undefined) updateFields.titleImageBase64 = titleImageBase64;
         if (isRandomOrder !== undefined) updateFields.isRandomOrder = isRandomOrder;
 
-        const quiz = await Quiz.findOneAndUpdate(
-            { _id: req.params.id, creatorId: req.user.id },
+        // 작성자이거나 관리자인지 확인
+        const isCreator = existingQuiz.creatorId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isCreator && !isAdmin) {
+          return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+
+        const quiz = await Quiz.findByIdAndUpdate(
+            req.params.id,
             updateFields,
             { new: true }
         );
-        if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없거나 수정 권한이 없습니다.' });
+        if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
         res.json({ message: '퀴즈 수정 완료', quiz });
     } catch (err) {
         console.error('퀴즈 수정 실패:', err);
@@ -238,7 +309,18 @@ module.exports = (quizDb) => {
         const questionData = req.body;
         const quiz = await Quiz.findById(req.params.quizId);
         if (!quiz) return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
-        if (quiz.creatorId.toString() !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
+
+        // 압수된 퀴즈는 수정 불가
+        if (quiz.creatorId === 'seized') {
+          return res.status(403).json({ message: '압수된 퀴즈는 수정할 수 없습니다.' });
+        }
+
+        // 작성자이거나 관리자인지 확인
+        const isCreator = quiz.creatorId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isCreator && !isAdmin) {
+          return res.status(403).json({ message: '권한이 없습니다.' });
+        }
 
         const index = parseInt(questionIndex);
         if (index < 0 || index > quiz.questions.length) {
@@ -267,17 +349,70 @@ module.exports = (quizDb) => {
         } else {
             quiz.questions[index] = questionToSave;
         }
-        
+
         quiz.markModified('questions');
         await quiz.save();
-        
-        res.json({ 
+
+        res.json({
             message: index === quiz.questions.length - 1 ? '문제가 추가되었습니다.' : '문제가 수정되었습니다.',
             question: quiz.questions[index]
         });
     } catch (err) {
         console.error('문제 수정 실패:', err);
         res.status(500).json({ message: '문제 수정 실패', error: err.message });
+    }
+  });
+
+  // 퀴즈 신고
+  privateRouter.post('/quiz/:id/report', async (req, res) => {
+    try {
+      const { reason } = req.body;
+
+      if (!reason || reason.trim().length === 0) {
+        return res.status(400).json({ message: '신고 사유를 입력해주세요.' });
+      }
+
+      const quiz = await Quiz.findById(req.params.id);
+      if (!quiz) {
+        return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+      }
+
+      // 자기 퀴즈는 신고 불가
+      if (quiz.creatorId.toString() === req.user.id) {
+        return res.status(400).json({ message: '자신의 퀴즈는 신고할 수 없습니다.' });
+      }
+
+      // 이미 신고한 사용자인지 확인
+      const alreadyReported = quiz.reports.some(
+        report => report.reporterId.toString() === req.user.id
+      );
+
+      if (alreadyReported) {
+        return res.status(400).json({ message: '이미 신고한 퀴즈입니다.' });
+      }
+
+      // 신고 추가 - $push 연산자 사용 (validation 우회)
+      const updatedQuiz = await Quiz.findByIdAndUpdate(
+        req.params.id,
+        {
+          $push: {
+            reports: {
+              reporterId: req.user.id,
+              reason: reason.trim(),
+              reportedAt: new Date()
+            }
+          }
+        },
+        { new: true }
+      );
+
+      res.json({
+        message: '신고가 접수되었습니다.',
+        reportCount: updatedQuiz.reports.length
+      });
+    } catch (err) {
+      console.error('Quiz report error:', err);
+      res.status(500).json({ message: '신고 처리 중 오류가 발생했습니다.', error: err.message });
     }
   });
 

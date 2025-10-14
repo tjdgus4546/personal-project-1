@@ -98,12 +98,13 @@ router.post('/naver/complete-signup', async (req, res) => {
     
     // JWT 토큰 생성
     const accessToken = jwt.sign(
-      { 
-        id: user._id, 
+      {
+        id: user._id,
         username: user.username,
-        nickname: user.nickname 
-      }, 
-      JWT_SECRET, 
+        nickname: user.nickname,
+        role: user.role || 'user'
+      },
+      JWT_SECRET,
       { expiresIn: '15m' }
     );
     
@@ -194,12 +195,13 @@ router.get('/naver/callback', async (req, res) => {
     if (existingUser) {
       // 이미 가입된 사용자 - 바로 로그인
       const accessToken = jwt.sign(
-        { 
-          id: existingUser._id, 
+        {
+          id: existingUser._id,
           username: existingUser.username,
-          nickname: existingUser.nickname 
-        }, 
-        JWT_SECRET, 
+          nickname: existingUser.nickname,
+          role: existingUser.role || 'user'
+        },
+        JWT_SECRET,
         { expiresIn: '15m' }
       );
       

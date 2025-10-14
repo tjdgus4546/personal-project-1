@@ -1,6 +1,24 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+// 신고 스키마
+const reportSchema = new Schema({
+  reporterId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  reason: {
+    type: String,
+    required: true,
+    maxlength: 500,
+  },
+  reportedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const questionSchema = new Schema({
   text: { type: String, maxlength: 80 },
   questionType: { type: String, enum: ['text', 'image', 'video', 'audio'], required: true, default: 'text' },
@@ -42,9 +60,30 @@ const quizSchema = new Schema({
     maxlength: 40,
   },
   creatorId: {
+    type: String, // ObjectId 또는 'seized'
+    required: true,
+  },
+  originalCreatorId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    default: null,
+  },
+  seizedAt: {
+    type: Date,
+    default: null,
+  },
+  seizedById: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  seizedReason: {
+    type: String,
+    default: null,
+  },
+  reports: {
+    type: [reportSchema],
+    default: [],
   },
   questions: {
     type: [questionSchema],

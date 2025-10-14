@@ -49,11 +49,12 @@ const authenticateToken = async (req, res, next) => {
       }
 
       const newAccessToken = jwt.sign(
-        { 
-          id: user._id, 
-          nickname: user.nickname 
-        }, 
-        JWT_SECRET, 
+        {
+          id: user._id,
+          nickname: user.nickname,
+          role: user.role || 'user'
+        },
+        JWT_SECRET,
         { expiresIn: '15m' }
       );
 
@@ -65,9 +66,10 @@ const authenticateToken = async (req, res, next) => {
         maxAge: 15 * 60 * 1000,
       });
 
-      req.user = { 
-        id: user._id, 
-        nickname: user.nickname 
+      req.user = {
+        id: user._id,
+        nickname: user.nickname,
+        role: user.role || 'user'
       };
       return next();
 
