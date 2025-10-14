@@ -300,9 +300,15 @@ export function updateAnswerYoutubePreview() {
     }
 }
 
-// 유튜브 비디오 ID 추출
+// 유튜브 비디오 ID 추출 (쇼츠 지원)
 function extractYoutubeVideoId(url) {
     if (!url) return null;
+
+    // 유튜브 쇼츠 패턴 먼저 확인 (예: youtube.com/shorts/VIDEO_ID)
+    const shortsMatch = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch) return shortsMatch[1];
+
+    // 기존 정규식 (일반 유튜브 URL)
     const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[7].length === 11) ? match[7] : null;
