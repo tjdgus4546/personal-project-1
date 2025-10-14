@@ -24,8 +24,8 @@ const accessLogSchema = new mongoose.Schema({
   },
   timestamp: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
+    // index는 TTL 인덱스로 대체 (아래 참조)
   }
 });
 

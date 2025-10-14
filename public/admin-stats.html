@@ -143,7 +143,7 @@
       </div>
 
       <!-- 일별 접속 통계 -->
-      <div class="bg-black/30 rounded-2xl p-6 shadow-xl border border-gray-600">
+      <div class="bg-black/30 rounded-2xl p-6 shadow-xl border border-gray-600 mb-8">
         <h2 class="text-xl font-bold mb-4 text-gray-200">최근 7일 일별 통계</h2>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -158,6 +158,45 @@
               <!-- 일별 통계가 여기에 표시됩니다 -->
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- 디버그 정보 (개발/문제 해결용) -->
+      <div class="bg-black/30 rounded-2xl p-6 shadow-xl border border-yellow-600">
+        <h2 class="text-xl font-bold mb-4 text-yellow-400">🔍 디버그 정보</h2>
+        <p class="text-gray-400 text-sm mb-4">통계 정확도 확인을 위한 원본 데이터입니다.</p>
+
+        <!-- 고유 IP 정보 -->
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold mb-2 text-gray-200">오늘 수집된 고유 IP</h3>
+          <div class="bg-gray-800/50 rounded-lg p-4">
+            <div class="text-white text-2xl font-bold mb-2" id="debugUniqueIpCount">-</div>
+            <div class="text-gray-400 text-sm mb-3">고유 IP 개수</div>
+            <div class="bg-gray-900/50 rounded p-3 max-h-48 overflow-y-auto">
+              <div class="text-xs font-mono text-gray-300" id="debugIpList">
+                로딩 중...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 최근 로그 -->
+        <div>
+          <h3 class="text-lg font-semibold mb-2 text-gray-200">최근 접속 로그 (최대 50개)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-gray-600">
+                  <th class="text-left p-2 text-gray-400">IP 주소</th>
+                  <th class="text-left p-2 text-gray-400">경로</th>
+                  <th class="text-left p-2 text-gray-400">시간</th>
+                </tr>
+              </thead>
+              <tbody id="debugRecentLogs" class="font-mono">
+                <!-- 최근 로그가 여기에 표시됩니다 -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

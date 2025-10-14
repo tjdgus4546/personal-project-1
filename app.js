@@ -48,13 +48,14 @@ connectDB().then(({ userDb, quizDb }) => {
   // 접속 로그 수집 미들웨어 (비동기 처리로 응답 속도 개선)
   const AccessLog = require('./models/AccessLog')(userDb);
   app.use((req, res, next) => {
-    // 정적 파일, API health check, socket.io는 로그 제외
+    // 정적 파일, API health check, socket.io, HTML 페이지는 로그 제외
     if (
       req.path.startsWith('/css') ||
       req.path.startsWith('/js') ||
       req.path.startsWith('/images') ||
       req.path.startsWith('/socket.io') ||
-      req.path === '/favicon.ico'
+      req.path === '/favicon.ico' ||
+      req.path.endsWith('.html') // HTML 페이지 요청 제외 (API만 카운트)
     ) {
       return next();
     }

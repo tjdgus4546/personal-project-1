@@ -2,6 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
   loadStats();
+  loadDebugInfo();
 });
 
 async function loadStats() {
@@ -40,6 +41,38 @@ async function loadStats() {
           다시 시도
         </button>
       </div>
+    `;
+  }
+}
+
+async function loadDebugInfo() {
+  try {
+    const response = await fetch('/admin/stats/debug-ips', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error('디버그 정보를 불러오는데 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      displayDebugInfo(data);
+    } else {
+      throw new Error(data.message || '디버그 정보를 불러오는데 실패했습니다.');
+    }
+
+  } catch (error) {
+    console.error('Debug info load error:', error);
+    document.getElementById('debugIpList').textContent = '디버그 정보를 불러오는데 실패했습니다.';
+    document.getElementById('debugRecentLogs').innerHTML = `
+      <tr>
+        <td colspan="3" class="text-center text-red-400 py-4">
+          디버그 정보를 불러오는데 실패했습니다.
+        </td>
+      </tr>
     `;
   }
 }
@@ -155,4 +188,44 @@ function formatDate(date) {
   const weekday = weekdays[date.getDay()];
 
   return `${month}월 ${day}일 (${weekday})`;
+}
+
+function displayDebugInfo(data) {
+  // 고유 IP 개수 표시
+  document.getElementById('debugUniqueIpCount').textContent = data.uniqueIpCount || 0;
+
+  // 고유 IP 목록 표시
+  const ipListEl = document.getElementById('debugIpList');
+  if (data.uniqueIps && data.uniqueIps.length > 0) {
+    ipListEl.innerHTML = data.uniqueIps.map((ip, index) =>
+      `<div class="mb-1">${index + 1}. ${ip}</div>`
+    ).join('');
+  } else {
+    ipListEl.textContent = '수집된 IP가 없습니다.';
+  }
+
+  // 최근 로그 표시
+  const logsTable = document.getElementById('debugRecentLogs');
+  if (data.recentLogs && data.recentLogs.length > 0) {
+    logsTable.innerHTML = data.recentLogs.map(log => {
+      const date = new Date(log.timestamp);
+      const timeStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+
+      return `
+        <tr class="border-b border-gray-700">
+          <td class="p-2 text-gray-300">${log.ip}</td>
+          <td class="p-2 text-gray-300">${log.path}</td>
+          <td class="p-2 text-gray-400">${timeStr}</td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    logsTable.innerHTML = `
+      <tr>
+        <td colspan="3" class="text-center text-gray-500 py-8">
+          수집된 로그가 없습니다.
+        </td>
+      </tr>
+    `;
+  }
 }

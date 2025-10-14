@@ -512,14 +512,55 @@ router.get('/quizzes/:quizId/images', async (req, res) => {
   }
 });
 
+// 디버그: 오늘 저장된 IP 목록 확인
+router.get('/stats/debug-ips', async (req, res) => {
+  try {
+    const AccessLog = require('../models/AccessLog')(req.app.get('userDb'));
+
+    const now = new Date();
+    const koreaOffset = 9 * 60 * 60 * 1000;
+    const todayKorea = new Date(now.getTime() + koreaOffset);
+    todayKorea.setUTCHours(0, 0, 0, 0);
+    const today = new Date(todayKorea.getTime() - koreaOffset);
+
+    // 오늘 로그 조회
+    const logs = await AccessLog.find({ timestamp: { $gte: today } })
+      .select('ip path timestamp')
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .lean();
+
+    // 고유 IP 집계
+    const uniqueIps = await AccessLog.distinct('ip', { timestamp: { $gte: today } });
+
+    res.json({
+      success: true,
+      uniqueIpCount: uniqueIps.length,
+      uniqueIps,
+      recentLogs: logs
+    });
+  } catch (err) {
+    console.error('Debug IPs error:', err);
+    res.status(500).json({
+      success: false,
+      message: '디버그 정보를 불러오는데 실패했습니다.'
+    });
+  }
+});
+
 // 접속 통계 조회
 router.get('/stats', async (req, res) => {
   try {
     const AccessLog = require('../models/AccessLog')(req.app.get('userDb'));
     const io = req.app.get('io');
 
+    // 한국 시간대 (UTC+9) 기준으로 오늘 자정 계산
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const koreaOffset = 9 * 60 * 60 * 1000; // 9시간을 밀리초로
+    const todayKorea = new Date(now.getTime() + koreaOffset);
+    todayKorea.setUTCHours(0, 0, 0, 0); // UTC 기준 자정으로 설정
+    const today = new Date(todayKorea.getTime() - koreaOffset); // 다시 UTC로 변환
+
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -542,14 +583,24 @@ router.get('/stats', async (req, res) => {
     // 동시 접속자 수 (Socket.IO 연결 수)
     const onlineUsers = io.engine.clientsCount || 0;
 
-    // 시간대별 접속 통계 (오늘)
+    // 시간대별 접속 통계 (오늘, 한국 시간 기준)
     const hourlyStats = await AccessLog.aggregate([
       {
         $match: { timestamp: { $gte: today } }
       },
       {
+        $addFields: {
+          koreaHour: {
+            $hour: {
+              date: '$timestamp',
+              timezone: '+09:00' // 한국 시간대
+            }
+          }
+        }
+      },
+      {
         $group: {
-          _id: { $hour: '$timestamp' },
+          _id: '$koreaHour',
           count: { $sum: 1 },
           uniqueIps: { $addToSet: '$ip' }
         }
@@ -566,31 +617,32 @@ router.get('/stats', async (req, res) => {
       }
     ]);
 
-    // 일주일 일별 통계
+    // 일주일 일별 통계 (한국 시간 기준)
     const dailyStats = await AccessLog.aggregate([
       {
         $match: { timestamp: { $gte: weekAgo } }
       },
       {
+        $addFields: {
+          koreaDate: {
+            $dateToString: {
+              date: '$timestamp',
+              format: '%Y-%m-%d',
+              timezone: '+09:00' // 한국 시간대
+            }
+          }
+        }
+      },
+      {
         $group: {
-          _id: {
-            year: { $year: '$timestamp' },
-            month: { $month: '$timestamp' },
-            day: { $dayOfMonth: '$timestamp' }
-          },
+          _id: '$koreaDate',
           count: { $sum: 1 },
           uniqueIps: { $addToSet: '$ip' }
         }
       },
       {
         $project: {
-          date: {
-            $dateFromParts: {
-              year: '$_id.year',
-              month: '$_id.month',
-              day: '$_id.day'
-            }
-          },
+          date: { $dateFromString: { dateString: '$_id' } },
           pageviews: '$count',
           visitors: { $size: '$uniqueIps' }
         }
