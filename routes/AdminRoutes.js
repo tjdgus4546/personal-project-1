@@ -256,54 +256,38 @@ router.patch('/quizzes/:quizId/visibility', async (req, res) => {
   }
 });
 
-// 퀴즈 압수 (최적화: 단일 쿼리)
+// 퀴즈 압수 (작성자를 관리자로 변경하고 원본 작성자 백업)
 router.post('/quizzes/:quizId/seize', async (req, res) => {
   try {
     const { quizId } = req.params;
     const { reason } = req.body;
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-
-    // findByIdAndUpdate의 옵션으로 유효성 검사 포함
-    const quiz = await Quiz.findOneAndUpdate(
-      {
-        _id: quizId,
-        originalCreatorId: { $exists: false } // 이미 압수되지 않은 것만
-      },
-      {
-        $set: {
-          originalCreatorId: '$creatorId', // 현재 creatorId를 originalCreatorId로
-          creatorId: 'seized',
-          seizedAt: new Date(),
-          seizedById: req.user.id,
-          seizedReason: reason || '관리자 조치',
-          isComplete: false
-        }
-      },
-      {
-        new: false, // 업데이트 전 문서 반환
-        runValidators: true
-      }
-    );
+    const quiz = await Quiz.findById(quizId);
 
     if (!quiz) {
-      // 퀴즈가 없거나 이미 압수됨
-      const existingQuiz = await Quiz.findById(quizId);
-      if (!existingQuiz) {
-        return res.status(404).json({
-          success: false,
-          message: '퀴즈를 찾을 수 없습니다.'
-        });
-      }
+      return res.status(404).json({
+        success: false,
+        message: '퀴즈를 찾을 수 없습니다.'
+      });
+    }
+
+    // 이미 압수된 퀴즈인지 확인
+    if (quiz.originalCreatorId) {
       return res.status(400).json({
         success: false,
         message: '이미 압수된 퀴즈입니다.'
       });
     }
 
-    // originalCreatorId 수동 설정 (MongoDB의 $set: '$creatorId'가 작동하지 않을 수 있음)
+    // 원본 작성자 백업 후 creatorId를 'seized'로 변경
     await Quiz.findByIdAndUpdate(quizId, {
-      originalCreatorId: quiz.creatorId
+      originalCreatorId: quiz.creatorId,
+      creatorId: 'seized', // 압수된 퀴즈 표시
+      seizedAt: new Date(),
+      seizedById: req.user.id, // 압수한 관리자 ID 저장
+      seizedReason: reason || '관리자 조치',
+      isComplete: false // 압수 시 자동으로 비공개 처리
     });
 
     res.json({
@@ -319,57 +303,36 @@ router.post('/quizzes/:quizId/seize', async (req, res) => {
   }
 });
 
-// 퀴즈 복구 (최적화: 단일 쿼리)
+// 퀴즈 복구 (원본 작성자에게 되돌리기)
 router.post('/quizzes/:quizId/restore', async (req, res) => {
   try {
     const { quizId } = req.params;
-    const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
 
-    const quiz = await Quiz.findOneAndUpdate(
-      {
-        _id: quizId,
-        originalCreatorId: { $exists: true, $ne: null } // 압수된 것만
-      },
-      [
-        {
-          $set: {
-            creatorId: '$originalCreatorId', // originalCreatorId를 creatorId로 복구
-            originalCreatorId: '$$REMOVE', // 필드 제거
-            seizedAt: '$$REMOVE',
-            seizedById: '$$REMOVE',
-            seizedReason: '$$REMOVE'
-          }
-        }
-      ],
-      {
-        new: false, // 업데이트 전 문서 반환
-        runValidators: true
-      }
-    );
+    const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
+    const quiz = await Quiz.findById(quizId);
 
     if (!quiz) {
-      const existingQuiz = await Quiz.findById(quizId);
-      if (!existingQuiz) {
-        return res.status(404).json({
-          success: false,
-          message: '퀴즈를 찾을 수 없습니다.'
-        });
-      }
+      return res.status(404).json({
+        success: false,
+        message: '퀴즈를 찾을 수 없습니다.'
+      });
+    }
+
+    // 압수된 퀴즈가 아니면 복구 불가
+    if (!quiz.originalCreatorId) {
       return res.status(400).json({
         success: false,
         message: '압수되지 않은 퀴즈는 복구할 수 없습니다.'
       });
     }
 
-    // 수동으로 복구 (aggregation pipeline이 작동하지 않을 경우)
+    // 원본 작성자로 복구
     await Quiz.findByIdAndUpdate(quizId, {
-      creatorId: quiz.originalCreatorId,
-      $unset: {
-        originalCreatorId: '',
-        seizedAt: '',
-        seizedById: '',
-        seizedReason: ''
-      }
+      creatorId: quiz.originalCreatorId, // 원본 작성자로 복구
+      originalCreatorId: null,
+      seizedAt: null,
+      seizedById: null,
+      seizedReason: null
     });
 
     res.json({
