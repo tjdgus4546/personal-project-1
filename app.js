@@ -32,9 +32,11 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: true, // HTTPS 환경이므로 true 설정
+    httpOnly: true,
     maxAge: 30 * 60 * 1000 // 30분
-  }
+  },
+  proxy: true // 프록시/로드밸런서 환경에서도 세션 유지
 }));
 
 // ✅ MongoDB 연결
