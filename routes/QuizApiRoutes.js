@@ -6,6 +6,16 @@ module.exports = (quizDb) => {
   const privateRouter = express.Router();
   const Quiz = require('../models/Quiz')(quizDb);
 
+  // IP 주소 추출 헬퍼 함수
+  function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+           req.headers['x-real-ip'] ||
+           req.connection?.remoteAddress ||
+           req.socket?.remoteAddress ||
+           req.ip ||
+           'unknown';
+  }
+
   // --- Public Routes (인증 불필요) ---
 
   // 공개된 퀴즈 목록만 반환 (메인페이지용)
@@ -129,7 +139,11 @@ module.exports = (quizDb) => {
         creatorId: req.user.id,
         titleImageBase64,
         questions: [],
-        isComplete: false
+        isComplete: false,
+        creationLog: {
+          ip: getClientIp(req),
+          timestamp: new Date()
+        }
       });
       await newQuiz.save();
       res.status(201).json({ message: '퀴즈 생성 시작됨', quizId: newQuiz._id });
@@ -177,7 +191,13 @@ module.exports = (quizDb) => {
             order: index + 1,
             timeLimit: q.timeLimit || 90
         }));
-        
+
+        // IP 로그 추가
+        quiz.modificationLogs.push({
+          ip: getClientIp(req),
+          timestamp: new Date()
+        });
+
         await quiz.save();
         res.json({ message: '문제 목록이 업데이트되었습니다.', questionCount: quiz.questions.length });
     } catch (err) {
@@ -288,6 +308,14 @@ module.exports = (quizDb) => {
           return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
+        // IP 로그 추가
+        updateFields.$push = {
+          modificationLogs: {
+            ip: getClientIp(req),
+            timestamp: new Date()
+          }
+        };
+
         const quiz = await Quiz.findByIdAndUpdate(
             req.params.id,
             updateFields,
@@ -349,6 +377,12 @@ module.exports = (quizDb) => {
         } else {
             quiz.questions[index] = questionToSave;
         }
+
+        // IP 로그 추가
+        quiz.modificationLogs.push({
+          ip: getClientIp(req),
+          timestamp: new Date()
+        });
 
         quiz.markModified('questions');
         await quiz.save();
