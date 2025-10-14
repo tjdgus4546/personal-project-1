@@ -45,34 +45,35 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
 
-  // 접속 로그 수집 미들웨어
+  // 접속 로그 수집 미들웨어 (비동기 처리로 응답 속도 개선)
   const AccessLog = require('./models/AccessLog')(userDb);
-  app.use(async (req, res, next) => {
-    try {
-      // 정적 파일, API health check, socket.io는 로그 제외
-      if (
-        req.path.startsWith('/css') ||
-        req.path.startsWith('/js') ||
-        req.path.startsWith('/images') ||
-        req.path.startsWith('/socket.io') ||
-        req.path === '/favicon.ico'
-      ) {
-        return next();
-      }
-
-      const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
-
-      await AccessLog.create({
-        ip,
-        path: req.path,
-        method: req.method,
-        userAgent: req.headers['user-agent'],
-        userId: req.user?.id || null
-      });
-    } catch (error) {
-      console.error('Access log error:', error);
+  app.use((req, res, next) => {
+    // 정적 파일, API health check, socket.io는 로그 제외
+    if (
+      req.path.startsWith('/css') ||
+      req.path.startsWith('/js') ||
+      req.path.startsWith('/images') ||
+      req.path.startsWith('/socket.io') ||
+      req.path === '/favicon.ico'
+    ) {
+      return next();
     }
+
+    // 즉시 next() 호출하여 응답 차단 방지
     next();
+
+    // 비동기로 로그 저장 (응답을 기다리지 않음)
+    const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+
+    AccessLog.create({
+      ip,
+      path: req.path,
+      method: req.method,
+      userAgent: req.headers['user-agent'],
+      userId: req.user?.id || null
+    }).catch(error => {
+      console.error('Access log error:', error);
+    });
   });
   
   const { publicRouter, privateRouter } = quizApiRoutesFactory(quizDb);

@@ -8,6 +8,7 @@ let hasMore = true;
 let currentUser = null; // 현재 사용자 정보 저장
 let currentSearchTerm = ''; // 현재 검색어
 let currentFilterStatus = 'all'; // 현재 필터 상태
+let imageCache = new Map(); // 이미지 캐시 (quizId -> images)
 
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
@@ -93,9 +94,9 @@ async function loadQuizzes(reset = false) {
     // 검색어가 있으면 검색 API, 없으면 일반 목록 API
     let url;
     if (currentSearchTerm) {
-      url = `/admin/quizzes/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=40&status=${currentFilterStatus}`;
+      url = `/admin/quizzes/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=10&status=${currentFilterStatus}`;
     } else {
-      url = `/admin/quizzes?page=${currentPage}&limit=40&status=${currentFilterStatus}`;
+      url = `/admin/quizzes?page=${currentPage}&limit=10&status=${currentFilterStatus}`;
     }
 
     const response = await fetchWithAuth(url);
@@ -167,35 +168,69 @@ async function updateReportCount() {
 // 미리보기 툴팁 타이머 관리
 let tooltipHideTimer = null;
 
-// 문제 이미지 미리보기 툴팁 생성
-function createImagePreviewTooltip(questions) {
-  if (!questions || questions.length === 0) {
-    return '';
+// 빈 툴팁 생성 (호버 시 이미지 로드)
+function createEmptyTooltip() {
+  return `
+    <div class="image-preview-tooltip absolute left-full ml-2 top-0 hidden bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl z-50 max-h-96 overflow-y-auto" style="min-width: 150px;">
+      <div class="flex items-center justify-center py-4">
+        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+      </div>
+    </div>
+  `;
+}
+
+// 이미지 로드 및 툴팁 업데이트
+async function loadQuizImages(quizId, tooltip) {
+  // 캐시에 있으면 바로 표시
+  if (imageCache.has(quizId)) {
+    updateTooltipWithImages(tooltip, imageCache.get(quizId));
+    return;
   }
 
-  // 이미지가 있는 문제만 필터링
-  const questionsWithImages = questions.filter(q => q.imageBase64 || q.answerImageBase64);
+  try {
+    const response = await fetchWithAuth(`/admin/quizzes/${quizId}/images`);
 
-  if (questionsWithImages.length === 0) {
-    return '<div class="image-preview-tooltip absolute left-full ml-2 top-0 hidden bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">이미지 없음</div>';
-  }
-
-  const imageItems = questionsWithImages.map((q, idx) => {
-    let html = '';
-    if (q.imageBase64) {
-      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">문제 ${q.order || idx + 1}</div><img src="${q.imageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
+    if (!response.ok) {
+      throw new Error('이미지 로드 실패');
     }
-    if (q.answerImageBase64) {
-      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">정답 ${q.order || idx + 1}</div><img src="${q.answerImageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
+
+    const data = await response.json();
+
+    if (data.success) {
+      // 캐시에 저장
+      imageCache.set(quizId, data.images);
+      // 툴팁 업데이트
+      updateTooltipWithImages(tooltip, data.images);
+    } else {
+      tooltip.innerHTML = '<div class="text-xs text-gray-400 p-2">이미지 로드 실패</div>';
+    }
+  } catch (error) {
+    console.error('Quiz images load error:', error);
+    tooltip.innerHTML = '<div class="text-xs text-gray-400 p-2">이미지 로드 실패</div>';
+  }
+}
+
+// 툴팁에 이미지 표시
+function updateTooltipWithImages(tooltip, images) {
+  if (!images || images.length === 0) {
+    tooltip.innerHTML = '<div class="text-xs text-gray-400 p-2 whitespace-nowrap">이미지 없음</div>';
+    return;
+  }
+
+  const imageItems = images.map((img, idx) => {
+    let html = '';
+    if (img.imageBase64) {
+      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">문제 ${img.order || idx + 1}</div><img src="${img.imageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
+    }
+    if (img.answerImageBase64) {
+      html += `<div class="mb-2"><div class="text-xs text-gray-400 mb-1">정답 ${img.order || idx + 1}</div><img src="${img.answerImageBase64}" class="w-32 h-24 object-cover rounded"></div>`;
     }
     return html;
   }).join('');
 
-  return `
-    <div class="image-preview-tooltip absolute left-full ml-2 top-0 hidden bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl z-50 max-h-96 overflow-y-auto" style="min-width: 150px;">
-      <div class="text-xs font-semibold text-gray-300 mb-2">문제 이미지 (${questionsWithImages.length})</div>
-      ${imageItems}
-    </div>
+  tooltip.innerHTML = `
+    <div class="text-xs font-semibold text-gray-300 mb-2">문제 이미지 (${images.length})</div>
+    ${imageItems}
   `;
 }
 
@@ -214,10 +249,18 @@ function hideTooltip(tooltip, delay = 300) {
 }
 
 // 툴팁 이벤트 설정
-function setupTooltipEvents(thumbnailElement, tooltip) {
+function setupTooltipEvents(thumbnailElement, tooltip, quizId) {
+  let imagesLoaded = false;
+
   // 썸네일에 마우스 올리면 표시
   thumbnailElement.addEventListener('mouseenter', () => {
     showTooltip(tooltip);
+
+    // 이미지가 아직 로드되지 않았으면 로드
+    if (!imagesLoaded) {
+      loadQuizImages(quizId, tooltip);
+      imagesLoaded = true;
+    }
   });
 
   // 썸네일에서 마우스 벗어나면 딜레이 후 숨김
@@ -275,7 +318,7 @@ function renderQuizTable(quizzes) {
                 Q
               </div>
             `}
-            ${createImagePreviewTooltip(quiz.questions)}
+            ${createEmptyTooltip()}
           </div>
           <div>
             <div class="font-medium text-white">${quiz.title}</div>
@@ -287,7 +330,7 @@ function renderQuizTable(quizzes) {
         <div class="text-white">${quiz.creator.nickname}</div>
         <div class="text-xs text-gray-400">${quiz.creator.email}</div>
       </td>
-      <td class="p-3 text-gray-300 whitespace-nowrap">${quiz.questions?.length || 0}개</td>
+      <td class="p-3 text-gray-300 whitespace-nowrap">${quiz.questionCount || 0}개</td>
       <td class="p-3 whitespace-nowrap">
         ${isSeized ? `
           <div class="space-y-1">
@@ -356,7 +399,7 @@ function renderQuizTable(quizzes) {
       // 썸네일 이미지 또는 기본 아이콘 요소 찾기
       const thumbnailElement = thumbnailContainer.querySelector('img, div.w-12');
       if (thumbnailElement) {
-        setupTooltipEvents(thumbnailElement, tooltip);
+        setupTooltipEvents(thumbnailElement, tooltip, quiz._id);
       }
     }
   });

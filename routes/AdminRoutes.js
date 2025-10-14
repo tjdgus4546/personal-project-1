@@ -94,23 +94,29 @@ async function enrichQuizzesWithUserInfo(quizzes, User) {
       }));
     }
 
-    // questions 필드가 있으면 필요한 정보만 추출 (이미지, 순서)
-    let questionsPreview = null;
+    // questions 필드가 있으면 문제 수만 포함 (이미지는 호버링 시 별도 API로 로드)
+    let questionCount = 0;
     if (quiz.questions && Array.isArray(quiz.questions)) {
-      questionsPreview = quiz.questions.map(q => ({
-        order: q.order,
-        imageBase64: q.imageBase64,
-        answerImageBase64: q.answerImageBase64
-      }));
+      questionCount = quiz.questions.length;
     }
 
     return {
-      ...quiz,
+      _id: quiz._id,
+      title: quiz.title,
+      description: quiz.description,
+      titleImageBase64: quiz.titleImageBase64,
+      isComplete: quiz.isComplete,
+      createdAt: quiz.createdAt,
+      creatorId: quiz.creatorId,
+      originalCreatorId: quiz.originalCreatorId,
+      seizedById: quiz.seizedById,
+      seizedAt: quiz.seizedAt,
+      seizedReason: quiz.seizedReason,
       creator,
       seizedBy,
       reports: reportsWithReporter || quiz.reports,
       reportCount: quiz.reports?.length || 0,
-      questions: questionsPreview // 이미지와 순서만 포함
+      questionCount // 문제 수만 포함
     };
   });
 }
@@ -122,7 +128,7 @@ router.get('/quizzes/search', async (req, res) => {
   try {
     const searchTerm = req.query.q || '';
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 40;
+    const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const filterStatus = req.query.status || 'all';
 
@@ -198,7 +204,7 @@ router.get('/quizzes/search', async (req, res) => {
 router.get('/quizzes', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 40;
+    const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const filterStatus = req.query.status || 'all';
 
@@ -466,6 +472,45 @@ router.delete('/quizzes/:quizId/reports', async (req, res) => {
 });
 
 // ========== 접속 통계 API ==========
+
+// 퀴즈 이미지 조회 (호버링 시 사용)
+router.get('/quizzes/:quizId/images', async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
+
+    const quiz = await Quiz.findById(quizId)
+      .select('questions')
+      .lean();
+
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: '퀴즈를 찾을 수 없습니다.'
+      });
+    }
+
+    // 이미지가 있는 문제만 필터링하여 전송
+    const images = quiz.questions
+      .filter(q => q.imageBase64 || q.answerImageBase64)
+      .map(q => ({
+        order: q.order,
+        imageBase64: q.imageBase64 || null,
+        answerImageBase64: q.answerImageBase64 || null
+      }));
+
+    res.json({
+      success: true,
+      images
+    });
+  } catch (err) {
+    console.error('Quiz images load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '이미지를 불러오는데 실패했습니다.'
+    });
+  }
+});
 
 // 접속 통계 조회
 router.get('/stats', async (req, res) => {
