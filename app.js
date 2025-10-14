@@ -44,6 +44,36 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('userDb', userDb);  // User DB를 전역에서 사용 가능하도록 설정
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
+
+  // 접속 로그 수집 미들웨어
+  const AccessLog = require('./models/AccessLog')(userDb);
+  app.use(async (req, res, next) => {
+    try {
+      // 정적 파일, API health check, socket.io는 로그 제외
+      if (
+        req.path.startsWith('/css') ||
+        req.path.startsWith('/js') ||
+        req.path.startsWith('/images') ||
+        req.path.startsWith('/socket.io') ||
+        req.path === '/favicon.ico'
+      ) {
+        return next();
+      }
+
+      const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+
+      await AccessLog.create({
+        ip,
+        path: req.path,
+        method: req.method,
+        userAgent: req.headers['user-agent'],
+        userId: req.user?.id || null
+      });
+    } catch (error) {
+      console.error('Access log error:', error);
+    }
+    next();
+  });
   
   const { publicRouter, privateRouter } = quizApiRoutesFactory(quizDb);
 

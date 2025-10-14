@@ -21,6 +21,11 @@ router.get('/reports.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin-reports.html'));
 });
 
+// 통계 페이지
+router.get('/stats.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin-stats.html'));
+});
+
 // ========== 최적화된 공통 함수 ==========
 
 /**
@@ -456,6 +461,125 @@ router.delete('/quizzes/:quizId/reports', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '신고 삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// ========== 접속 통계 API ==========
+
+// 접속 통계 조회
+router.get('/stats', async (req, res) => {
+  try {
+    const AccessLog = require('../models/AccessLog')(req.app.get('userDb'));
+    const io = req.app.get('io');
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // 병렬로 모든 통계 조회
+    const [dailyVisitors, weeklyVisitors, monthlyVisitors, dailyPageviews, weeklyPageviews, monthlyPageviews] = await Promise.all([
+      // 일일 순 방문자 (고유 IP)
+      AccessLog.distinct('ip', { timestamp: { $gte: today } }),
+      // 주간 순 방문자
+      AccessLog.distinct('ip', { timestamp: { $gte: weekAgo } }),
+      // 월간 순 방문자
+      AccessLog.distinct('ip', { timestamp: { $gte: monthAgo } }),
+      // 일일 페이지뷰
+      AccessLog.countDocuments({ timestamp: { $gte: today } }),
+      // 주간 페이지뷰
+      AccessLog.countDocuments({ timestamp: { $gte: weekAgo } }),
+      // 월간 페이지뷰
+      AccessLog.countDocuments({ timestamp: { $gte: monthAgo } })
+    ]);
+
+    // 동시 접속자 수 (Socket.IO 연결 수)
+    const onlineUsers = io.engine.clientsCount || 0;
+
+    // 시간대별 접속 통계 (오늘)
+    const hourlyStats = await AccessLog.aggregate([
+      {
+        $match: { timestamp: { $gte: today } }
+      },
+      {
+        $group: {
+          _id: { $hour: '$timestamp' },
+          count: { $sum: 1 },
+          uniqueIps: { $addToSet: '$ip' }
+        }
+      },
+      {
+        $project: {
+          hour: '$_id',
+          pageviews: '$count',
+          visitors: { $size: '$uniqueIps' }
+        }
+      },
+      {
+        $sort: { hour: 1 }
+      }
+    ]);
+
+    // 일주일 일별 통계
+    const dailyStats = await AccessLog.aggregate([
+      {
+        $match: { timestamp: { $gte: weekAgo } }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$timestamp' },
+            month: { $month: '$timestamp' },
+            day: { $dayOfMonth: '$timestamp' }
+          },
+          count: { $sum: 1 },
+          uniqueIps: { $addToSet: '$ip' }
+        }
+      },
+      {
+        $project: {
+          date: {
+            $dateFromParts: {
+              year: '$_id.year',
+              month: '$_id.month',
+              day: '$_id.day'
+            }
+          },
+          pageviews: '$count',
+          visitors: { $size: '$uniqueIps' }
+        }
+      },
+      {
+        $sort: { date: 1 }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        daily: {
+          visitors: dailyVisitors.length,
+          pageviews: dailyPageviews
+        },
+        weekly: {
+          visitors: weeklyVisitors.length,
+          pageviews: weeklyPageviews
+        },
+        monthly: {
+          visitors: monthlyVisitors.length,
+          pageviews: monthlyPageviews
+        },
+        online: onlineUsers,
+        hourlyStats,
+        dailyStats
+      }
+    });
+  } catch (err) {
+    console.error('Stats load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '통계를 불러오는데 실패했습니다.'
     });
   }
 });
