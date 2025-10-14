@@ -1340,6 +1340,17 @@ function setupSocketListeners() {
 
 // 퀴즈 종료 화면 표시
 function showGameEndScreen(players) {
+    // 유튜브 플레이어 정지 및 제거
+    if (youtubePlayer) {
+        try {
+            youtubePlayer.stopVideo();
+            youtubePlayer.destroy();
+        } catch (error) {
+            console.error('유튜브 플레이어 정지 실패:', error);
+        }
+        youtubePlayer = null;
+    }
+
     // 모든 섹션 숨기기
     document.getElementById('quizInfoSection').classList.add('hidden');
     document.getElementById('gameSection').classList.add('hidden');
