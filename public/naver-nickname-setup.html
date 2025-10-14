@@ -35,20 +35,38 @@
                     <label for="nickname" class="block text-sm font-medium text-gray-300 mb-2">
                         닉네임 (게임에서 표시될 이름)
                     </label>
-                    <input 
-                        type="text" 
-                        id="nickname" 
-                        name="nickname" 
-                        placeholder="사용할 닉네임을 입력해주세요" 
+                    <input
+                        type="text"
+                        id="nickname"
+                        name="nickname"
+                        placeholder="사용할 닉네임을 입력해주세요"
                         required
                         maxlength="20"
                         class="w-full px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
                     >
                     <p class="text-xs text-gray-500 mt-1">2-20글자, 영문/한글/숫자 사용 가능</p>
                 </div>
-                
-                <button 
-                    type="submit" 
+
+                <!-- 개인정보 처리방침 동의 -->
+                <div class="flex items-start space-x-3 py-2">
+                    <input
+                        type="checkbox"
+                        id="privacyAgree"
+                        name="privacyAgree"
+                        class="mt-1 w-4 h-4 text-green-600 bg-[#3a3a4a] border-gray-600 rounded focus:ring-green-500 focus:ring-2"
+                        required
+                    >
+                    <label for="privacyAgree" class="text-sm text-gray-300">
+                        <span class="text-red-400">[필수]</span>
+                        <a href="/privacy-policy.html" target="_blank" class="text-green-400 hover:text-green-300 underline">
+                            개인정보 처리방침
+                        </a>
+                        에 동의합니다
+                    </label>
+                </div>
+
+                <button
+                    type="submit"
                     class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl"
                 >
                     닉네임 설정하고 시작하기
@@ -56,6 +74,16 @@
             </form>
         </div>
     </div>
+
+    <!-- 푸터 -->
+    <footer class="mt-12 pb-8 text-center text-gray-400 text-sm">
+        <div class="space-x-4">
+            <a href="/privacy-policy.html" class="hover:text-white transition-colors no-underline">개인정보 처리방침</a>
+            <span>|</span>
+            <a href="/" class="hover:text-white transition-colors no-underline">PlayCode</a>
+        </div>
+        <p class="mt-2">© 2025 PlayCode. All rights reserved.</p>
+    </footer>
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -104,18 +132,25 @@
     
     async function handleNicknameSubmit(e) {
         e.preventDefault();
-        
+
         const urlParams = new URLSearchParams(window.location.search);
         const tempToken = urlParams.get('temp_token');
         const nickname = document.getElementById('nickname').value.trim();
-        
+
         if (!nickname) {
             showAlert('error', '닉네임을 입력해주세요.');
             return;
         }
-        
+
         if (nickname.length < 2 || nickname.length > 20) {
             showAlert('error', '닉네임은 2-20글자여야 합니다.');
+            return;
+        }
+
+        // 개인정보 처리방침 동의 확인
+        const privacyAgree = document.getElementById('privacyAgree');
+        if (!privacyAgree || !privacyAgree.checked) {
+            showAlert('error', '개인정보 처리방침에 동의해주세요.');
             return;
         }
         

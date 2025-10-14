@@ -178,7 +178,14 @@ function validateSignupForm(data) {
         showAlert('error', '비밀번호는 30글자 이하여야 합니다.');
         return false;
     }
-    
+
+    // 개인정보 처리방침 동의 확인
+    const privacyAgree = document.getElementById('privacyAgree');
+    if (!privacyAgree || !privacyAgree.checked) {
+        showAlert('error', '개인정보 처리방침에 동의해주세요.');
+        return false;
+    }
+
     return true;
 }
 
