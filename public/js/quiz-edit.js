@@ -240,11 +240,21 @@ export function updateYoutubePreview() {
     const startTime = document.getElementById('startTime').value;
     const endTime = document.getElementById('endTime').value;
 
-    // 정답 유튜브 URL에도 자동 복사
+    // 정답 유튜브 URL에도 자동 복사 (조건부)
     const answerYoutubeUrlInput = document.getElementById('answerYoutubeUrl');
     if (url && answerYoutubeUrlInput) {
-        answerYoutubeUrlInput.value = url;
-        updateAnswerYoutubePreview(); // 정답 미리보기도 업데이트
+        const currentAnswerUrl = answerYoutubeUrlInput.value.trim();
+        const previousQuestionUrl = answerYoutubeUrlInput.dataset.previousQuestionUrl || '';
+
+        // 정답 URL이 비어있거나, 이전 문제 URL과 같으면 자동 복사
+        // (사용자가 의도적으로 다른 URL로 변경한 경우는 덮어쓰지 않음)
+        if (!currentAnswerUrl || currentAnswerUrl === previousQuestionUrl) {
+            answerYoutubeUrlInput.value = url;
+            updateAnswerYoutubePreview(); // 정답 미리보기도 업데이트
+        }
+
+        // 현재 문제 URL을 저장 (다음 비교를 위해)
+        answerYoutubeUrlInput.dataset.previousQuestionUrl = url;
     }
 
     if (!url) {
@@ -721,7 +731,12 @@ export function editQuestion(index) {
     document.getElementById('youtubeUrl').value = question.youtubeUrl || '';
     document.getElementById('startTime').value = secondsToTimeFormat(question.youtubeStartTime || 0);
     document.getElementById('endTime').value = secondsToTimeFormat(question.youtubeEndTime || 0);
-    document.getElementById('answerYoutubeUrl').value = question.answerYoutubeUrl || '';
+
+    const answerUrlInput = document.getElementById('answerYoutubeUrl');
+    answerUrlInput.value = question.answerYoutubeUrl || '';
+    // previousQuestionUrl 초기화 (문제 로드 시)
+    answerUrlInput.dataset.previousQuestionUrl = question.youtubeUrl || '';
+
     document.getElementById('answerStartTime').value = secondsToTimeFormat(question.answerYoutubeStartTime || 0);
     
     // 정답/오답
