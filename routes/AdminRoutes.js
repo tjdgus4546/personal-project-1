@@ -672,6 +672,18 @@ router.get('/stats', async (req, res) => {
       ...ipBlacklistFilter
     };
 
+    // 게임 플레이 중인 유저 집계
+    const GameSession = require('../models/GameSession')(req.app.get('quizDb'));
+    const activeSessions = await GameSession.find({ isActive: true }).lean();
+
+    // 플레이 중인 고유 사용자 ID 수집 (중복 제거)
+    const playingUserIds = new Set();
+    activeSessions.forEach(session => {
+      session.players
+        .filter(p => p.connected)
+        .forEach(p => playingUserIds.add(p.userId.toString()));
+    });
+
     // 병렬로 모든 통계 조회 (봇 제외)
     const [dailyVisitors, weeklyVisitors, monthlyVisitors, onlineVisitors, dailyPageviews, weeklyPageviews, monthlyPageviews] = await Promise.all([
       // 일일 순 방문자 (고유 IP, 봇 제외)
@@ -692,6 +704,9 @@ router.get('/stats', async (req, res) => {
 
     // 동시 접속자 수 (최근 5분 이내 활동한 실제 사용자)
     const onlineUsers = onlineVisitors.length;
+
+    // 게임 플레이 중인 유저 수
+    const playingUsers = playingUserIds.size;
 
     // 시간대별 접속 통계 (오늘, 한국 시간 기준, 봇 제외)
     const hourlyStats = await AccessLog.aggregate([
@@ -786,6 +801,7 @@ router.get('/stats', async (req, res) => {
           pageviews: monthlyPageviews
         },
         online: onlineUsers,
+        playing: playingUsers, // 게임 플레이 중인 유저 수
         hourlyStats,
         dailyStats
       }

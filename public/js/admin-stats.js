@@ -92,6 +92,7 @@ async function loadDebugInfo() {
 function displayStats(stats) {
   // 주요 지표
   document.getElementById('onlineUsers').textContent = stats.online || 0;
+  document.getElementById('playingUsers').textContent = stats.playing || 0;
   document.getElementById('dailyVisitors').textContent = stats.daily.visitors || 0;
   document.getElementById('weeklyVisitors').textContent = stats.weekly.visitors || 0;
   document.getElementById('monthlyVisitors').textContent = stats.monthly.visitors || 0;
