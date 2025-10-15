@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.14.1",
     "socket.io": "^4.8.1",
+    "socket.io-cookie-parser": "^1.0.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
