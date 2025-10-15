@@ -191,29 +191,47 @@ function formatDate(date) {
 }
 
 function displayDebugInfo(data) {
-  // 고유 IP 개수 표시
-  document.getElementById('debugUniqueIpCount').textContent = data.uniqueIpCount || 0;
+  // 고유 IP 개수 표시 (실제 사용자 vs 전체)
+  const countText = `${data.uniqueIpCountReal || 0} 명 (봇 제외)`;
+  const allCountText = `전체 ${data.uniqueIpCount || 0}명 (봇 포함)`;
 
-  // 고유 IP 목록 표시
+  document.getElementById('debugUniqueIpCount').innerHTML = `
+    ${countText}
+    <div class="text-sm font-normal text-gray-400 mt-1">${allCountText}</div>
+  `;
+
+  // 고유 IP 목록 표시 (실제 사용자만)
   const ipListEl = document.getElementById('debugIpList');
-  if (data.uniqueIps && data.uniqueIps.length > 0) {
-    ipListEl.innerHTML = data.uniqueIps.map((ip, index) =>
-      `<div class="mb-1">${index + 1}. ${ip}</div>`
-    ).join('');
+  if (data.uniqueIpsReal && data.uniqueIpsReal.length > 0) {
+    ipListEl.innerHTML = `
+      <div class="text-green-400 text-xs mb-2">✓ 실제 사용자 IP (${data.uniqueIpsReal.length}개)</div>
+      ${data.uniqueIpsReal.map((ip, index) =>
+        `<div class="mb-1 text-green-300">${index + 1}. ${ip}</div>`
+      ).join('')}
+      ${data.uniqueIps.length > data.uniqueIpsReal.length ? `
+        <div class="text-red-400 text-xs mt-3 mb-2">⚠ 봇 IP (${data.uniqueIps.length - data.uniqueIpsReal.length}개)</div>
+        ${data.uniqueIps.filter(ip => !data.uniqueIpsReal.includes(ip)).map((ip, index) =>
+          `<div class="mb-1 text-red-300">${index + 1}. ${ip}</div>`
+        ).join('')}
+      ` : ''}
+    `;
   } else {
-    ipListEl.textContent = '수집된 IP가 없습니다.';
+    ipListEl.textContent = '수집된 실제 사용자 IP가 없습니다.';
   }
 
-  // 최근 로그 표시
+  // 최근 로그 표시 (봇 여부 표시)
   const logsTable = document.getElementById('debugRecentLogs');
   if (data.recentLogs && data.recentLogs.length > 0) {
     logsTable.innerHTML = data.recentLogs.map(log => {
       const date = new Date(log.timestamp);
       const timeStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
 
+      const botBadge = log.isBot ? '<span class="text-xs bg-red-500/30 text-red-300 px-2 py-0.5 rounded ml-2">BOT</span>' : '<span class="text-xs bg-green-500/30 text-green-300 px-2 py-0.5 rounded ml-2">USER</span>';
+      const rowClass = log.isBot ? 'bg-red-900/10' : '';
+
       return `
-        <tr class="border-b border-gray-700">
-          <td class="p-2 text-gray-300">${log.ip}</td>
+        <tr class="border-b border-gray-700 ${rowClass}">
+          <td class="p-2 text-gray-300">${log.ip}${botBadge}</td>
           <td class="p-2 text-gray-300">${log.path}</td>
           <td class="p-2 text-gray-400">${timeStr}</td>
         </tr>

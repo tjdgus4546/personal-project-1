@@ -1761,6 +1761,18 @@ video {
   background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
 
+.bg-green-500\/30 {
+  background-color: rgb(34 197 94 / 0.3);
+}
+
+.bg-red-500\/30 {
+  background-color: rgb(239 68 68 / 0.3);
+}
+
+.bg-red-900\/10 {
+  background-color: rgb(127 29 29 / 0.1);
+}
+
 .bg-opacity-20 {
   --tw-bg-opacity: 0.2;
 }
@@ -2185,6 +2197,10 @@ video {
 
 .font-semibold {
   font-weight: 600;
+}
+
+.font-normal {
+  font-weight: 400;
 }
 
 .leading-relaxed {

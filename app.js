@@ -22,7 +22,9 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false // index.html 자동 제공 비활성화 (명시적 라우트 사용)
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
@@ -45,36 +47,68 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
 
-  // 접속 로그 수집 미들웨어 (비동기 처리로 응답 속도 개선)
+  // 접속 로그 수집 미들웨어 (실제 페이지 조회만 카운트)
   const AccessLog = require('./models/AccessLog')(userDb);
   app.use((req, res, next) => {
-    // 정적 파일, API health check, socket.io, HTML 페이지는 로그 제외
+    // ✅ 페이지뷰 = 실제 HTML 페이지를 조회한 경우만 카운트
+    // GET 요청이 아니면 제외
+    if (req.method !== 'GET') {
+      return next();
+    }
+
+    // 정적 파일, API, 관리자 페이지 등은 제외
     if (
       req.path.startsWith('/css') ||
       req.path.startsWith('/js') ||
       req.path.startsWith('/images') ||
       req.path.startsWith('/socket.io') ||
-      req.path === '/favicon.ico' ||
-      req.path.endsWith('.html') // HTML 페이지 요청 제외 (API만 카운트)
+      req.path.startsWith('/api/') ||
+      req.path.startsWith('/auth/') ||
+      req.path.startsWith('/game/') ||
+      req.path.startsWith('/admin') ||
+      req.path === '/favicon.ico'
     ) {
       return next();
     }
 
-    // 즉시 next() 호출하여 응답 차단 방지
-    next();
+    // ✅ 화이트리스트: 실제 페이지만 카운트
+    const isPageView =
+      req.path === '/' ||                                    // 메인 페이지
+      req.path === '/my-page' ||                             // 마이페이지
+      req.path === '/edit-profile' ||                        // 내 정보 수정
+      req.path === '/quiz/my-list' ||                        // 나의 퀴즈 목록
+      req.path === '/quiz/edit' ||                           // 퀴즈 편집
+      req.path === '/quiz/init' ||                           // 퀴즈 생성
+      req.path.match(/^\/quiz\/[a-f0-9]{24}$/) ||           // 게임 세션 (/quiz/:sessionId)
+      req.path.endsWith('.html');                            // 기타 HTML 페이지
 
-    // 비동기로 로그 저장 (응답을 기다리지 않음)
-    const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+    if (!isPageView) {
+      return next();
+    }
 
-    AccessLog.create({
-      ip,
-      path: req.path,
-      method: req.method,
-      userAgent: req.headers['user-agent'],
-      userId: req.user?.id || null
-    }).catch(error => {
-      console.error('Access log error:', error);
+    // 🔒 응답이 완료되었을 때 로그 저장 (중복 방지)
+    res.on('finish', () => {
+      // 이미 처리된 요청은 건너뛰기
+      if (req._accessLogProcessed) {
+        return;
+      }
+      req._accessLogProcessed = true;
+
+      // 비동기로 로그 저장
+      const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+
+      AccessLog.create({
+        ip,
+        path: req.path,
+        method: req.method,
+        userAgent: req.headers['user-agent'],
+        userId: req.user?.id || null
+      }).catch(error => {
+        console.error('Access log error:', error);
+      });
     });
+
+    next();
   });
   
   const { publicRouter, privateRouter } = quizApiRoutesFactory(quizDb);

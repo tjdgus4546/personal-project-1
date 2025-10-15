@@ -523,21 +523,38 @@ router.get('/stats/debug-ips', async (req, res) => {
     todayKorea.setUTCHours(0, 0, 0, 0);
     const today = new Date(todayKorea.getTime() - koreaOffset);
 
-    // 오늘 로그 조회
+    // 봇 필터 패턴
+    const botPattern = /bot|crawler|spider|crawling|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|facebookexternalhit|ia_archiver|curl|wget|python-requests|ahrefsbot|semrushbot|dotbot|petalbot/i;
+
+    // 오늘 로그 조회 (User-Agent 포함)
     const logs = await AccessLog.find({ timestamp: { $gte: today } })
-      .select('ip path timestamp')
+      .select('ip path timestamp userAgent')
       .sort({ timestamp: -1 })
       .limit(50)
       .lean();
 
-    // 고유 IP 집계
-    const uniqueIps = await AccessLog.distinct('ip', { timestamp: { $gte: today } });
+    // 봇과 실제 사용자 구분
+    const logsWithBotFlag = logs.map(log => ({
+      ...log,
+      isBot: botPattern.test(log.userAgent || '')
+    }));
+
+    // 고유 IP 집계 (전체)
+    const uniqueIpsAll = await AccessLog.distinct('ip', { timestamp: { $gte: today } });
+
+    // 고유 IP 집계 (봇 제외)
+    const uniqueIpsReal = await AccessLog.distinct('ip', {
+      timestamp: { $gte: today },
+      userAgent: { $not: botPattern }
+    });
 
     res.json({
       success: true,
-      uniqueIpCount: uniqueIps.length,
-      uniqueIps,
-      recentLogs: logs
+      uniqueIpCount: uniqueIpsAll.length,
+      uniqueIpCountReal: uniqueIpsReal.length, // 봇 제외
+      uniqueIps: uniqueIpsAll,
+      uniqueIpsReal, // 봇 제외한 실제 사용자 IP
+      recentLogs: logsWithBotFlag
     });
   } catch (err) {
     console.error('Debug IPs error:', err);
@@ -552,7 +569,6 @@ router.get('/stats/debug-ips', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const AccessLog = require('../models/AccessLog')(req.app.get('userDb'));
-    const io = req.app.get('io');
 
     // 한국 시간대 (UTC+9) 기준으로 오늘 자정 계산
     const now = new Date();
@@ -563,30 +579,43 @@ router.get('/stats', async (req, res) => {
 
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 현재 접속자 계산용
 
-    // 병렬로 모든 통계 조회
-    const [dailyVisitors, weeklyVisitors, monthlyVisitors, dailyPageviews, weeklyPageviews, monthlyPageviews] = await Promise.all([
-      // 일일 순 방문자 (고유 IP)
-      AccessLog.distinct('ip', { timestamp: { $gte: today } }),
+    // 봇 필터 조건 (정규표현식으로 봇 User-Agent 제외)
+    const botPattern = /bot|crawler|spider|crawling|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|facebookexternalhit|ia_archiver|curl|wget|python-requests|ahrefsbot|semrushbot|dotbot|petalbot/i;
+
+    const botFilter = {
+      userAgent: { $not: botPattern }
+    };
+
+    // 병렬로 모든 통계 조회 (봇 제외)
+    const [dailyVisitors, weeklyVisitors, monthlyVisitors, onlineVisitors, dailyPageviews, weeklyPageviews, monthlyPageviews] = await Promise.all([
+      // 일일 순 방문자 (고유 IP, 봇 제외)
+      AccessLog.distinct('ip', { timestamp: { $gte: today }, ...botFilter }),
       // 주간 순 방문자
-      AccessLog.distinct('ip', { timestamp: { $gte: weekAgo } }),
+      AccessLog.distinct('ip', { timestamp: { $gte: weekAgo }, ...botFilter }),
       // 월간 순 방문자
-      AccessLog.distinct('ip', { timestamp: { $gte: monthAgo } }),
-      // 일일 페이지뷰
-      AccessLog.countDocuments({ timestamp: { $gte: today } }),
+      AccessLog.distinct('ip', { timestamp: { $gte: monthAgo }, ...botFilter }),
+      // 현재 접속자 (최근 5분 이내 활동한 고유 IP, 봇 제외)
+      AccessLog.distinct('ip', { timestamp: { $gte: fiveMinutesAgo }, ...botFilter }),
+      // 일일 페이지뷰 (봇 제외)
+      AccessLog.countDocuments({ timestamp: { $gte: today }, ...botFilter }),
       // 주간 페이지뷰
-      AccessLog.countDocuments({ timestamp: { $gte: weekAgo } }),
+      AccessLog.countDocuments({ timestamp: { $gte: weekAgo }, ...botFilter }),
       // 월간 페이지뷰
-      AccessLog.countDocuments({ timestamp: { $gte: monthAgo } })
+      AccessLog.countDocuments({ timestamp: { $gte: monthAgo }, ...botFilter })
     ]);
 
-    // 동시 접속자 수 (Socket.IO 연결 수)
-    const onlineUsers = io.engine.clientsCount || 0;
+    // 동시 접속자 수 (최근 5분 이내 활동한 실제 사용자)
+    const onlineUsers = onlineVisitors.length;
 
-    // 시간대별 접속 통계 (오늘, 한국 시간 기준)
+    // 시간대별 접속 통계 (오늘, 한국 시간 기준, 봇 제외)
     const hourlyStats = await AccessLog.aggregate([
       {
-        $match: { timestamp: { $gte: today } }
+        $match: {
+          timestamp: { $gte: today },
+          userAgent: { $not: botPattern }
+        }
       },
       {
         $addFields: {
@@ -617,10 +646,13 @@ router.get('/stats', async (req, res) => {
       }
     ]);
 
-    // 일주일 일별 통계 (한국 시간 기준)
+    // 일주일 일별 통계 (한국 시간 기준, 봇 제외)
     const dailyStats = await AccessLog.aggregate([
       {
-        $match: { timestamp: { $gte: weekAgo } }
+        $match: {
+          timestamp: { $gte: weekAgo },
+          userAgent: { $not: botPattern }
+        }
       },
       {
         $addFields: {
