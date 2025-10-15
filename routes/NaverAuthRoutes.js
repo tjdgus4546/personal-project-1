@@ -91,6 +91,7 @@ router.post('/naver/complete-signup', async (req, res) => {
         email: naverUserInfo.email,
         naverId: naverUserInfo.id,
         profileImage: naverUserInfo.profile_image || null,
+        isEmailVerified: true  // OAuth 사용자는 이메일 자동 인증
       });
     }
     

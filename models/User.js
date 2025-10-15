@@ -78,6 +78,19 @@ const userSchema = new Schema({
   isDeleted: {
     type: Boolean,
     default: false
+  },
+  // 이메일 인증 관련
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationCode: {
+    type: String,
+    default: null
+  },
+  verificationCodeExpires: {
+    type: Date,
+    default: null
   }
 });
 

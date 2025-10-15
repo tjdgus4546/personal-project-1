@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const naverAuthRoutes = require('./routes/NaverAuthRoutes');
@@ -34,6 +35,13 @@ app.use(session({
   secret: process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    dbName: 'userDB',
+    collectionName: 'sessions',
+    ttl: 30 * 60, // 30분 (초 단위)
+    autoRemove: 'native' // MongoDB TTL 인덱스로 자동 삭제
+  }),
   cookie: {
     secure: true, // HTTPS 환경이므로 true 설정
     httpOnly: true,

@@ -1,7 +1,8 @@
 // controllers/AuthController.js
 
-const bcrypt = require('bcrypt'); 
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { sendVerificationEmail, generateVerificationCode } = require('../utils/emailService');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -18,6 +19,17 @@ const signup = async (req, res) => {
   }
 
   try {
+    // 이메일 인증 확인 (세션에서)
+    const emailVerification = req.session.emailVerification;
+    if (!emailVerification || !emailVerification.verified) {
+      return res.status(400).json({ message: '이메일 인증이 필요합니다.' });
+    }
+
+    // 인증된 이메일과 입력한 이메일 일치 확인
+    if (emailVerification.email !== email.toLowerCase().trim()) {
+      return res.status(400).json({ message: '인증된 이메일과 입력한 이메일이 일치하지 않습니다.' });
+    }
+
     // 이메일 중복 체크
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
@@ -32,13 +44,17 @@ const signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ 
+    const newUser = new User({
       username: username.trim(),  // DB에는 저장하지만 사용 안 함
       nickname: nickname.trim(),
       email: email.toLowerCase().trim(),
-      password: hashedPassword 
+      password: hashedPassword,
+      isEmailVerified: true  // 이메일 인증 완료
     });
     await newUser.save();
+
+    // 회원가입 완료 후 세션 정리
+    delete req.session.emailVerification;
 
     res.status(201).json({ message: '회원가입 성공!' });
   } catch (err) {
@@ -46,7 +62,7 @@ const signup = async (req, res) => {
     if (err.code === 11000) {
       // MongoDB 중복 키 에러
       const field = Object.keys(err.keyPattern)[0];
-      const message = field === 'email' ? '이메일이 이미 사용 중입니다.' : 
+      const message = field === 'email' ? '이메일이 이미 사용 중입니다.' :
                      field === 'nickname' ? '닉네임이 이미 사용 중입니다.' : '중복된 값이 있습니다.';
       return res.status(400).json({ message });
     }
@@ -71,6 +87,13 @@ const login = async (req, res) => {
       return res.status(403).json({
         message: '탈퇴한 계정입니다. 로그인할 수 없습니다.',
         deletionScheduledAt: user.deletionScheduledAt
+      });
+    }
+
+    // 이메일 인증 확인 (일반 회원가입 사용자만)
+    if (!user.naverId && !user.googleId && !user.isEmailVerified) {
+      return res.status(403).json({
+        message: '이메일 인증이 필요합니다. 회원가입 시 인증을 완료해주세요.'
       });
     }
 
@@ -356,4 +379,96 @@ const deleteAccount = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getUserInfo, logout, refreshToken, updateProfile, deleteAccount };
+// 이메일 인증 코드 발송
+const sendVerificationCode = async (req, res) => {
+  const userDb = req.app.get('userDb');
+  const User = require('../models/User')(userDb);
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: '이메일을 입력해주세요.' });
+  }
+
+  try {
+    // 이메일 중복 체크
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUser) {
+      return res.status(400).json({ message: '이미 가입된 이메일입니다.' });
+    }
+
+    // 6자리 인증 코드 생성
+    const verificationCode = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분 후 만료
+
+    // 임시로 이메일과 인증 코드를 세션에 저장 (또는 별도 테이블 사용 가능)
+    req.session.emailVerification = {
+      email: email.toLowerCase().trim(),
+      code: verificationCode,
+      expiresAt: expiresAt,
+    };
+
+    // 이메일 발송
+    await sendVerificationEmail(email, verificationCode);
+
+    res.json({
+      message: '인증 코드가 이메일로 전송되었습니다.',
+      expiresIn: 600, // 10분 (초 단위)
+    });
+  } catch (err) {
+    console.error('인증 코드 발송 오류:', err);
+    res.status(500).json({ message: '인증 코드 발송에 실패했습니다.', error: err.message });
+  }
+};
+
+// 이메일 인증 코드 검증
+const verifyEmailCode = async (req, res) => {
+  const { email, code } = req.body;
+
+  if (!email || !code) {
+    return res.status(400).json({ message: '이메일과 인증 코드를 입력해주세요.' });
+  }
+
+  try {
+    const sessionData = req.session.emailVerification;
+
+    if (!sessionData) {
+      return res.status(400).json({ message: '인증 코드를 먼저 요청해주세요.' });
+    }
+
+    // 이메일 확인
+    if (sessionData.email !== email.toLowerCase().trim()) {
+      return res.status(400).json({ message: '이메일이 일치하지 않습니다.' });
+    }
+
+    // 만료 시간 확인
+    if (new Date() > new Date(sessionData.expiresAt)) {
+      delete req.session.emailVerification;
+      return res.status(400).json({ message: '인증 코드가 만료되었습니다. 다시 요청해주세요.' });
+    }
+
+    // 인증 코드 확인
+    if (sessionData.code !== code.trim()) {
+      return res.status(400).json({ message: '인증 코드가 일치하지 않습니다.' });
+    }
+
+    // 인증 성공 - 세션에 인증 완료 표시
+    req.session.emailVerification.verified = true;
+
+    res.json({ message: '이메일 인증이 완료되었습니다.' });
+  } catch (err) {
+    console.error('인증 코드 검증 오류:', err);
+    res.status(500).json({ message: '인증 코드 검증에 실패했습니다.', error: err.message });
+  }
+};
+
+module.exports = {
+  signup,
+  login,
+  getUserInfo,
+  logout,
+  refreshToken,
+  updateProfile,
+  deleteAccount,
+  sendVerificationCode,
+  verifyEmailCode
+};

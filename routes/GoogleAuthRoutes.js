@@ -96,6 +96,7 @@ router.post('/google/complete-signup', async (req, res) => {
         email: googleUserInfo.email,
         googleId: googleUserInfo.sub,
         profileImage: googleUserInfo.picture || null,
+        isEmailVerified: true  // OAuth 사용자는 이메일 자동 인증
       });
     }
 

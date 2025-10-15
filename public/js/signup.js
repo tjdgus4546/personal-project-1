@@ -1,12 +1,19 @@
 // public/js/signup.js
 
+// 이메일 인증 상태
+let emailVerified = false;
+let verificationTimer = null;
+
 // DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', function() {
     // URL 파라미터 처리
     handleUrlParameters();
-    
+
     // 회원가입 폼 이벤트 리스너
     setupSignupForm();
+
+    // 이메일 인증 버튼 이벤트 리스너
+    setupEmailVerification();
 });
 
 // URL 파라미터에서 에러/성공 메시지 처리
@@ -119,61 +126,67 @@ function setupSignupForm() {
 
 // 폼 유효성 검사
 function validateSignupForm(data) {
+    // 이메일 인증 확인
+    if (!emailVerified) {
+        showAlert('error', '이메일 인증을 완료해주세요.');
+        return false;
+    }
+
     // 닉네임 검사
     if (!data.nickname || !data.nickname.trim()) {
         showAlert('error', '닉네임을 입력해주세요.');
         return false;
     }
-    
+
     if (data.nickname.trim().length < 2) {
         showAlert('error', '닉네임은 2글자 이상이어야 합니다.');
         return false;
     }
-    
+
     if (data.nickname.trim().length > 20) {
         showAlert('error', '닉네임은 20글자 이하여야 합니다.');
         return false;
     }
-    
+
     // 이름 검사
     if (!data.username || !data.username.trim()) {
         showAlert('error', '이름을 입력해주세요.');
         return false;
     }
-    
+
     if (data.username.trim().length < 2) {
         showAlert('error', '이름은 2글자 이상이어야 합니다.');
         return false;
     }
-    
+
     if (data.username.trim().length > 20) {
         showAlert('error', '이름은 20글자 이하여야 합니다.');
         return false;
     }
-    
+
     // 이메일 검사
     if (!data.email || !data.email.trim()) {
         showAlert('error', '이메일을 입력해주세요.');
         return false;
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(data.email)) {
         showAlert('error', '올바른 이메일 형식을 입력해주세요.');
         return false;
     }
-    
+
     // 비밀번호 검사
     if (!data.password || !data.password.trim()) {
         showAlert('error', '비밀번호를 입력해주세요.');
         return false;
     }
-    
+
     if (data.password.length < 6) {
         showAlert('error', '비밀번호는 6글자 이상이어야 합니다.');
         return false;
     }
-    
+
     if (data.password.length > 30) {
         showAlert('error', '비밀번호는 30글자 이하여야 합니다.');
         return false;
@@ -283,3 +296,169 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// ========== 이메일 인증 관련 함수 ==========
+
+// 이메일 인증 버튼 이벤트 설정
+function setupEmailVerification() {
+    const sendVerificationBtn = document.getElementById('sendVerificationBtn');
+    const verifyCodeBtn = document.getElementById('verifyCodeBtn');
+
+    if (sendVerificationBtn) {
+        sendVerificationBtn.addEventListener('click', sendVerificationCode);
+    }
+
+    if (verifyCodeBtn) {
+        verifyCodeBtn.addEventListener('click', verifyEmailCode);
+    }
+}
+
+// 인증 코드 발송
+async function sendVerificationCode() {
+    const emailInput = document.getElementById('email');
+    const email = emailInput.value.trim();
+
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+        showAlert('error', '올바른 이메일 주소를 입력해주세요.');
+        return;
+    }
+
+    const sendBtn = document.getElementById('sendVerificationBtn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '전송 중...';
+
+    try {
+        const response = await fetch('/auth/send-verification-code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showAlert('success', '인증 코드가 이메일로 전송되었습니다.');
+
+            // 인증 코드 입력란 표시
+            document.getElementById('verificationCodeSection').classList.remove('hidden');
+
+            // 이메일 입력 비활성화
+            emailInput.disabled = true;
+
+            // 10분 타이머 시작
+            startVerificationTimer(result.expiresIn || 600);
+
+        } else {
+            showAlert('error', result.message || '인증 코드 발송에 실패했습니다.');
+            sendBtn.disabled = false;
+            sendBtn.textContent = '인증코드 발송';
+        }
+
+    } catch (error) {
+        console.error('인증 코드 발송 오류:', error);
+        showAlert('error', '네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+        sendBtn.disabled = false;
+        sendBtn.textContent = '인증코드 발송';
+    }
+}
+
+// 인증 코드 검증
+async function verifyEmailCode() {
+    const emailInput = document.getElementById('email');
+    const codeInput = document.getElementById('verificationCode');
+    const email = emailInput.value.trim();
+    const code = codeInput.value.trim();
+
+    if (!code || code.length !== 6) {
+        showAlert('error', '6자리 인증 코드를 입력해주세요.');
+        return;
+    }
+
+    const verifyBtn = document.getElementById('verifyCodeBtn');
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = '확인 중...';
+
+    try {
+        const response = await fetch('/auth/verify-email-code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, code })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showAlert('success', '이메일 인증이 완료되었습니다!');
+
+            // 인증 완료 상태 업데이트
+            emailVerified = true;
+
+            // UI 업데이트
+            document.getElementById('verificationCodeSection').classList.add('hidden');
+            document.getElementById('verificationSuccess').classList.remove('hidden');
+            document.getElementById('sendVerificationBtn').style.display = 'none';
+
+            // 타이머 정리
+            if (verificationTimer) {
+                clearInterval(verificationTimer);
+            }
+
+        } else {
+            showAlert('error', result.message || '인증 코드가 일치하지 않습니다.');
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = '인증 확인';
+        }
+
+    } catch (error) {
+        console.error('인증 코드 검증 오류:', error);
+        showAlert('error', '네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = '인증 확인';
+    }
+}
+
+// 인증 타이머 시작 (초 단위)
+function startVerificationTimer(seconds) {
+    let remainingTime = seconds;
+    const timerDisplay = document.getElementById('verificationTimer');
+
+    // 기존 타이머 정리
+    if (verificationTimer) {
+        clearInterval(verificationTimer);
+    }
+
+    // 타이머 업데이트 함수
+    function updateTimer() {
+        const minutes = Math.floor(remainingTime / 60);
+        const secs = remainingTime % 60;
+        timerDisplay.textContent = `남은 시간: ${minutes}:${secs.toString().padStart(2, '0')}`;
+
+        if (remainingTime <= 0) {
+            clearInterval(verificationTimer);
+            timerDisplay.textContent = '인증 시간이 만료되었습니다. 다시 발송해주세요.';
+            timerDisplay.style.color = '#ff4444';
+
+            // 버튼 상태 복원
+            const sendBtn = document.getElementById('sendVerificationBtn');
+            sendBtn.disabled = false;
+            sendBtn.textContent = '재발송';
+
+            // 이메일 입력 다시 활성화
+            document.getElementById('email').disabled = false;
+        }
+
+        remainingTime--;
+    }
+
+    // 즉시 한 번 실행
+    updateTimer();
+
+    // 1초마다 업데이트
+    verificationTimer = setInterval(updateTimer, 1000);
+}

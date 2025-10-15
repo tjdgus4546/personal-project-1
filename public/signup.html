@@ -40,14 +40,56 @@
                     maxlength="20"
                     class="w-full px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
                 >
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    placeholder="이메일" 
-                    required
-                    class="w-full px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
-                >
+                <div class="space-y-2">
+                    <div class="flex space-x-2">
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="이메일"
+                            required
+                            class="flex-1 px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
+                        >
+                        <button
+                            type="button"
+                            id="sendVerificationBtn"
+                            class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors duration-300 whitespace-nowrap"
+                        >
+                            인증코드 발송
+                        </button>
+                    </div>
+
+                    <!-- 인증 코드 입력란 (처음에는 숨김) -->
+                    <div id="verificationCodeSection" class="hidden space-y-2">
+                        <div class="flex space-x-2">
+                            <input
+                                type="text"
+                                id="verificationCode"
+                                placeholder="인증 코드 6자리"
+                                maxlength="6"
+                                class="flex-1 px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
+                            >
+                            <button
+                                type="button"
+                                id="verifyCodeBtn"
+                                class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-colors duration-300 whitespace-nowrap"
+                            >
+                                인증 확인
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400" id="verificationTimer"></p>
+                    </div>
+
+                    <!-- 인증 완료 표시 -->
+                    <div id="verificationSuccess" class="hidden">
+                        <p class="text-sm text-green-400 flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            이메일 인증 완료
+                        </p>
+                    </div>
+                </div>
                 <input
                     type="password"
                     id="password"
