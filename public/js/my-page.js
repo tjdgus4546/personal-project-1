@@ -95,7 +95,7 @@ function displayUserInfo(user, stats) {
     document.getElementById('displayEmailDetail').textContent = user.email || '-';
 
     // 활동 통계 표시
-    document.getElementById('playedQuizzesCount').textContent = `${user.playedQuizzes?.length || 0}개`;
+    document.getElementById('playedQuizzesCount').textContent = `${stats.playedQuizzes || 0}개`;
     document.getElementById('createdQuizzesCount').textContent = `${stats.createdQuizzes || 0}개`;
     
     // 가입 방법 표시

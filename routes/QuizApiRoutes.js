@@ -106,6 +106,40 @@ module.exports = (quizDb) => {
 
   // --- Private Routes (인증 필요) ---
 
+  // 사용자 통계 정보 (만든 퀴즈 개수, 플레이한 퀴즈 개수)
+  privateRouter.get('/user/stats', async (req, res) => {
+    try {
+      const userId = req.user.id;
+
+      // 만든 퀴즈 개수 계산 (정상 퀴즈 + 압수된 퀴즈 포함)
+      const createdQuizzes = await Quiz.countDocuments({
+        $or: [
+          { creatorId: userId.toString() },                     // 정상 퀴즈
+          { creatorId: 'seized', originalCreatorId: userId }   // 압수된 퀴즈 (원래 내가 만든 것)
+        ]
+      });
+
+      // 플레이한 퀴즈 개수는 User 모델에서 가져오기
+      const userDb = req.app.get('userDb');
+      const User = require('../models/User')(userDb);
+      const user = await User.findById(userId).select('playedQuizzes');
+      const playedQuizzes = user?.playedQuizzes?.length || 0;
+
+      res.json({
+        createdQuizzes,
+        playedQuizzes
+      });
+    } catch (err) {
+      console.error('사용자 통계 조회 실패:', err);
+      res.status(500).json({
+        message: '통계 조회 실패',
+        error: err.message,
+        createdQuizzes: 0,
+        playedQuizzes: 0
+      });
+    }
+  });
+
   // 나의 퀴즈 확인
   privateRouter.get('/quiz/my-list', async (req, res) => {
     try {
