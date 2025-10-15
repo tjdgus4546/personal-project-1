@@ -523,8 +523,43 @@ router.get('/stats/debug-ips', async (req, res) => {
     todayKorea.setUTCHours(0, 0, 0, 0);
     const today = new Date(todayKorea.getTime() - koreaOffset);
 
-    // 봇 필터 패턴
+    // 봇 필터 패턴 (User-Agent 기반)
     const botPattern = /bot|crawler|spider|crawling|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|facebookexternalhit|ia_archiver|curl|wget|python-requests|ahrefsbot|semrushbot|dotbot|petalbot/i;
+
+    // 알려진 악성 IP 블랙리스트
+    const knownBotIPs = [
+      '3.94.205.55',      // AWS - .git 공격
+      '185.244.104.2',    // 러시아 - 악성 스캔
+      '89.248.168.222'    // 감지된 봇
+    ];
+
+    // 봇 판별 함수 (User-Agent + IP + 행동 패턴)
+    function isBotRequest(log) {
+      // 1. User-Agent 기반
+      if (botPattern.test(log.userAgent || '')) {
+        return true;
+      }
+
+      // 2. IP 블랙리스트
+      if (knownBotIPs.includes(log.ip)) {
+        return true;
+      }
+
+      // 3. 행동 패턴 (공격 시도)
+      if (log.path && (
+        log.path.includes('/.git') ||
+        log.path.includes('/.env') ||
+        log.path.includes('/admin-console') ||
+        log.path.includes('/adminpanel') ||
+        log.path.includes('/wp-admin') ||
+        log.path.includes('.php') ||
+        log.path.includes('/config.')
+      )) {
+        return true;
+      }
+
+      return false;
+    }
 
     // 오늘 로그 조회 (User-Agent 포함)
     const logs = await AccessLog.find({ timestamp: { $gte: today } })
@@ -533,20 +568,27 @@ router.get('/stats/debug-ips', async (req, res) => {
       .limit(50)
       .lean();
 
-    // 봇과 실제 사용자 구분
+    // 봇과 실제 사용자 구분 (개선된 필터 사용)
     const logsWithBotFlag = logs.map(log => ({
       ...log,
-      isBot: botPattern.test(log.userAgent || '')
+      isBot: isBotRequest(log)
     }));
 
     // 고유 IP 집계 (전체)
     const uniqueIpsAll = await AccessLog.distinct('ip', { timestamp: { $gte: today } });
 
-    // 고유 IP 집계 (봇 제외)
-    const uniqueIpsReal = await AccessLog.distinct('ip', {
-      timestamp: { $gte: today },
-      userAgent: { $not: botPattern }
-    });
+    // 고유 IP 집계 (봇 제외) - 모든 로그를 가져와서 필터링
+    const allLogs = await AccessLog.find({ timestamp: { $gte: today } })
+      .select('ip path userAgent')
+      .lean();
+
+    const realUserIPs = new Set(
+      allLogs
+        .filter(log => !isBotRequest(log))
+        .map(log => log.ip)
+    );
+
+    const uniqueIpsReal = Array.from(realUserIPs);
 
     res.json({
       success: true,
@@ -581,11 +623,53 @@ router.get('/stats', async (req, res) => {
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 현재 접속자 계산용
 
-    // 봇 필터 조건 (정규표현식으로 봇 User-Agent 제외)
+    // 봇 필터 패턴 (User-Agent 기반)
     const botPattern = /bot|crawler|spider|crawling|googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|facebookexternalhit|ia_archiver|curl|wget|python-requests|ahrefsbot|semrushbot|dotbot|petalbot/i;
 
+    // 알려진 악성 IP 블랙리스트
+    const knownBotIPs = [
+      '3.94.205.55',      // AWS - .git 공격
+      '185.244.104.2',    // 러시아 - 악성 스캔
+      '89.248.168.222'    // 감지된 봇
+    ];
+
+    // 봇 판별 함수 (User-Agent + IP + 행동 패턴)
+    function isBotRequest(log) {
+      // 1. User-Agent 기반
+      if (botPattern.test(log.userAgent || '')) {
+        return true;
+      }
+
+      // 2. IP 블랙리스트
+      if (knownBotIPs.includes(log.ip)) {
+        return true;
+      }
+
+      // 3. 행동 패턴 (공격 시도)
+      if (log.path && (
+        log.path.includes('/.git') ||
+        log.path.includes('/.env') ||
+        log.path.includes('/admin-console') ||
+        log.path.includes('/adminpanel') ||
+        log.path.includes('/wp-admin') ||
+        log.path.includes('.php') ||
+        log.path.includes('/config.')
+      )) {
+        return true;
+      }
+
+      return false;
+    }
+
+    // MongoDB에서 IP 블랙리스트 제외 조건
+    const ipBlacklistFilter = {
+      ip: { $nin: knownBotIPs }
+    };
+
+    // 기본 봇 필터 (User-Agent + IP 블랙리스트)
     const botFilter = {
-      userAgent: { $not: botPattern }
+      userAgent: { $not: botPattern },
+      ...ipBlacklistFilter
     };
 
     // 병렬로 모든 통계 조회 (봇 제외)
@@ -614,7 +698,8 @@ router.get('/stats', async (req, res) => {
       {
         $match: {
           timestamp: { $gte: today },
-          userAgent: { $not: botPattern }
+          userAgent: { $not: botPattern },
+          ip: { $nin: knownBotIPs }
         }
       },
       {
@@ -651,7 +736,8 @@ router.get('/stats', async (req, res) => {
       {
         $match: {
           timestamp: { $gte: weekAgo },
-          userAgent: { $not: botPattern }
+          userAgent: { $not: botPattern },
+          ip: { $nin: knownBotIPs }
         }
       },
       {
