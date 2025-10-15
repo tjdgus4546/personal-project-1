@@ -45,6 +45,9 @@ function handleUrlParameters() {
             case 'session_expired':
                 errorMessage = '세션이 만료되었습니다. 다시 로그인해주세요.';
                 break;
+            case 'account_deleted':
+                errorMessage = '탈퇴한 계정입니다. 로그인할 수 없습니다.<br>작성하신 콘텐츠는 6개월간 보관 후 완전히 삭제됩니다.';
+                break;
             default:
                 errorMessage = '알 수 없는 오류가 발생했습니다.';
         }

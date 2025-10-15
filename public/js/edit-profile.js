@@ -225,9 +225,10 @@ function populateForm(user) {
     updateNicknameLength();
 
     // 계정 정보 표시
-    const signupMethod = user.naverId ? '네이버 연동' : '일반 가입';
+    const signupMethod = user.naverId ? '네이버 연동' :
+                        user.googleId ? '구글 연동' : '일반 가입';
     document.getElementById('signupMethod').textContent = signupMethod;
-    
+
     if (user.createdAt) {
         const joinDate = new Date(user.createdAt).toLocaleDateString('ko-KR');
         document.getElementById('joinDate').textContent = joinDate;
@@ -235,7 +236,7 @@ function populateForm(user) {
 
     // OAuth 사용자인 경우 비밀번호 섹션 숨기기
     const passwordSection = document.getElementById('passwordSection');
-    if (user.naverId) {
+    if (user.naverId || user.googleId) {
         passwordSection.classList.add('hidden');
     } else {
         passwordSection.classList.remove('hidden');
@@ -262,8 +263,10 @@ function populateProfileImage(user) {
         `;
         
         // 프로필 이미지 정보 표시
+        const imageSource = user.naverId ? '네이버' :
+                           user.googleId ? '구글' : '사용자';
         document.getElementById('profileImageInfo').innerHTML = `
-            <p class="text-green-400">✓ ${user.naverId ? '네이버' : '사용자'} 프로필 이미지</p>
+            <p class="text-green-400">✓ ${imageSource} 프로필 이미지</p>
         `;
     } else {
         // 기본 이미지이거나 이미지가 없는 경우
@@ -480,22 +483,78 @@ function setupRealtimeValidation() {
     });
 }
 
+// 회원 탈퇴 처리
+async function handleDeleteAccount() {
+    // 1차 확인: 경고 메시지와 함께 확인
+    const confirmed = confirm(
+        '정말로 회원 탈퇴하시겠습니까?\n\n' +
+        '⚠️ 탈퇴 시 주의사항:\n' +
+        '• 즉시 로그인이 불가능합니다\n' +
+        '• 작성한 모든 퀴즈가 자동으로 비공개 처리됩니다\n' +
+        '• 퀴즈 및 활동 기록은 DB에 6개월간 보관됩니다\n' +
+        '• 6개월 후 모든 정보가 영구 삭제됩니다\n' +
+        '• 법적 분쟁 시 수사기관에 정보가 제공될 수 있습니다\n\n' +
+        '이 작업은 되돌릴 수 없습니다.'
+    );
+
+    if (!confirmed) return;
+
+    // 2차 확인: "탈퇴" 텍스트 입력 요구
+    const doubleCheck = prompt(
+        '정말로 탈퇴하시겠습니까?\n\n' +
+        '계속 진행하려면 아래 텍스트를 정확히 입력해주세요:\n\n' +
+        '탈퇴'
+    );
+
+    if (doubleCheck !== '탈퇴') {
+        if (doubleCheck !== null) {
+            showAlert('warning', '입력한 텍스트가 일치하지 않습니다. 탈퇴가 취소되었습니다.');
+        }
+        return;
+    }
+
+    try {
+        const response = await fetch('/auth/delete-account', {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // 성공 시 메시지 표시 후 메인 페이지로 이동
+            alert(
+                '회원 탈퇴가 완료되었습니다.\n\n' +
+                '그동안 PlayCode를 이용해주셔서 감사합니다.\n' +
+                `작성하신 콘텐츠는 ${new Date(data.deletionScheduledAt).toLocaleDateString('ko-KR')}까지 보관됩니다.`
+            );
+            window.location.href = '/';
+        } else {
+            showAlert('error', data.message || '회원 탈퇴 중 오류가 발생했습니다.');
+        }
+
+    } catch (error) {
+        console.error('회원 탈퇴 실패:', error);
+        showAlert('error', '네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+    }
+}
+
 // 이벤트 리스너 설정
 function setupEventListeners() {
     const editForm = document.getElementById('editProfileForm');
     if (editForm) {
         editForm.addEventListener('submit', handleFormSubmit);
     }
-    
+
     // 프로필 이미지 변경 버튼
     const changeImageBtn = document.getElementById('changeImageBtn');
     const profileImageInput = document.getElementById('profileImageInput');
-    
+
     if (changeImageBtn && profileImageInput) {
         changeImageBtn.addEventListener('click', () => {
             profileImageInput.click();
         });
-        
+
         profileImageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -503,19 +562,25 @@ function setupEventListeners() {
             }
         });
     }
-    
+
     // 새 이미지 제거 버튼
     const removeNewImageBtn = document.getElementById('removeNewImageBtn');
     if (removeNewImageBtn) {
         removeNewImageBtn.addEventListener('click', removeNewImage);
     }
-    
+
     // 현재 이미지 제거 버튼
     const removeCurrentImageBtn = document.getElementById('removeCurrentImageBtn');
     if (removeCurrentImageBtn) {
         removeCurrentImageBtn.addEventListener('click', removeCurrentImageHandler);
     }
-    
+
+    // 회원 탈퇴 버튼
+    const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+    if (deleteAccountBtn) {
+        deleteAccountBtn.addEventListener('click', handleDeleteAccount);
+    }
+
     // 실시간 유효성 검사 설정
     setupRealtimeValidation();
 }

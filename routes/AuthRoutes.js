@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const router = express.Router();
-const { signup, login, getUserInfo, logout, refreshToken, updateProfile } = require('../controllers/AuthController');
+const { signup, login, getUserInfo, logout, refreshToken, updateProfile, deleteAccount } = require('../controllers/AuthController');
 const authenticateToken = require('../middlewares/AuthMiddleware');
 
 // 로그인 페이지 라우팅
@@ -35,5 +35,6 @@ router.post('/signup', signup);
 router.get('/me', authenticateToken, getUserInfo);
 router.post('/logout', logout);
 router.post('/refresh', refreshToken);
+router.delete('/delete-account', authenticateToken, deleteAccount);
 
 module.exports = router;

@@ -191,8 +191,14 @@ router.get('/naver/callback', async (req, res) => {
     const User = require('../models/User')(userDb);
     
     const existingUser = await User.findOne({ naverId: naverUser.id });
-    
+
     if (existingUser) {
+      // 탈퇴한 회원인지 확인
+      if (existingUser.isDeleted) {
+        console.log('탈퇴한 계정 로그인 시도:', existingUser.email);
+        return res.redirect('/login?error=account_deleted');
+      }
+
       // 이미 가입된 사용자 - 바로 로그인
       const accessToken = jwt.sign(
         {

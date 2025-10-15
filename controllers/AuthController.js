@@ -65,7 +65,15 @@ const login = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: '사용자를 찾을 수 없습니다.' });
     }
-    
+
+    // 탈퇴한 회원인지 확인
+    if (user.isDeleted) {
+      return res.status(403).json({
+        message: '탈퇴한 계정입니다. 로그인할 수 없습니다.',
+        deletionScheduledAt: user.deletionScheduledAt
+      });
+    }
+
     // OAuth 사용자인 경우 (password가 없는 경우)
     if (!user.password && user.naverId) {
       return res.status(400).json({
@@ -288,4 +296,64 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getUserInfo, logout, refreshToken, updateProfile };
+// 회원 탈퇴
+const deleteAccount = async (req, res) => {
+  const userDb = req.app.get('userDb');
+  const quizDb = req.app.get('quizDb');
+  const User = require('../models/User')(userDb);
+  const Quiz = require('../models/Quiz')(quizDb);
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 이미 탈퇴한 회원인지 확인
+    if (user.isDeleted) {
+      return res.status(400).json({ message: '이미 탈퇴한 계정입니다.' });
+    }
+
+    const now = new Date();
+    const sixMonthsLater = new Date(now.getTime() + (6 * 30 * 24 * 60 * 60 * 1000)); // 6개월 후
+
+    // 해당 회원의 모든 퀴즈를 비공개 처리
+    // 압수되지 않은 퀴즈(creatorId가 userId인 경우)만 비공개 처리
+    const quizUpdateResult = await Quiz.updateMany(
+      {
+        creatorId: req.user.id.toString(),
+        isComplete: true
+      },
+      {
+        $set: { isComplete: false }
+      }
+    );
+
+    console.log(`회원 탈퇴: ${user.email} - ${quizUpdateResult.modifiedCount}개의 퀴즈 비공개 처리됨`);
+
+    // 소프트 삭제: 즉시 삭제하지 않고 표시만
+    user.isDeleted = true;
+    user.deletedAt = now;
+    user.deletionScheduledAt = sixMonthsLater;
+
+    // 비밀번호는 즉시 삭제 (보안)
+    user.password = undefined;
+
+    await user.save();
+
+    // 쿠키 삭제
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
+    res.json({
+      message: '회원 탈퇴가 완료되었습니다. 6개월 후 모든 정보가 완전히 삭제됩니다.',
+      deletionScheduledAt: sixMonthsLater
+    });
+
+  } catch (err) {
+    console.error('회원 탈퇴 오류:', err);
+    res.status(500).json({ message: '서버 오류', error: err.message });
+  }
+};
+
+module.exports = { signup, login, getUserInfo, logout, refreshToken, updateProfile, deleteAccount };

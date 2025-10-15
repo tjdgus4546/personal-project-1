@@ -66,6 +66,18 @@ const userSchema = new Schema({
     type: String,
     enum: ['user', 'admin', 'superadmin'],
     default: 'user'
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletionScheduledAt: {
+    type: Date,
+    default: null
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false
   }
 });
 
