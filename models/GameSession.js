@@ -13,6 +13,7 @@ const playerSchema = new Schema({
   connected: { type: Boolean, default: true },
   lastSeen: { type: Date, default: Date.now },
   socketId: { type: String, default: null },
+  lastCorrectTime: { type: Date, default: null }, // 마지막 정답을 맞춘 시간
 });
 
 const gameSessionSchema = new Schema({

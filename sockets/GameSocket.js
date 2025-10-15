@@ -19,10 +19,29 @@ module.exports = (io, app) => {
    * @param {Array} players - 플레이어 배열
    */
     function emitScoreboard(io, sessionId, players) {
+    // 순위 정렬: 1차 점수 내림차순, 2차 맞춘 문제 수 내림차순, 3차 정답 시간 오름차순
+    const sortedPlayers = [...players].sort((a, b) => {
+      // 1차 정렬: 점수 내림차순
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      // 2차 정렬: 점수가 같으면 맞춘 문제 수 내림차순
+      const countDiff = (b.correctAnswersCount || 0) - (a.correctAnswersCount || 0);
+      if (countDiff !== 0) {
+        return countDiff;
+      }
+      // 3차 정렬: 맞춘 문제 수도 같으면 정답을 빨리 맞춘 사람이 높은 순위
+      // lastCorrectTime이 없는 경우(정답을 하나도 못 맞춘 경우) 가장 낮은 순위로
+      if (!a.lastCorrectTime && !b.lastCorrectTime) return 0;
+      if (!a.lastCorrectTime) return 1; // a가 정답 없음 -> b가 더 높은 순위
+      if (!b.lastCorrectTime) return -1; // b가 정답 없음 -> a가 더 높은 순위
+      return a.lastCorrectTime - b.lastCorrectTime; // 빠른 시간(작은 값)이 더 높은 순위
+    });
+
     io.to(sessionId).emit('scoreboard', {
       success: true,
       data: {
-        players: players.map(p => ({
+        players: sortedPlayers.map(p => ({
           nickname: p.nickname,
           score: p.score,
           correctAnswersCount: p.correctAnswersCount || 0,
@@ -517,6 +536,7 @@ module.exports = (io, app) => {
           player.score += 1;
         }
         player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
+        player.lastCorrectTime = new Date(); // 정답 맞춘 시간 기록
 
         session.correctUsers = session.correctUsers || {};
         if (!session.correctUsers[qIndex]) {
@@ -1045,7 +1065,7 @@ module.exports = (io, app) => {
         
         if (correctDisplayNames.length > 0) {
           correctDisplayNames.forEach((displayName, index) => {
-            const player = session.players.find(p => 
+            const player = session.players.find(p =>
               (p.nickname || 'Unknown') === displayName
             );
             if (player) {
@@ -1057,6 +1077,7 @@ module.exports = (io, app) => {
                 player.score += 1;
               }
               player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
+              player.lastCorrectTime = new Date(); // 정답 맞춘 시간 기록
             }
           });
 

@@ -71,8 +71,8 @@ router.get('/quiz/:sessionId', authenticateToken, async (req, res) => {
     }
 
     // 인가 로직: 사용자가 이 세션의 호스트이거나 참여자인지 확인
-    const isHost = session.host.toString() === userId;
-    const isParticipant = session.players.some(p => p.userId.toString() === userId);
+    const isHost = session.host && session.host.toString() === userId;
+    const isParticipant = session.players.some(p => p.userId && p.userId.toString() === userId);
 
     if (isHost || isParticipant) {
       // 허가된 사용자: 퀴즈 세션 페이지를 보냄
