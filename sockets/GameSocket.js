@@ -693,7 +693,7 @@ module.exports = (io, app) => {
             return;
           }
 
-        const connectedCount = session.players.filter(p => p.connected).length; 
+        const connectedCount = session.players.filter(p => p.connected).length;
 
         io.to(sessionId).emit('voteSkipUpdate', {
           success: true,
@@ -703,10 +703,10 @@ module.exports = (io, app) => {
           }
         });
 
-        const totalPlayers = session.players.length;
-        const voteRatio = session.skipVotes.length / totalPlayers;
+        // 스킵 투표는 현재 접속 중인 플레이어만 기준으로 계산
+        const voteRatio = session.skipVotes.length / connectedCount;
 
-        if (voteRatio >= 0.5) {
+        if (voteRatio >= 0.5 && connectedCount > 0) {
 
           if (session.revealedAt) {
             return;
