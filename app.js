@@ -6,6 +6,7 @@ const session = require('express-session');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const naverAuthRoutes = require('./routes/NaverAuthRoutes');
+const googleAuthRoutes = require('./routes/GoogleAuthRoutes');
 const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
 const adminRoutes = require('./routes/AdminRoutes');
@@ -116,6 +117,7 @@ connectDB().then(({ userDb, quizDb }) => {
   // 라우트 설정
   app.use('/auth', authRoutes);
   app.use('/auth', naverAuthRoutes);
+  app.use('/auth', googleAuthRoutes);
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
   app.use('/api', publicRouter); // 인증이 필요없는 API

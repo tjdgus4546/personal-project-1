@@ -58,22 +58,40 @@
                     class="w-full px-4 py-3 bg-[#3a3a4a] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all duration-300 text-base"
                 >
 
-                <!-- 개인정보 처리방침 동의 -->
-                <div class="flex items-start space-x-3 py-2">
-                    <input
-                        type="checkbox"
-                        id="privacyAgree"
-                        name="privacyAgree"
-                        class="mt-1 w-4 h-4 text-blue-600 bg-[#3a3a4a] border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
-                        required
-                    >
-                    <label for="privacyAgree" class="text-sm text-gray-300">
-                        <span class="text-red-400">[필수]</span>
-                        <a href="/privacy-policy.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">
-                            개인정보 처리방침
-                        </a>
-                        에 동의합니다
-                    </label>
+                <!-- 약관 동의 -->
+                <div class="space-y-3 py-2">
+                    <div class="flex items-start space-x-3">
+                        <input
+                            type="checkbox"
+                            id="termsAgree"
+                            name="termsAgree"
+                            class="mt-1 w-4 h-4 text-blue-600 bg-[#3a3a4a] border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                            required
+                        >
+                        <label for="termsAgree" class="text-sm text-gray-300">
+                            <span class="text-red-400">[필수]</span>
+                            <a href="/terms.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">
+                                서비스 이용약관
+                            </a>
+                            에 동의합니다
+                        </label>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <input
+                            type="checkbox"
+                            id="privacyAgree"
+                            name="privacyAgree"
+                            class="mt-1 w-4 h-4 text-blue-600 bg-[#3a3a4a] border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                            required
+                        >
+                        <label for="privacyAgree" class="text-sm text-gray-300">
+                            <span class="text-red-400">[필수]</span>
+                            <a href="/privacy-policy.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">
+                                개인정보 처리방침
+                            </a>
+                            에 동의합니다
+                        </label>
+                    </div>
                 </div>
 
                 <button
@@ -89,9 +107,13 @@
             </div>
 
             <div class="space-y-3 social-login-group">
-                <a href="/auth/naver" 
+                <a href="/auth/naver"
                    class="btn-naver block w-full text-center py-3 px-4 rounded-lg font-medium transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl no-underline">
                     네이버로 가입하기
+                </a>
+                <a href="/auth/google"
+                   class="btn-google block w-full text-center py-3 px-4 rounded-lg font-medium transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl no-underline">
+                    구글로 가입하기
                 </a>
             </div>
 
@@ -107,6 +129,8 @@
     <!-- 푸터 -->
     <footer class="mt-12 pb-8 text-center text-gray-400 text-sm">
         <div class="space-x-4">
+            <a href="/terms.html" class="hover:text-white transition-colors no-underline">서비스 이용약관</a>
+            <span>|</span>
             <a href="/privacy-policy.html" class="hover:text-white transition-colors no-underline">개인정보 처리방침</a>
             <span>|</span>
             <a href="/" class="hover:text-white transition-colors no-underline">PlayCode</a>

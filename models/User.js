@@ -30,6 +30,11 @@ const userSchema = new Schema({
     unique: true,
     sparse: true, // null 값 허용하면서 unique 유지
   },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // null 값 허용하면서 unique 유지
+  },
   createdAt: {
     type: Date,
     default: Date.now,

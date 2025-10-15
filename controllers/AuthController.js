@@ -68,8 +68,14 @@ const login = async (req, res) => {
     
     // OAuth 사용자인 경우 (password가 없는 경우)
     if (!user.password && user.naverId) {
-      return res.status(400).json({ 
-        message: '네이버 로그인으로 가입된 계정입니다. 네이버 로그인을 이용해주세요.' 
+      return res.status(400).json({
+        message: '네이버 로그인으로 가입된 계정입니다. 네이버 로그인을 이용해주세요.'
+      });
+    }
+
+    if (!user.password && user.googleId) {
+      return res.status(400).json({
+        message: '구글 로그인으로 가입된 계정입니다. 구글 로그인을 이용해주세요.'
       });
     }
     
@@ -220,16 +226,18 @@ const updateProfile = async (req, res) => {
       
       updateData.profileImage = profileImage;
     } else if (removeProfileImage) {
-      // 현재 이미지 제거 (네이버 연동 사용자는 네이버 기본 이미지로 복원)
+      // 현재 이미지 제거 (OAuth 연동 사용자는 기본 이미지로 복원)
       if (user.naverId) {
         updateData.profileImage = 'https://ssl.pstatic.net/static/pwe/address/img_profile.png';
+      } else if (user.googleId) {
+        updateData.profileImage = null;  // 구글은 기본 이미지 URL이 없으므로 null
       } else {
         updateData.profileImage = null;
       }
     }
 
     // 비밀번호 변경 (OAuth 사용자가 아닌 경우에만)
-    if (newPassword && !user.naverId) {
+    if (newPassword && !user.naverId && !user.googleId) {
       if (!currentPassword) {
         return res.status(400).json({ message: '현재 비밀번호를 입력해주세요.' });
       }
@@ -245,6 +253,8 @@ const updateProfile = async (req, res) => {
       updateData.password = hashedPassword;
     } else if (newPassword && user.naverId) {
       return res.status(400).json({ message: '네이버 연동 계정은 비밀번호를 변경할 수 없습니다.' });
+    } else if (newPassword && user.googleId) {
+      return res.status(400).json({ message: '구글 연동 계정은 비밀번호를 변경할 수 없습니다.' });
     }
 
     // 업데이트할 데이터가 없는 경우
