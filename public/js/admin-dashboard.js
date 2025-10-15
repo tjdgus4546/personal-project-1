@@ -9,6 +9,8 @@ let currentUser = null; // 현재 사용자 정보 저장
 let currentSearchTerm = ''; // 현재 검색어
 let currentFilterStatus = 'all'; // 현재 필터 상태
 let imageCache = new Map(); // 이미지 캐시 (quizId -> images)
+let autoRefreshInterval = null;
+let isAutoRefreshEnabled = true; // 기본값: 자동 갱신 활성화
 
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
@@ -63,6 +65,15 @@ async function initializePage() {
 
     // 무한 스크롤 이벤트 리스너 추가
     window.addEventListener('scroll', handleScroll);
+
+    // 자동 갱신 시작 (15초마다)
+    startAutoRefresh();
+
+    // 페이지 가시성 변경 감지 (탭 전환 시)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 초기 버튼 상태 설정
+    updateAutoRefreshButton();
   } catch (error) {
     console.error('페이지 초기화 실패:', error);
     alert('페이지 초기화 중 오류가 발생했습니다.');
@@ -601,11 +612,135 @@ function hideLoadMoreIndicator() {
   }
 }
 
+// 자동 갱신 시작 (신고 카운트 + 퀴즈 목록 갱신)
+function startAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+  }
+
+  if (isAutoRefreshEnabled) {
+    autoRefreshInterval = setInterval(() => {
+      // 페이지가 보이는 상태일 때만 갱신
+      if (!document.hidden) {
+        updateReportCount();
+        refreshQuizListSilently();
+      }
+    }, 15000); // 15초마다
+  }
+}
+
+// 퀴즈 목록 조용히 갱신 (스크롤 위치 유지)
+async function refreshQuizListSilently() {
+  try {
+    const url = currentSearchTerm
+      ? `/admin/quizzes/search?q=${encodeURIComponent(currentSearchTerm)}&page=1&limit=${allQuizzes.length || 10}&status=${currentFilterStatus}`
+      : `/admin/quizzes?page=1&limit=${allQuizzes.length || 10}&status=${currentFilterStatus}`;
+
+    const response = await fetchWithAuth(url);
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    // 기존 퀴즈 개수와 비교
+    if (data.quizzes.length !== allQuizzes.length) {
+      showNotification(`퀴즈 목록이 변경되었습니다. (${data.quizzes.length}개)`);
+    }
+
+    // 목록 업데이트 (스크롤 위치는 유지)
+    allQuizzes = data.quizzes;
+    renderQuizTable(allQuizzes);
+
+  } catch (error) {
+    console.error('Silent refresh error:', error);
+  }
+}
+
+// 자동 갱신 중지
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
+// 자동 갱신 토글
+function toggleAutoRefresh() {
+  isAutoRefreshEnabled = !isAutoRefreshEnabled;
+
+  if (isAutoRefreshEnabled) {
+    startAutoRefresh();
+    showNotification('자동 갱신 활성화 (15초마다)');
+  } else {
+    stopAutoRefresh();
+    showNotification('자동 갱신 비활성화');
+  }
+
+  updateAutoRefreshButton();
+}
+
+// 자동 갱신 버튼 UI 업데이트
+function updateAutoRefreshButton() {
+  const button = document.getElementById('autoRefreshToggle');
+  if (button) {
+    if (isAutoRefreshEnabled) {
+      button.innerHTML = `
+        <svg class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        자동 갱신 중
+      `;
+      button.classList.remove('bg-gray-700');
+      button.classList.add('bg-green-600');
+    } else {
+      button.innerHTML = `
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        자동 갱신 정지됨
+      `;
+      button.classList.remove('bg-green-600');
+      button.classList.add('bg-gray-700');
+    }
+  }
+}
+
+// 페이지 가시성 변경 처리
+function handleVisibilityChange() {
+  if (!document.hidden && isAutoRefreshEnabled) {
+    // 페이지가 다시 보이면 즉시 갱신
+    updateReportCount();
+    refreshQuizListSilently();
+  }
+}
+
+// 알림 표시
+function showNotification(message) {
+  // 기존 알림 제거
+  const existing = document.getElementById('autoRefreshNotification');
+  if (existing) {
+    existing.remove();
+  }
+
+  // 새 알림 생성
+  const notification = document.createElement('div');
+  notification.id = 'autoRefreshNotification';
+  notification.className = 'fixed top-20 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+
+  // 3초 후 제거
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
 // 전역 함수로 등록
 window.toggleVisibility = toggleVisibility;
 window.seizeQuiz = seizeQuiz;
 window.restoreQuiz = restoreQuiz;
 window.deleteQuiz = deleteQuiz;
+window.toggleAutoRefresh = toggleAutoRefresh;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
