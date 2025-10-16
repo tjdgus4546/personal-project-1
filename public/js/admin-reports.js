@@ -376,6 +376,14 @@ function createQuizCard(quiz) {
             <span class="text-gray-500">작성자:</span>
             <span class="text-white">${quiz.creator.nickname}</span>
             <span class="text-gray-500">(${quiz.creator.email})</span>
+            ${!isSeized && quiz.creatorId ? `
+              <button
+                onclick="event.stopPropagation(); suspendUserFromQuizReport('${quiz.creatorId}', '${quiz.creator.nickname.replace(/'/g, "\\'")}')"
+                class="ml-2 px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-500 text-white rounded transition-colors"
+              >
+                사용자 정지
+              </button>
+            ` : ''}
           </div>
           <div class="flex items-center gap-2">
             <span class="text-gray-500">문제 수:</span>
@@ -526,6 +534,14 @@ function createCommentCard(comment) {
               <span class="px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500">
                 숨김
               </span>
+            ` : ''}
+            ${comment.userId ? `
+              <button
+                onclick="suspendUserFromComment('${comment.userId}', '${comment.nickname.replace(/'/g, "\\'")}')"
+                class="ml-2 px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-500 text-white rounded transition-colors"
+              >
+                사용자 정지
+              </button>
             ` : ''}
           </div>
           <p class="text-gray-300 text-sm mb-2">${comment.content}</p>
@@ -826,6 +842,112 @@ function hideLoadMoreIndicator(tab = 'quiz') {
   }
 }
 
+// 사용자 정지
+async function suspendUserFromComment(userId, nickname) {
+  const daysInput = prompt(`"${nickname}" 사용자를 정지하시겠습니까?\n\n정지 기간을 일수로 입력하세요.\n(빈 칸 또는 0 입력 시 영구 정지)`);
+
+  if (daysInput === null) {
+    return;
+  }
+
+  const days = daysInput.trim() === '' || daysInput.trim() === '0' ? null : parseInt(daysInput);
+
+  if (days !== null && (isNaN(days) || days < 1)) {
+    alert('유효한 일수를 입력해주세요. (1 이상의 숫자 또는 빈 칸)');
+    return;
+  }
+
+  const reason = prompt('정지 사유를 입력하세요 (선택사항):');
+
+  if (reason === null) {
+    return;
+  }
+
+  const confirmMessage = days
+    ? `"${nickname}" 사용자를 ${days}일간 정지하시겠습니까?`
+    : `"${nickname}" 사용자를 영구 정지하시겠습니까?`;
+
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/users/${userId}/suspend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        days,
+        reason: reason || '관리자 조치'
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadReportedComments(true); // 목록 새로고침
+    } else {
+      alert(data.message || '사용자 정지 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('User suspend error:', err);
+    alert('사용자 정지 처리 중 오류가 발생했습니다.');
+  }
+}
+
+// 사용자 정지 (퀴즈 신고에서)
+async function suspendUserFromQuizReport(userId, nickname) {
+  const daysInput = prompt(`"${nickname}" 사용자를 정지하시겠습니까?\n\n정지 기간을 일수로 입력하세요.\n(빈 칸 또는 0 입력 시 영구 정지)`);
+
+  if (daysInput === null) {
+    return;
+  }
+
+  const days = daysInput.trim() === '' || daysInput.trim() === '0' ? null : parseInt(daysInput);
+
+  if (days !== null && (isNaN(days) || days < 1)) {
+    alert('유효한 일수를 입력해주세요. (1 이상의 숫자 또는 빈 칸)');
+    return;
+  }
+
+  const reason = prompt('정지 사유를 입력하세요 (선택사항):');
+
+  if (reason === null) {
+    return;
+  }
+
+  const confirmMessage = days
+    ? `"${nickname}" 사용자를 ${days}일간 정지하시겠습니까?`
+    : `"${nickname}" 사용자를 영구 정지하시겠습니까?`;
+
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/users/${userId}/suspend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        days,
+        reason: reason || '관리자 조치'
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadReportedQuizzes(true); // 목록 새로고침
+    } else {
+      alert(data.message || '사용자 정지 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('User suspend error:', err);
+    alert('사용자 정지 처리 중 오류가 발생했습니다.');
+  }
+}
+
 // 전역 함수로 등록
 window.seizeQuizFromReport = seizeQuizFromReport;
 window.restoreQuizFromReport = restoreQuizFromReport;
@@ -834,6 +956,8 @@ window.dismissReports = dismissReports;
 window.hideCommentFromReport = hideCommentFromReport;
 window.deleteCommentFromReport = deleteCommentFromReport;
 window.dismissCommentReports = dismissCommentReports;
+window.suspendUserFromComment = suspendUserFromComment;
+window.suspendUserFromQuizReport = suspendUserFromQuizReport;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);

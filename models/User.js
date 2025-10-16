@@ -91,6 +91,28 @@ const userSchema = new Schema({
   verificationCodeExpires: {
     type: Date,
     default: null
+  },
+  // 사용자 정지 관련
+  isSuspended: {
+    type: Boolean,
+    default: false
+  },
+  suspendedUntil: {
+    type: Date,
+    default: null // null이면 영구 정지
+  },
+  suspendReason: {
+    type: String,
+    default: null
+  },
+  suspendedAt: {
+    type: Date,
+    default: null
+  },
+  suspendedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 });
 

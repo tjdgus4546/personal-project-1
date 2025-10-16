@@ -381,6 +381,12 @@ function renderQuizTable(quizzes) {
             >
               압수
             </button>
+            <button
+              onclick="suspendUserFromDashboard('${quiz.creatorId}', '${quiz.creator.nickname.replace(/'/g, "\\'")}')"
+              class="border border-gray-600 hover:bg-yellow-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+            >
+              정지
+            </button>
           ` : `
             <button
               onclick="restoreQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
@@ -735,12 +741,66 @@ function showNotification(message) {
   }, 3000);
 }
 
+// 사용자 정지 (대시보드에서)
+async function suspendUserFromDashboard(userId, nickname) {
+  const daysInput = prompt(`"${nickname}" 사용자를 정지하시겠습니까?\n\n정지 기간을 일수로 입력하세요.\n(빈 칸 또는 0 입력 시 영구 정지)`);
+
+  if (daysInput === null) {
+    return;
+  }
+
+  const days = daysInput.trim() === '' || daysInput.trim() === '0' ? null : parseInt(daysInput);
+
+  if (days !== null && (isNaN(days) || days < 1)) {
+    alert('유효한 일수를 입력해주세요. (1 이상의 숫자 또는 빈 칸)');
+    return;
+  }
+
+  const reason = prompt('정지 사유를 입력하세요 (선택사항):');
+
+  if (reason === null) {
+    return;
+  }
+
+  const confirmMessage = days
+    ? `"${nickname}" 사용자를 ${days}일간 정지하시겠습니까?`
+    : `"${nickname}" 사용자를 영구 정지하시겠습니까?`;
+
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/users/${userId}/suspend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        days,
+        reason: reason || '관리자 조치'
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침
+    } else {
+      alert(data.message || '사용자 정지 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('User suspend error:', err);
+    alert('사용자 정지 처리 중 오류가 발생했습니다.');
+  }
+}
+
 // 전역 함수로 등록
 window.toggleVisibility = toggleVisibility;
 window.seizeQuiz = seizeQuiz;
 window.restoreQuiz = restoreQuiz;
 window.deleteQuiz = deleteQuiz;
 window.toggleAutoRefresh = toggleAutoRefresh;
+window.suspendUserFromDashboard = suspendUserFromDashboard;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);

@@ -90,6 +90,33 @@ const login = async (req, res) => {
       });
     }
 
+    // 정지된 회원인지 확인
+    if (user.isSuspended) {
+      // 기간 정지의 경우 기간이 만료되었는지 확인
+      if (user.suspendedUntil && new Date() >= new Date(user.suspendedUntil)) {
+        // 정지 기간이 만료됨 -> 자동으로 정지 해제
+        await User.findByIdAndUpdate(user._id, {
+          isSuspended: false,
+          suspendedUntil: null,
+          suspendReason: null,
+          suspendedAt: null,
+          suspendedBy: null
+        });
+      } else {
+        // 여전히 정지 중
+        const suspendMessage = user.suspendedUntil
+          ? `계정이 ${new Date(user.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
+          : '계정이 영구 정지되었습니다.';
+
+        return res.status(403).json({
+          message: `${suspendMessage}\n사유: ${user.suspendReason || '관리자 조치'}`,
+          isSuspended: true,
+          suspendedUntil: user.suspendedUntil,
+          suspendReason: user.suspendReason
+        });
+      }
+    }
+
     // 이메일 인증 확인 (일반 회원가입 사용자만)
     // SES 프로덕션 승인 전까지 임시 비활성화 - 기존 사용자 로그인 허용
     // if (!user.naverId && !user.googleId && !user.isEmailVerified) {

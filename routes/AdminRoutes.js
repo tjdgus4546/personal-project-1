@@ -627,6 +627,102 @@ router.delete('/comments/:commentId', async (req, res) => {
   }
 });
 
+// ========== 사용자 정지 관리 API ==========
+
+// 사용자 정지 처리
+router.post('/users/:userId/suspend', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { days, reason } = req.body; // days: null이면 영구 정지, 숫자면 일수
+
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 관리자는 정지할 수 없음
+    if (user.role === 'admin' || user.role === 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: '관리자는 정지할 수 없습니다.'
+      });
+    }
+
+    // 정지 종료일 계산
+    let suspendedUntil = null;
+    if (days && days > 0) {
+      suspendedUntil = new Date();
+      suspendedUntil.setDate(suspendedUntil.getDate() + parseInt(days));
+    }
+
+    // 사용자 정지 처리
+    await User.findByIdAndUpdate(userId, {
+      isSuspended: true,
+      suspendedUntil,
+      suspendReason: reason || '관리자 조치',
+      suspendedAt: new Date(),
+      suspendedBy: req.user.id
+    });
+
+    const suspendMessage = days
+      ? `사용자가 ${days}일간 정지되었습니다.`
+      : '사용자가 영구 정지되었습니다.';
+
+    res.json({
+      success: true,
+      message: suspendMessage
+    });
+  } catch (err) {
+    console.error('User suspend error:', err);
+    res.status(500).json({
+      success: false,
+      message: '사용자 정지 처리 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 정지 해제
+router.post('/users/:userId/unsuspend', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 정지 해제
+    await User.findByIdAndUpdate(userId, {
+      isSuspended: false,
+      suspendedUntil: null,
+      suspendReason: null,
+      suspendedAt: null,
+      suspendedBy: null
+    });
+
+    res.json({
+      success: true,
+      message: '사용자 정지가 해제되었습니다.'
+    });
+  } catch (err) {
+    console.error('User unsuspend error:', err);
+    res.status(500).json({
+      success: false,
+      message: '사용자 정지 해제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // ========== 접속 통계 API ==========
 
 // 퀴즈 이미지 조회 (호버링 시 사용)
