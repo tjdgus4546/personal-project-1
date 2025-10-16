@@ -431,35 +431,48 @@ function updateModalContent(quiz) {
     document.getElementById('modalDescription').textContent = description;
 }
 
+// ESC 키 핸들러
+function handleEscapeKey(event) {
+    if (event.key === 'Escape' || event.key === 'Esc') {
+        closeQuizModal();
+    }
+}
+
 // 모달 표시 애니메이션
 function showModal() {
     const modal = document.getElementById('quizModal');
     const modalContent = document.getElementById('quizModalContent');
-    
+
     modal.classList.remove('hidden');
-    
+
     setTimeout(() => {
         modalContent.classList.remove('scale-95', 'opacity-0');
         modalContent.classList.add('scale-100', 'opacity-100');
     }, 10);
-    
+
     document.body.style.overflow = 'hidden';
+
+    // ESC 키 리스너 추가
+    document.addEventListener('keydown', handleEscapeKey);
 }
 
 // 모달 닫기
 function closeQuizModal() {
     const modal = document.getElementById('quizModal');
     const modalContent = document.getElementById('quizModalContent');
-    
+
     modalContent.classList.remove('scale-100', 'opacity-100');
     modalContent.classList.add('scale-95', 'opacity-0');
-    
+
     setTimeout(() => {
         modal.classList.add('hidden');
         currentQuizId = null;
     }, 300);
-    
+
     document.body.style.overflow = 'auto';
+
+    // ESC 키 리스너 제거
+    document.removeEventListener('keydown', handleEscapeKey);
 }
 
 // 게임 세션 생성
