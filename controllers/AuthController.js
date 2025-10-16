@@ -91,11 +91,12 @@ const login = async (req, res) => {
     }
 
     // 이메일 인증 확인 (일반 회원가입 사용자만)
-    if (!user.naverId && !user.googleId && !user.isEmailVerified) {
-      return res.status(403).json({
-        message: '이메일 인증이 필요합니다. 회원가입 시 인증을 완료해주세요.'
-      });
-    }
+    // SES 프로덕션 승인 전까지 임시 비활성화 - 기존 사용자 로그인 허용
+    // if (!user.naverId && !user.googleId && !user.isEmailVerified) {
+    //   return res.status(403).json({
+    //     message: '이메일 인증이 필요합니다. 회원가입 시 인증을 완료해주세요.'
+    //   });
+    // }
 
     // OAuth 사용자인 경우 (password가 없는 경우)
     if (!user.password && user.naverId) {

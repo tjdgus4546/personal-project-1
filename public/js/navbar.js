@@ -93,18 +93,19 @@ function createNavbarHTML(user = null) {
                 로그아웃
               </button>
             ` : `
-              <a 
-                href="/login" 
+              <a
+                href="/login"
                 class="bg-[#8BA2FA] hover:bg-[#617DE9] px-2 py-1 lg:px-4 lg:py-2 rounded-md transition-colors text-xs lg:text-sm font-medium"
               >
                 로그인
               </a>
-              <a 
-                href="/signup" 
+              <!-- 자체 회원가입 임시 비활성화 (SES 프로덕션 승인 후 재활성화 예정) -->
+              <!-- <a
+                href="/signup"
                 class="bg-[#8BA2FA] hover:bg-[#617DE9] px-2 py-1 lg:px-4 lg:py-2 rounded-md transition-colors text-xs lg:text-sm font-medium"
               >
                 회원가입
-              </a>
+              </a> -->
             `}
           </div>
 
@@ -151,18 +152,19 @@ function createNavbarHTML(user = null) {
               </button>
             ` : `
               <div class="space-y-2 px-2">
-                <a 
-                  href="/login" 
+                <a
+                  href="/login"
                   class="block w-full text-center bg-green-500 hover:bg-green-600 px-3 py-2 rounded-md transition-colors text-sm font-medium"
                 >
                   로그인
                 </a>
-                <a 
-                  href="/signup" 
+                <!-- 자체 회원가입 임시 비활성화 (SES 프로덕션 승인 후 재활성화 예정) -->
+                <!-- <a
+                  href="/signup"
                   class="block w-full text-center bg-blue-500 hover:bg-blue-600 px-3 py-2 rounded-md transition-colors text-sm font-medium"
                 >
                   회원가입
-                </a>
+                </a> -->
               </div>
             `}
           </div>
