@@ -36,18 +36,18 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    dbName: 'userDB',
+    mongoUrl: process.env.MONGODB_URI || process.env.USER_DB_URI,
+    dbName: 'userdb',
     collectionName: 'sessions',
     ttl: 30 * 60, // 30분 (초 단위)
     autoRemove: 'native' // MongoDB TTL 인덱스로 자동 삭제
   }),
   cookie: {
-    secure: true, // HTTPS 환경이므로 true 설정
+    secure: process.env.NODE_ENV === 'production', // 프로덕션에서만 true
     httpOnly: true,
     maxAge: 30 * 60 * 1000 // 30분
   },
-  proxy: true // 프록시/로드밸런서 환경에서도 세션 유지
+  proxy: process.env.NODE_ENV === 'production' // 프로덕션에서만 true
 }));
 
 // ✅ MongoDB 연결

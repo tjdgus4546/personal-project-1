@@ -97,11 +97,6 @@ function displayUserInfo(user, stats) {
     // 활동 통계 표시
     document.getElementById('playedQuizzesCount').textContent = `${stats.playedQuizzes || 0}개`;
     document.getElementById('createdQuizzesCount').textContent = `${stats.createdQuizzes || 0}개`;
-    
-    // 가입 방법 표시
-    console.log('🔍 디버그 - 사용자 정보:', user);
-    console.log('🔍 naverId:', user.naverId);
-    console.log('🔍 googleId:', user.googleId);
 
     let signupMethod = '일반 가입';
     if (user.naverId) {
@@ -109,7 +104,6 @@ function displayUserInfo(user, stats) {
     } else if (user.googleId) {
         signupMethod = '구글 연동';
     }
-    console.log('🔍 최종 가입방법:', signupMethod);
     document.getElementById('signupMethod').textContent = signupMethod;
 }
 
