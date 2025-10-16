@@ -20,6 +20,7 @@ let currentWaitingSendFunction = sendWaitingMessage;
 let youtubePlayer = null;
 let globalYoutubeVolume = 50;
 let questionOrder = [];
+let correctUsersThisQuestion = new Set(); // 현재 문제에서 정답 맞춘 사용자 닉네임
 
 // Socket.IO 연결
 const socket = io();
@@ -278,11 +279,15 @@ function renderScoreboard(players) {
 
     sortedPlayers.forEach((p, index) => {
         const li = document.createElement('li');
-        li.className = 'flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 border-blue-400';
-        
-        const avatarHTML = createPlayerAvatar(p);
         const displayName = p.nickname || 'Unknown';
-        
+
+        // 현재 문제에서 정답 맞춘 사용자는 초록색 테두리, 아니면 파란색
+        const borderColor = correctUsersThisQuestion.has(displayName) ? 'border-green-500' : 'border-blue-400';
+        li.className = `flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 ${borderColor}`;
+        li.setAttribute('data-nickname', displayName); // 닉네임 저장
+
+        const avatarHTML = createPlayerAvatar(p);
+
         li.innerHTML = `
             <div class="flex items-center justify-center gap-3 mb-2">
                 <span class="text-yellow-400 font-bold text-sm">#${index + 1}</span>
@@ -481,6 +486,14 @@ function showQuestion({ silent = false } = {}) {
 
     box.innerHTML = '';
     hasAnswered = false;
+
+    // 다음 문제 시작 - 정답자 초기화 및 스코어보드 테두리 초기화
+    correctUsersThisQuestion.clear();
+    const allScoreboardItems = document.querySelectorAll('#scoreboard li');
+    allScoreboardItems.forEach(item => {
+        item.classList.remove('border-green-500');
+        item.classList.add('border-blue-400');
+    });
 
     let html = '';
     updateQuestionNumber();
@@ -1276,8 +1289,16 @@ function setupSocketListeners() {
         }
 
         const { nickname, profileImage } = data;
-        
+
         addChatMessage(nickname, profileImage, `${nickname}님이 정답을 맞혔습니다!`, true);
+
+        // 주관식 정답 - 즉시 초록색 테두리 추가
+        correctUsersThisQuestion.add(nickname);
+        const scoreboardItem = document.querySelector(`#scoreboard li[data-nickname="${nickname}"]`);
+        if (scoreboardItem) {
+            scoreboardItem.classList.remove('border-blue-400');
+            scoreboardItem.classList.add('border-green-500');
+        }
     });
     
     socket.on('scoreboard', ({ success, message, data }) => {
@@ -1718,6 +1739,16 @@ function displayCorrectUsersInChat(correctUsers) {
     if (!chatLog) return;
 
     if (correctUsers && correctUsers.length > 0) {
+        // 객관식 정답자들도 Set에 추가하고 초록색 테두리 적용
+        correctUsers.forEach(nickname => {
+            correctUsersThisQuestion.add(nickname);
+            const scoreboardItem = document.querySelector(`#scoreboard li[data-nickname="${nickname}"]`);
+            if (scoreboardItem) {
+                scoreboardItem.classList.remove('border-blue-400');
+                scoreboardItem.classList.add('border-green-500');
+            }
+        });
+
         // 정답자가 있는 경우
         const correctUsersMessage = document.createElement('div');
         correctUsersMessage.className = 'mb-4 p-4 bg-blue-900/30 border-2 border-blue-400/50 rounded-xl';
@@ -1797,7 +1828,7 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
 
     let html = `
-        <div class="bg-green-500/20 border-green-400 rounded-xl p-6 mb-4">
+        <div class="bg-green-500/20 border-green-400 rounded-xl p-4 mb-3">
             <h3 class="font-bold text-green-400 mb-2">정답</h3>
             <div class="text-white">
                 ${displayAnswer}
