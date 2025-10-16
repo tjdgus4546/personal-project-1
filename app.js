@@ -32,6 +32,17 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1); // 첫 번째 프록시를 신뢰
 }
 
+// HTTPS 강제 리다이렉트 (프로덕션)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https') {
+      res.redirect(301, `https://${req.header('host')}${req.url}`);
+    } else {
+      next();
+    }
+  });
+}
+
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false // index.html 자동 제공 비활성화 (명시적 라우트 사용)
 }));
@@ -188,6 +199,27 @@ connectDB().then(({ userDb, quizDb }) => {
   });
   // 소켓 로직 파일 연결
   require('./sockets/GameSocket')(io, app);
+
+  // ===== 에러 핸들러 (모든 라우트 정의 후 마지막에 배치) =====
+
+  // 404 핸들러 - 정의되지 않은 모든 라우트 처리
+  app.use((req, res, next) => {
+    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+  });
+
+  // 500 핸들러 - 서버 에러 처리
+  app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+
+    if (process.env.NODE_ENV === 'production') {
+      // 프로덕션: 에러 정보 숨김
+      res.status(500).sendFile(path.join(__dirname, 'public', '500.html'));
+    } else {
+      // 개발 모드: 에러 메시지를 URL 파라미터로 전달
+      const errorMsg = encodeURIComponent(err.message || 'Unknown error');
+      res.status(500).redirect(`/500.html?error=${errorMsg}`);
+    }
+  });
 
   // 서버 시작
   server.listen(PORT, () => {
