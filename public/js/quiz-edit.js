@@ -340,11 +340,11 @@ function parseTimeToSeconds(timeStr) {
 // 초를 시간 형식으로 변환
 function secondsToTimeFormat(seconds) {
     if (!seconds || seconds === 0) return '';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
         return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     } else if (minutes > 0) {
@@ -352,6 +352,37 @@ function secondsToTimeFormat(seconds) {
     } else {
         return `${secs}`;
     }
+}
+
+// 토스트 알림 표시
+function showToast(message, type = 'success') {
+    const container = document.getElementById('saveToastContainer');
+    if (!container) return;
+
+    // 기존 토스트 제거
+    container.innerHTML = '';
+
+    // 타입별 색상 설정
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        info: 'bg-blue-500'
+    };
+    const bgColor = colors[type] || colors.success;
+
+    // 새 토스트 생성 (absolute positioning으로 레이아웃에 영향 없음)
+    const toast = document.createElement('div');
+    toast.className = `absolute bottom-0 left-0 right-0 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg text-center transition-opacity duration-300 z-10`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    // 2초 후 제거
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 300);
+    }, 2000);
 }
 
 // 정답 추가
@@ -847,11 +878,11 @@ export async function saveQuestion() {
 
     try {
         await saveCurrentQuestion();  // ✅ 개별 문제만 저장
-        alert('✅ 저장되었습니다!');
+        showToast('저장되었습니다!', 'success');
         renderQuestions();
         renderSidebar();
     } catch (error) {
-        alert('❌ 저장 중 오류가 발생했습니다: ' + error.message);
+        showToast('저장 중 오류가 발생했습니다', 'error');
     }
 }
 
