@@ -11,6 +11,48 @@ let hasMore = true;
 
 let currentQuizId = null;
 
+// 드롭다운 토글 함수 (데스크톱)
+function toggleSortDropdown() {
+    const dropdown = document.getElementById('sortDropdown');
+    dropdown.classList.toggle('hidden');
+}
+
+// 드롭다운 토글 함수 (모바일)
+function toggleSortDropdownMobile() {
+    const dropdown = document.getElementById('sortDropdownMobile');
+    dropdown.classList.toggle('hidden');
+}
+
+// 정렬 선택 (데스크톱)
+function selectSort(sortOrder) {
+    const dropdown = document.getElementById('sortDropdown');
+    dropdown.classList.add('hidden');
+    changeSortOrder(sortOrder);
+}
+
+// 정렬 선택 (모바일)
+function selectSortMobile(sortOrder) {
+    const dropdown = document.getElementById('sortDropdownMobile');
+    dropdown.classList.add('hidden');
+    changeSortOrder(sortOrder);
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(event) {
+    const sortButton = document.getElementById('sortButton');
+    const sortButtonMobile = document.getElementById('sortButtonMobile');
+    const sortDropdown = document.getElementById('sortDropdown');
+    const sortDropdownMobile = document.getElementById('sortDropdownMobile');
+
+    if (sortButton && sortDropdown && !sortButton.contains(event.target) && !sortDropdown.contains(event.target)) {
+        sortDropdown.classList.add('hidden');
+    }
+
+    if (sortButtonMobile && sortDropdownMobile && !sortButtonMobile.contains(event.target) && !sortDropdownMobile.contains(event.target)) {
+        sortDropdownMobile.classList.add('hidden');
+    }
+});
+
 // 초대 코드로 게임 참여
 async function joinByInvite() {
     // 데스크톱과 모바일 양쪽에서 값 가져오기
@@ -54,24 +96,17 @@ async function changeSortOrder(newSortOrder) {
     currentPage = 1;
     hasMore = true;
     allQuizzes = [];
-    
-    // 데스크톱과 모바일 모두 업데이트
-    const desktopSelect = document.getElementById('sortSelect');
-    const mobileSelect = document.getElementById('sortSelectMobile');
-    
-    if (desktopSelect) desktopSelect.value = newSortOrder;
-    if (mobileSelect) mobileSelect.value = newSortOrder;
-    
+
     const quizListContainer = document.getElementById('quizList');
     quizListContainer.innerHTML = `
         <div class="text-center py-8 col-span-full">
-            <div class="inline-flex items-center space-x-2 text-gray-300">
-                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            <div class="inline-flex items-center space-x-2 text-gray-500">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500"></div>
                 <span>퀴즈 목록을 정렬하는 중...</span>
             </div>
         </div>
     `;
-    
+
     await loadQuizzes();
 }
 
@@ -134,7 +169,14 @@ async function searchQuizzes(searchTerm) {
     if (mobileInput) mobileInput.value = searchTerm;
     
     const quizListContainer = document.getElementById('quizList');
-    quizListContainer.innerHTML = `<div class="loading-spinner text-center py-8 col-span-full text-gray-300">검색 중...</div>`;
+    quizListContainer.innerHTML = `
+        <div class="text-center py-8 col-span-full">
+            <div class="inline-flex items-center space-x-2 text-gray-500">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500"></div>
+                <span>검색 중...</span>
+            </div>
+        </div>
+    `;
     
     await loadQuizzes();
 }
@@ -219,8 +261,8 @@ async function loadQuizList() {
 
     quizListContainer.innerHTML = `
         <div class="text-center py-8 col-span-full">
-            <div class="inline-flex items-center space-x-2 text-gray-300">
-                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            <div class="inline-flex items-center space-x-2 text-gray-500">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500"></div>
                 <span>퀴즈 목록을 불러오는 중...</span>
             </div>
         </div>
@@ -231,13 +273,6 @@ async function loadQuizList() {
     currentSortOrder = 'popular';
     hasMore = true;
     allQuizzes = [];
-
-    // 양쪽 정렬 선택기 초기값 설정
-    const desktopSelect = document.getElementById('sortSelect');
-    const mobileSelect = document.getElementById('sortSelectMobile');
-    
-    if (desktopSelect) desktopSelect.value = currentSortOrder;
-    if (mobileSelect) mobileSelect.value = currentSortOrder;
 
     try {
         await loadQuizzes();
@@ -597,6 +632,10 @@ window.reportQuiz = reportQuiz;
 window.loadQuizList = loadQuizList;
 window.joinByInvite = joinByInvite;
 window.changeSortOrder = changeSortOrder;
+window.toggleSortDropdown = toggleSortDropdown;
+window.toggleSortDropdownMobile = toggleSortDropdownMobile;
+window.selectSort = selectSort;
+window.selectSortMobile = selectSortMobile;
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);

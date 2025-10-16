@@ -20,23 +20,25 @@
                 <!-- 데스크톱 레이아웃 (lg 이상) -->
                 <div class="hidden lg:flex flex-col lg:flex-row gap-4 lg:gap-6 items-center justify-between">
                     <div class="flex justify-center h-[38px]">
-                        <div class="relative flex items-center space-x-3 bg-white px-4 py-2 rounded-lg shadow-sm border">
-                            <select 
-                                id="sortSelect" 
-                                class="text-sm border-0 focus:outline-none focus:ring-0 bg-transparent cursor-pointer pr-8 appearance-none"
-                                onchange="window.changeSortOrder && window.changeSortOrder(this.value)"
+                        <div class="relative">
+                            <button
+                                id="sortButton"
+                                class="bg-[#8BA2FA] hover:bg-[#617DE9] text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-lg flex items-center gap-2"
+                                onclick="toggleSortDropdown()"
                             >
-                                <option value="popular">인기순</option>
-                                <option value="latest">최신순</option>
-                                <option value="oldest">오래된순</option>
-                            </select>
-                            <svg class="w-4 h-4 text-gray-500 pointer-events-none absolute right-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
+                                <svg class="w-5 h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="sortDropdown" class="hidden absolute top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-[120px]">
+                                <button onclick="selectSort('popular')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg transition-colors">인기순</button>
+                                <button onclick="selectSort('latest')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">최신순</button>
+                                <button onclick="selectSort('oldest')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg transition-colors">오래된순</button>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="flex-1 max-w-2xl">
+                    <div class="flex-1 w-max">
                         <div class="flex h-[38px]">
                             <input 
                                 type="text" 
@@ -46,7 +48,7 @@
                             >
                             <button 
                                 id="searchBtn"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition-colors"
+                                class="bg-[#8BA2FA] hover:bg-[#617DE9] text-white px-4 py-2 rounded-r-lg transition-colors"
                             >
                                 검색
                             </button>
@@ -63,7 +65,7 @@
                         >
                         <button 
                             id="joinBtn"
-                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-lg transition-colors"
+                            class="bg-[#8BA2FA] hover:bg-[#617DE9] text-white px-4 py-2 rounded-r-lg transition-colors"
                         >
                             입장
                         </button>
@@ -93,19 +95,21 @@
                         </div>
                         
                         <!-- 정렬 드롭다운 -->
-                        <div class="relative flex items-center bg-white px-3 py-2 rounded-lg shadow-sm border min-w-[100px]">
-                            <select 
-                                id="sortSelectMobile" 
-                                class="text-sm border-0 focus:outline-none focus:ring-0 bg-transparent cursor-pointer pr-6 appearance-none w-full"
-                                onchange="window.changeSortOrder && window.changeSortOrder(this.value)"
+                        <div class="relative">
+                            <button
+                                id="sortButtonMobile"
+                                class="bg-[#8BA2FA] hover:bg-[#617DE9] text-white px-3 py-2 rounded-lg transition-colors font-medium shadow-lg flex items-center"
+                                onclick="toggleSortDropdownMobile()"
                             >
-                                <option value="popular">인기순</option>
-                                <option value="latest">최신순</option>
-                                <option value="oldest">오래된순</option>
-                            </select>
-                            <svg class="w-3 h-3 text-gray-500 pointer-events-none absolute right-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="sortDropdownMobile" class="hidden absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-[120px]">
+                                <button onclick="selectSortMobile('popular')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg transition-colors">인기순</button>
+                                <button onclick="selectSortMobile('latest')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">최신순</button>
+                                <button onclick="selectSortMobile('oldest')" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg transition-colors">오래된순</button>
+                            </div>
                         </div>
                     </div>
 
