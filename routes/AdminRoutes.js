@@ -26,6 +26,11 @@ router.get('/stats.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin-stats.html'));
 });
 
+// 문의 관리 페이지
+router.get('/contacts.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin-contacts.html'));
+});
+
 // ========== 최적화된 공통 함수 ==========
 
 /**
@@ -1269,6 +1274,177 @@ router.get('/suspicious-activities', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '의심스러운 활동 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// ========== 문의 관리 API ==========
+
+// 문의 목록 조회
+router.get('/contacts', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const status = req.query.status || 'all'; // all, pending, in_progress, resolved, closed
+
+    const Contact = require('../models/Contact')(req.app.get('userDb'));
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    let query = {};
+    if (status !== 'all') {
+      query.status = status;
+    }
+
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, contacts] = await Promise.all([
+      Contact.countDocuments(query),
+      Contact.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    // 사용자 정보 추가
+    const userIds = contacts
+      .filter(c => c.userId)
+      .map(c => c.userId);
+
+    const respondedByIds = contacts
+      .filter(c => c.respondedBy)
+      .map(c => c.respondedBy);
+
+    const allUserIds = [...new Set([...userIds, ...respondedByIds])];
+
+    const users = await User.find({ _id: { $in: allUserIds } })
+      .select('_id username nickname email')
+      .lean();
+
+    const userMap = new Map();
+    users.forEach(user => {
+      userMap.set(user._id.toString(), user);
+    });
+
+    const contactsWithDetails = contacts.map(contact => ({
+      ...contact,
+      user: contact.userId ? userMap.get(contact.userId.toString()) : null,
+      respondedByUser: contact.respondedBy ? userMap.get(contact.respondedBy.toString()) : null
+    }));
+
+    res.json({
+      success: true,
+      contacts: contactsWithDetails,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        hasMore: skip + contacts.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Contacts load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '문의 목록을 불러오는데 실패했습니다.'
+    });
+  }
+});
+
+// 문의 상태 변경
+router.patch('/contacts/:contactId/status', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'in_progress', 'resolved', 'closed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 상태입니다.'
+      });
+    }
+
+    const Contact = require('../models/Contact')(req.app.get('userDb'));
+
+    await Contact.findByIdAndUpdate(contactId, {
+      status,
+      updatedAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: '문의 상태가 변경되었습니다.'
+    });
+  } catch (err) {
+    console.error('Contact status update error:', err);
+    res.status(500).json({
+      success: false,
+      message: '상태 변경 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 문의 답변 작성
+router.post('/contacts/:contactId/respond', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { response } = req.body;
+
+    if (!response || response.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '답변 내용을 입력해주세요.'
+      });
+    }
+
+    const Contact = require('../models/Contact')(req.app.get('userDb'));
+
+    await Contact.findByIdAndUpdate(contactId, {
+      adminResponse: response.trim(),
+      respondedBy: req.user.id,
+      respondedAt: new Date(),
+      status: 'resolved',
+      updatedAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: '답변이 저장되었습니다.'
+    });
+  } catch (err) {
+    console.error('Contact response error:', err);
+    res.status(500).json({
+      success: false,
+      message: '답변 저장 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 문의 삭제
+router.delete('/contacts/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const Contact = require('../models/Contact')(req.app.get('userDb'));
+
+    const contact = await Contact.findByIdAndDelete(contactId);
+
+    if (!contact) {
+      return res.status(404).json({
+        success: false,
+        message: '문의를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '문의가 삭제되었습니다.'
+    });
+  } catch (err) {
+    console.error('Contact delete error:', err);
+    res.status(500).json({
+      success: false,
+      message: '문의 삭제 중 오류가 발생했습니다.'
     });
   }
 });

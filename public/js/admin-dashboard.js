@@ -127,9 +127,10 @@ async function loadQuizzes(reset = false) {
     allQuizzes = [...allQuizzes, ...data.quizzes];
     hasMore = data.pagination.hasMore;
 
-    // 신고 카운트 업데이트 (첫 페이지만)
+    // 신고 카운트 및 문의 카운트 업데이트 (첫 페이지만)
     if (currentPage === 1) {
       updateReportCount();
+      updateContactCount();
     }
 
     // 테이블 렌더링
@@ -173,6 +174,24 @@ async function updateReportCount() {
   } catch (err) {
     console.error('Report count load error:', err);
     document.getElementById('reportCount').textContent = '0';
+  }
+}
+
+// 문의 카운트 업데이트
+async function updateContactCount() {
+  try {
+    const response = await fetchWithAuth('/admin/contacts?page=1&limit=1&status=pending');
+
+    if (response.ok) {
+      const data = await response.json();
+      const contactCount = data.pagination.totalCount || 0;
+      document.getElementById('contactCount').textContent = contactCount;
+    } else {
+      document.getElementById('contactCount').textContent = '0';
+    }
+  } catch (err) {
+    console.error('Contact count load error:', err);
+    document.getElementById('contactCount').textContent = '0';
   }
 }
 
@@ -629,6 +648,7 @@ function startAutoRefresh() {
       // 페이지가 보이는 상태일 때만 갱신
       if (!document.hidden) {
         updateReportCount();
+        updateContactCount();
         refreshQuizListSilently();
       }
     }, 15000); // 15초마다
@@ -715,6 +735,7 @@ function handleVisibilityChange() {
   if (!document.hidden && isAutoRefreshEnabled) {
     // 페이지가 다시 보이면 즉시 갱신
     updateReportCount();
+    updateContactCount();
     refreshQuizListSilently();
   }
 }

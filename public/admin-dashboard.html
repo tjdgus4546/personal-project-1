@@ -51,6 +51,22 @@
         </div>
       </button>
 
+      <!-- 문의 관리 -->
+      <button
+        onclick="window.location.href='/admin/contacts.html'"
+        class="w-full md:w-auto h-[120px] bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 rounded-xl p-6 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+      >
+        <div class="flex items-center justify-between h-full">
+          <div class="text-left">
+            <div class="text-green-100 text-sm mb-2">접수된 문의</div>
+            <div class="text-white text-3xl font-bold" id="contactCount">-</div>
+          </div>
+          <svg class="w-8 h-8 text-green-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+      </button>
+
       <!-- 접속 통계 -->
       <button
         onclick="window.location.href='/admin/stats.html'"

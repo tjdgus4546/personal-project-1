@@ -139,7 +139,9 @@ async function initializePage() {
         
         // 사용자 정보 로드
         await loadUserProfile();
-        
+
+        // 문의 목록은 사용자가 펼쳤을 때만 로드 (접힌 상태로 시작)
+
     } catch (error) {
         console.error('페이지 초기화 실패:', error);
         
@@ -148,6 +150,188 @@ async function initializePage() {
         document.getElementById('errorSection').classList.remove('hidden');
     }
 }
+
+// ========== 나의 문의 관련 함수 ==========
+
+// 카테고리 한글 변환
+const categoryNames = {
+    general: '일반 문의',
+    bug: '버그 신고',
+    feature: '기능 제안',
+    account: '계정 관련',
+    other: '기타'
+};
+
+// 상태 배지 생성
+function getStatusBadge(status) {
+    const badges = {
+        pending: '<span class="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">대기 중</span>',
+        in_progress: '<span class="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full">처리 중</span>',
+        resolved: '<span class="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-full">해결됨</span>',
+        closed: '<span class="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs rounded-full">종료됨</span>'
+    };
+    return badges[status] || status;
+}
+
+// 날짜 포맷
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 문의 목록 로드
+async function loadUserContacts() {
+    const loadingEl = document.getElementById('contactsLoading');
+    const listEl = document.getElementById('contactsList');
+    const emptyEl = document.getElementById('contactsEmpty');
+
+    try {
+        const response = await fetch('/api/contacts/my?page=1&limit=10', {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('문의 목록을 불러올 수 없습니다.');
+        }
+
+        const data = await response.json();
+        const contacts = data.contacts || [];
+
+        loadingEl.classList.add('hidden');
+
+        if (contacts.length === 0) {
+            emptyEl.classList.remove('hidden');
+            listEl.classList.add('hidden');
+        } else {
+            emptyEl.classList.add('hidden');
+            listEl.classList.remove('hidden');
+
+            // 문의 목록 렌더링
+            listEl.innerHTML = contacts.map(contact => `
+                <div class="bg-black/30 rounded-lg p-4 border border-gray-600 hover:border-blue-500 transition-colors cursor-pointer" onclick="viewContactDetail('${contact._id}')">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h4 class="text-white font-medium">${contact.subject}</h4>
+                                ${getStatusBadge(contact.status)}
+                            </div>
+                            <p class="text-gray-400 text-sm">${categoryNames[contact.category] || contact.category}</p>
+                        </div>
+                        <div class="text-gray-500 text-xs">${formatDate(contact.createdAt)}</div>
+                    </div>
+                    ${contact.adminResponse ? `
+                        <div class="mt-3 pt-3 border-t border-gray-700">
+                            <p class="text-green-300 text-sm">✓ 답변 완료</p>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+    } catch (error) {
+        console.error('문의 목록 로드 실패:', error);
+        loadingEl.classList.add('hidden');
+        listEl.innerHTML = `
+            <div class="text-center py-8 text-red-400">
+                문의 목록을 불러오는데 실패했습니다.
+            </div>
+        `;
+    }
+}
+
+// 전역 변수로 현재 선택된 문의 저장
+let currentContact = null;
+let contactsLoaded = false; // 문의 목록 로드 여부
+
+// 문의 상세 보기
+async function viewContactDetail(contactId) {
+    try {
+        const response = await fetch('/api/contacts/my?page=1&limit=100', {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('문의 정보를 불러올 수 없습니다.');
+        }
+
+        const data = await response.json();
+        const contact = data.contacts.find(c => c._id === contactId);
+
+        if (!contact) {
+            alert('문의를 찾을 수 없습니다.');
+            return;
+        }
+
+        currentContact = contact;
+
+        // 모달 정보 채우기
+        document.getElementById('modal-contact-category').textContent = categoryNames[contact.category] || contact.category;
+        document.getElementById('modal-contact-status').innerHTML = getStatusBadge(contact.status);
+        document.getElementById('modal-contact-date').textContent = formatDate(contact.createdAt);
+        document.getElementById('modal-contact-subject').textContent = contact.subject;
+        document.getElementById('modal-contact-message').textContent = contact.message;
+
+        // 답변 표시
+        const responseSection = document.getElementById('modal-contact-response-section');
+        const pendingSection = document.getElementById('modal-contact-pending-section');
+
+        if (contact.adminResponse) {
+            responseSection.classList.remove('hidden');
+            pendingSection.classList.add('hidden');
+            document.getElementById('modal-contact-responded-at').textContent = formatDate(contact.respondedAt);
+            document.getElementById('modal-contact-response').textContent = contact.adminResponse;
+        } else {
+            responseSection.classList.add('hidden');
+            pendingSection.classList.remove('hidden');
+        }
+
+        // 모달 열기
+        document.getElementById('contactDetailModal').classList.remove('hidden');
+
+    } catch (error) {
+        console.error('문의 상세 로드 실패:', error);
+        alert('문의 정보를 불러오는데 실패했습니다.');
+    }
+}
+
+// 문의 모달 닫기
+function closeContactModal() {
+    document.getElementById('contactDetailModal').classList.add('hidden');
+    currentContact = null;
+}
+
+// 나의 문의 섹션 토글
+function toggleContactsSection() {
+    const content = document.getElementById('contactsContent');
+    const icon = document.getElementById('contactsToggleIcon');
+
+    if (content.classList.contains('hidden')) {
+        // 펼치기
+        content.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+
+        // 처음 펼칠 때만 문의 목록 로드
+        if (!contactsLoaded) {
+            loadUserContacts();
+            contactsLoaded = true;
+        }
+    } else {
+        // 접기
+        content.classList.add('hidden');
+        icon.style.transform = 'rotate(0deg)';
+    }
+}
+
+// 전역 함수로 등록
+window.viewContactDetail = viewContactDetail;
+window.closeContactModal = closeContactModal;
+window.toggleContactsSection = toggleContactsSection;
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);

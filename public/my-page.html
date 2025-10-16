@@ -74,7 +74,7 @@
                     <!-- 활동 정보 -->
                     <div class="space-y-4">
                         <h3 class="text-lg font-semibold text-white border-b border-gray-600 pb-2">활동 정보</h3>
-                        
+
                         <div class="space-y-3">
                             <div class="bg-[#3a3a4a] rounded-lg p-4">
                                 <div class="flex justify-between items-center">
@@ -82,14 +82,14 @@
                                     <span id="playedQuizzesCount" class="text-white font-semibold">0개</span>
                                 </div>
                             </div>
-                            
+
                             <div class="bg-[#3a3a4a] rounded-lg p-4">
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-400">만든 퀴즈</span>
                                     <span id="createdQuizzesCount" class="text-white font-semibold">0개</span>
                                 </div>
                             </div>
-                            
+
                             <div class="bg-[#3a3a4a] rounded-lg p-4">
                                 <div class="flex justify-between items-center">
                                     <span class="text-gray-400">가입 방법</span>
@@ -99,18 +99,64 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 나의 문의 섹션 -->
+                <div class="mt-8 pt-6 border-t border-gray-600">
+                    <!-- 접기/펼치기 헤더 -->
+                    <div class="flex items-center justify-between">
+                        <button
+                            onclick="toggleContactsSection()"
+                            class="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                        >
+                            <h3 class="text-lg font-semibold text-white">나의 문의</h3>
+                            <svg id="contactsToggleIcon" class="w-5 h-5 text-gray-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <button
+                            onclick="window.location.href='/contact.html'"
+                            class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                            새 문의 작성
+                        </button>
+                    </div>
+
+                    <!-- 접을 수 있는 콘텐츠 -->
+                    <div id="contactsContent" class="hidden mt-4">
+                        <!-- 로딩 상태 -->
+                        <div id="contactsLoading" class="text-center py-8">
+                            <div class="inline-flex items-center space-x-2 text-gray-300">
+                                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                <span>문의 목록을 불러오는 중...</span>
+                            </div>
+                        </div>
+
+                        <!-- 문의 목록 -->
+                        <div id="contactsList" class="hidden space-y-4">
+                            <!-- 문의 항목이 여기에 추가됩니다 -->
+                        </div>
+
+                        <!-- 빈 상태 -->
+                        <div id="contactsEmpty" class="hidden text-center py-8">
+                            <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                            <p class="text-gray-400 text-sm">아직 문의 내역이 없습니다</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 액션 버튼들 -->
-            <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                <button 
+            <div class="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+                <button
                     id="editProfileBtn"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 px-8 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
                 >
                     내 정보 수정
                 </button>
-                
-                <button 
+
+                <button
                     onclick="window.location.href='/quiz/my-list'"
                     class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 px-8 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
                 >
@@ -130,6 +176,68 @@
                 >
                     다시 시도
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 문의 상세 모달 -->
+    <div id="contactDetailModal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div class="bg-[#2d2d3d] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 border border-gray-600">
+            <!-- 모달 헤더 -->
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-600">
+                <h2 class="text-2xl font-bold text-white">문의 상세</h2>
+                <button onclick="closeContactModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 문의 정보 -->
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-gray-400 text-sm mb-1">카테고리</div>
+                        <div class="text-white font-medium" id="modal-contact-category"></div>
+                    </div>
+                    <div>
+                        <div class="text-gray-400 text-sm mb-1">상태</div>
+                        <div id="modal-contact-status"></div>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="text-gray-400 text-sm mb-1">접수일</div>
+                        <div class="text-white font-medium" id="modal-contact-date"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="text-gray-400 text-sm mb-1">제목</div>
+                    <div class="text-white font-medium text-lg" id="modal-contact-subject"></div>
+                </div>
+
+                <div>
+                    <div class="text-gray-400 text-sm mb-1">내용</div>
+                    <div class="text-white bg-black/30 p-4 rounded-lg whitespace-pre-wrap" id="modal-contact-message"></div>
+                </div>
+
+                <!-- 관리자 답변 -->
+                <div id="modal-contact-response-section" class="hidden border-t border-gray-600 pt-4">
+                    <div class="text-green-400 text-sm font-semibold mb-2">관리자 답변</div>
+                    <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                        <div class="text-green-300 text-sm mb-2">
+                            답변일: <span id="modal-contact-responded-at"></span>
+                        </div>
+                        <div class="text-white whitespace-pre-wrap" id="modal-contact-response"></div>
+                    </div>
+                </div>
+
+                <!-- 답변 대기 메시지 -->
+                <div id="modal-contact-pending-section" class="hidden border-t border-gray-600 pt-4">
+                    <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+                        <p class="text-yellow-300 text-sm">관리자 답변 대기 중입니다</p>
+                        <p class="text-gray-400 text-xs mt-1">답변은 영업일 기준 1-3일 이내에 작성됩니다</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
