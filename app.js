@@ -13,6 +13,7 @@ const quizRoutes = require('./routes/QuizRoutes');
 const gameRoutes = require('./routes/GameRoutes');
 const adminRoutes = require('./routes/AdminRoutes');
 const adminSetupRoutes = require('./routes/AdminSetupRoutes');
+const commentRoutes = require('./routes/CommentRoutes');
 const authenticateToken = require('./middlewares/AuthMiddleware');
 const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 
@@ -166,6 +167,7 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/', quizRoutes);
   app.use('/api', apiLimiter, publicRouter); // API에 중간 제한
   app.use('/api', apiLimiter, authenticateToken, privateRouter);
+  app.use('/api', apiLimiter, commentRoutes); // 댓글 라우트 (GET은 인증 불필요, POST는 인증 필요)
   app.use('/game', apiLimiter, authenticateToken, gameRoutes);
   app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
   app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)

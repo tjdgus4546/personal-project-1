@@ -192,24 +192,71 @@
 
       </div>
 
-      <!-- 대기실 채팅 섹션 -->
-      <div class="flex flex-col bg-black/30 mt-5 rounded-2xl p-6 shadow-xl border border-gray-600">
-        <h3 class="text-[18px] font-semibold text-white mb-4">대기실 채팅</h3>
-        
-        <!-- 대기실 채팅 로그 -->
-        <div id="waitingChatLog" class="h-[200px] break-words overflow-y-auto space-y-2 mb-4 p-2 bg-black/30 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
-          <!-- 채팅 메시지들이 여기에 표시됩니다 -->
+      <!-- 대기실 댓글 & 채팅 섹션 -->
+      <div class="flex flex-col-reverse md:flex-row gap-5 mt-5">
+
+        <!-- 왼쪽: 퀴즈 댓글 섹션 -->
+        <div class="flex flex-col bg-black/30 md:flex-1 rounded-2xl p-6 shadow-xl border border-gray-600">
+          <h3 class="text-[18px] font-semibold text-white mb-4">퀴즈 댓글</h3>
+
+          <!-- 댓글 로딩 상태 -->
+          <div id="commentsLoading" class="text-center py-4 text-gray-400 hidden">
+            <svg class="animate-spin h-6 w-6 mx-auto" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-2 text-sm">댓글을 불러오는 중...</p>
+          </div>
+
+          <!-- 댓글 오류 상태 -->
+          <div id="commentsError" class="text-center py-4 text-red-400 text-sm hidden">
+            댓글을 불러오는 데 실패했습니다.
+          </div>
+
+          <!-- 댓글 목록 -->
+          <div id="commentsContainer" class="h-[220px] break-words overflow-y-auto mb-4 pr-2 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+            <!-- 댓글들이 여기에 표시됩니다 -->
+          </div>
+
+          <!-- 댓글 입력 -->
+          <form id="commentForm" class="relative">
+            <input
+              type="text"
+              id="commentInput"
+              placeholder="댓글을 입력하세요 (최대 500자)"
+              maxlength="500"
+              class="w-full pr-14 pl-4 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300"
+            >
+            <button
+              type="submit"
+              id="submitCommentBtn"
+              disabled
+              class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
+            </button>
+          </form>
         </div>
-        
-        <!-- 대기실 채팅 입력 -->
-        <form id="waitingChatForm" onsubmit="event.preventDefault(); currentWaitingSendFunction();" class="relative">
-          <input type="text" id="waitingChatInput" placeholder="메시지 입력" 
-                class="w-full pr-14 pl-4 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300">
-          <button type="button" onclick="currentWaitingSendFunction()" 
-                  class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1">
-            <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
-          </button>
-        </form>
+
+        <!-- 오른쪽: 대기실 채팅 섹션 -->
+        <div class="flex flex-col bg-black/30 md:flex-1 rounded-2xl p-6 shadow-xl border border-gray-600">
+          <h3 class="text-[18px] font-semibold text-white mb-4">대기실 채팅</h3>
+
+          <!-- 대기실 채팅 로그 -->
+          <div id="waitingChatLog" class="h-[220px] break-words overflow-y-auto space-y-2 mb-4 p-2 bg-black/30 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+            <!-- 채팅 메시지들이 여기에 표시됩니다 -->
+          </div>
+
+          <!-- 대기실 채팅 입력 -->
+          <form id="waitingChatForm" onsubmit="event.preventDefault(); currentWaitingSendFunction();" class="relative">
+            <input type="text" id="waitingChatInput" placeholder="메시지 입력"
+                  class="w-full pr-14 pl-4 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300">
+            <button type="button" onclick="currentWaitingSendFunction()"
+                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1">
+              <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
+            </button>
+          </form>
+        </div>
 
       </div>
 
@@ -343,5 +390,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/CorrectUserManager.js"></script>
   <script type="module" src="/js/quiz-session.js"></script>
+  <script type="module" src="/js/quiz-comments.js"></script>
 </body>
 </html>

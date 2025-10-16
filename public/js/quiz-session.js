@@ -1,6 +1,7 @@
 // js/quiz-session.js
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
+import { initializeComments } from './quiz-comments.js';
 
 // 전역 변수들
 let currentSendFunction = sendMessage;
@@ -192,6 +193,12 @@ async function loadSessionData() {
             }
         } else {
             showQuizInfoSection();
+        }
+
+        // 댓글 모듈 초기화 (퀴즈 ID와 사용자 정보 전달)
+        const user = await getUserData();
+        if (data.quiz && data.quiz._id && user) {
+            initializeComments(data.quiz._id, user);
         }
 
     } catch (err) {
