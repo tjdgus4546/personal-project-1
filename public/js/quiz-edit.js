@@ -6,6 +6,7 @@ import { fetchWithAuth } from './quiz-init-modal.js';
 // 전역 변수
 let currentView = 'overview';
 let questions = [];
+let currentQuiz = null; // 퀴즈 정보 저장
 let currentEditingIndex = null;
 let currentAnswers = [];
 let currentIncorrects = [];
@@ -674,13 +675,13 @@ export function createNewQuestion() {
         incorrectAnswers: [],
         isChoice: false
     };
-    
+
     questions.push(newQuestion);
-    
+
     if (currentView === 'overview') {
         switchView('edit');
     }
-    
+
     editQuestion(questions.length - 1);
     renderQuestions();
 }
@@ -908,9 +909,15 @@ async function saveAllQuestions() {
 // 현재 문제 삭제
 export async function deleteCurrentQuestion() {
     if (currentEditingIndex === null) return;
-    
+
+    // 공개 상태인 퀴즈에서 10문제 이하로 줄일 수 없음
+    if (currentQuiz?.isComplete && questions.length <= 10) {
+        alert('공개 상태에서는 10문제 이하로 문제 수를 줄일 수 없습니다.');
+        return;
+    }
+
     if (!confirm('이 문제를 삭제하시겠습니까?')) return;
-    
+
     questions.splice(currentEditingIndex, 1);
     
     try {
@@ -944,24 +951,25 @@ async function loadQuestions() {
         const response = await fetch(`/api/quiz/${quizId}`, {
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             throw new Error('퀴즈를 불러올 수 없습니다');
         }
-        
+
         const quiz = await response.json();
+        currentQuiz = quiz; // 퀴즈 정보 저장
         document.getElementById('quizTitle').textContent = quiz.title || '퀴즈 편집';
         questions = quiz.questions || [];
 
         document.getElementById('isRandomOrder').checked = quiz.isRandomOrder || false;
-        
+
         // 기존 문제들의 타입을 자동으로 감지하여 업데이트
         questions.forEach(q => {
             if (!q.questionType) {
                 q.questionType = detectQuestionType(q);
             }
         });
-        
+
         renderQuestions();
         updateQuestionCount();
     } catch (error) {
