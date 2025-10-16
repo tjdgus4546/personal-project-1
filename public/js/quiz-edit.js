@@ -226,13 +226,82 @@ export function removeImage(inputId, previewId) {
     const preview = document.getElementById(previewId);
     preview.classList.add('hidden');
     preview.querySelector('img').src = '';
-    
+
     // Base64 초기화
     if (previewId === 'questionImagePreview') {
         questionImageBase64 = '';
     } else if (previewId === 'answerImagePreview') {
         answerImageBase64 = '';
     }
+}
+
+// 드래그 앤 드롭 설정
+function setupDragAndDrop() {
+    // 전역: 브라우저 기본 드래그 앤 드롭 동작 막기 (새 창에서 열기 방지)
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    }, false);
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+    }, false);
+
+    const dropZones = [
+        { dropZoneId: 'questionImageDropZone', inputId: 'questionImage', previewId: 'questionImagePreview' },
+        { dropZoneId: 'answerImageDropZone', inputId: 'answerImage', previewId: 'answerImagePreview' }
+    ];
+
+    dropZones.forEach(({ dropZoneId, inputId, previewId }) => {
+        const dropZone = document.getElementById(dropZoneId);
+        const input = document.getElementById(inputId);
+
+        if (!dropZone || !input) return;
+
+        // 클릭 시 파일 선택 창 열기
+        dropZone.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.click();
+        });
+
+        // 드래그 오버 시
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('ring-2', 'ring-blue-500', 'bg-gray-800/50');
+        });
+
+        // 드래그 떠날 시
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('ring-2', 'ring-blue-500', 'bg-gray-800/50');
+        });
+
+        // 드롭 시
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('ring-2', 'ring-blue-500', 'bg-gray-800/50');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+
+                // 이미지 파일 체크
+                if (!file.type.startsWith('image/')) {
+                    alert('이미지 파일만 업로드할 수 있습니다.');
+                    return;
+                }
+
+                // 파일을 input에 설정하고 previewImage 호출
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                input.files = dataTransfer.files;
+
+                await previewImage(input, previewId);
+            }
+        });
+    });
 }
 
 // 유튜브 미리보기 업데이트
@@ -1087,7 +1156,7 @@ export async function saveRandomOrderSetting() {
 (async function init() {
     const authenticated = await initNavbar();
     if (!authenticated) return;
-    
+
     if (quizId) {
         await loadQuestions();
     } else {
@@ -1095,12 +1164,15 @@ export async function saveRandomOrderSetting() {
         window.location.href = '/quiz/my-list';
         return;
     }
-    
+
     // isRandomOrder 토글 자동 저장 리스너 추가
     const randomOrderToggle = document.getElementById('isRandomOrder');
     if (randomOrderToggle) {
         randomOrderToggle.addEventListener('change', saveRandomOrderSetting);
     }
+
+    // 드래그 앤 드롭 설정
+    setupDragAndDrop();
 
     // 초기 폼 상태 업데이트
     updateFormVisibility();
