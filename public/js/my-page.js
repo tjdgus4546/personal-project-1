@@ -55,7 +55,7 @@ async function loadUserProfile() {
 function displayUserInfo(user, stats) {
     // 프로필 이미지 설정 (navbar와 동일한 방식)
     const profileContainer = document.getElementById('profileImageContainer');
-    const displayName = user.nickname || user.username;
+    const displayName = user.nickname || 'Unknown';
     
     // 네이버 기본 이미지가 아니고 실제 프로필 이미지가 있는 경우
     if (user.profileImage && user.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png') {
@@ -80,7 +80,7 @@ function displayUserInfo(user, stats) {
     }
 
     // 기본 정보 표시
-    document.getElementById('displayNickname').textContent = user.nickname || user.username;
+    document.getElementById('displayNickname').textContent = user.nickname || 'Unknown';
     document.getElementById('displayEmail').textContent = user.email;
     
     // 가입일 표시
@@ -99,12 +99,17 @@ function displayUserInfo(user, stats) {
     document.getElementById('createdQuizzesCount').textContent = `${stats.createdQuizzes || 0}개`;
     
     // 가입 방법 표시
+    console.log('🔍 디버그 - 사용자 정보:', user);
+    console.log('🔍 naverId:', user.naverId);
+    console.log('🔍 googleId:', user.googleId);
+
     let signupMethod = '일반 가입';
     if (user.naverId) {
         signupMethod = '네이버 연동';
     } else if (user.googleId) {
         signupMethod = '구글 연동';
     }
+    console.log('🔍 최종 가입방법:', signupMethod);
     document.getElementById('signupMethod').textContent = signupMethod;
 }
 
