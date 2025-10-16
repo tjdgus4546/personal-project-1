@@ -146,7 +146,7 @@ const login = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id, nickname: user.nickname, role: user.role || 'user' },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '6h' }
     );
 
     const refreshToken = jwt.sign({ id: user._id }, JWT_SECRET, {
@@ -157,7 +157,7 @@ const login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000
+      maxAge: 6 * 60 * 60 * 1000
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -220,14 +220,14 @@ const refreshToken = async (req, res) => {
     const newAccessToken = jwt.sign(
       { id: user._id, nickname: user.nickname, role: user.role || 'user' },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '6h' }
     );
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000
+      maxAge: 6 * 60 * 60 * 1000
     });
 
     res.status(200).json({ message: '새로운 액세스 토큰 발급 성공' });

@@ -55,7 +55,7 @@ const verifyAndRefreshToken = async (req, res) => {
           role: user.role || 'user'
         },
         JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '6h' }
       );
 
       // 새로 발급한 액세스 토큰을 쿠키에 저장
@@ -63,7 +63,7 @@ const verifyAndRefreshToken = async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000,
+        maxAge: 6 * 60 * 60 * 1000,
       });
 
       return {

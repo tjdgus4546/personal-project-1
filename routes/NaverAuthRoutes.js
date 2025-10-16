@@ -116,21 +116,21 @@ router.post('/naver/complete-signup', oauthSignupLimiter, async (req, res) => {
         role: user.role || 'user'
       },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '6h' }
     );
-    
+
     const refreshTokenJWT = jwt.sign(
-      { id: user._id }, 
-      JWT_SECRET, 
+      { id: user._id },
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
-    
+
     // 쿠키 설정
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000
+      maxAge: 6 * 60 * 60 * 1000
     });
     
     res.cookie('refreshToken', refreshTokenJWT, {
@@ -219,20 +219,20 @@ router.get('/naver/callback', async (req, res) => {
           role: existingUser.role || 'user'
         },
         JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '6h' }
       );
-      
+
       const refreshTokenJWT = jwt.sign(
-        { id: existingUser._id }, 
-        JWT_SECRET, 
+        { id: existingUser._id },
+        JWT_SECRET,
         { expiresIn: '7d' }
       );
-      
+
       res.cookie('accessToken', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000
+        maxAge: 6 * 60 * 60 * 1000
       });
       
       res.cookie('refreshToken', refreshTokenJWT, {

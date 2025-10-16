@@ -121,7 +121,7 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
         role: user.role || 'user'
       },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '6h' }
     );
 
     const refreshTokenJWT = jwt.sign(
@@ -135,7 +135,7 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000
+      maxAge: 6 * 60 * 60 * 1000
     });
 
     res.cookie('refreshToken', refreshTokenJWT, {
@@ -222,7 +222,7 @@ router.get('/google/callback', async (req, res) => {
           role: existingUser.role || 'user'
         },
         JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '6h' }
       );
 
       const refreshTokenJWT = jwt.sign(
@@ -235,7 +235,7 @@ router.get('/google/callback', async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000
+        maxAge: 6 * 60 * 60 * 1000
       });
 
       res.cookie('refreshToken', refreshTokenJWT, {
