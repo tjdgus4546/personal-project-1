@@ -418,6 +418,22 @@ export function initializeQuizModal() {
               </p>
             </div>
           </div>
+
+          <div class="bg-amber-900/30 border border-amber-600/50 rounded-lg p-4">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <div class="flex-1">
+                <p class="text-amber-200 text-sm font-semibold mb-1">
+                  이용 약관 안내
+                </p>
+                <p class="text-amber-100/90 text-xs leading-relaxed">
+                  PlayCode 약관에 위배되는 퀴즈( 비방성 목적, 부적절한 콘텐츠 등 )는 사전 통보 없이 삭제되거나 제재 조치가 취해질 수 있습니다. 퀴즈 생성 시 관련 법규와 약관을 준수해 주시기 바랍니다.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="sticky bottom-0 px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-gray-600">
