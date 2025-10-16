@@ -61,21 +61,46 @@ async function initNavbar() {
 
 // 문제 타입 선택 함수 (버튼 클릭 시 호출)
 export function selectQuestionType(type) {
+    const previousType = currentQuestionType;
     currentQuestionType = type; // 전역 변수 업데이트
-    
+
+    // 타입이 변경되면 이전 타입의 데이터 정리
+    if (previousType !== type) {
+        // 텍스트나 영상/소리로 변경 시 이미지 데이터 초기화
+        if ((previousType === 'image') && (type === 'text' || type === 'video' || type === 'audio')) {
+            questionImageBase64 = '';
+            answerImageBase64 = '';
+            document.getElementById('questionImagePreview')?.classList.add('hidden');
+            document.getElementById('answerImagePreview')?.classList.add('hidden');
+            document.getElementById('questionImage').value = '';
+            document.getElementById('answerImage').value = '';
+        }
+
+        // 텍스트나 이미지로 변경 시 유튜브 데이터 초기화
+        if ((previousType === 'video' || previousType === 'audio') && (type === 'text' || type === 'image')) {
+            document.getElementById('youtubeUrl').value = '';
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            document.getElementById('answerYoutubeUrl').value = '';
+            document.getElementById('answerStartTime').value = '';
+            document.getElementById('youtubePreview')?.classList.add('hidden');
+            document.getElementById('answerYoutubePreview')?.classList.add('hidden');
+        }
+    }
+
     // 모든 버튼의 스타일 초기화
     document.querySelectorAll('[data-question-type]').forEach(btn => {
         btn.classList.remove('bg-blue-600', 'ring-2', 'ring-blue-400');
         btn.classList.add('bg-gray-700', 'hover:bg-gray-600');
     });
-    
+
     // 선택된 버튼 활성화 스타일 적용
     const selectedButton = document.querySelector(`[data-question-type="${type}"]`);
     if (selectedButton) {
         selectedButton.classList.remove('bg-gray-700', 'hover:bg-gray-600');
         selectedButton.classList.add('bg-blue-600', 'ring-2', 'ring-blue-400');
     }
-    
+
     // 타입에 따른 폼 표시/숨김
     updateFormVisibility();
 }
@@ -898,9 +923,10 @@ export async function saveQuestion() {
     const timeLimit = parseInt(timeLimitValue);
     const isChoice = document.getElementById('isMultipleChoice').checked;
 
-    // 유효성 검사
-    if (!text) {
-        showToast('문제를 입력하세요.', 'error');
+    // 유효성 검사 - 문제 텍스트, 이미지, 유튜브 중 하나는 있어야 함
+    const youtubeUrl = document.getElementById('youtubeUrl')?.value?.trim();
+    if (!text && !questionImageBase64 && !youtubeUrl) {
+        showToast('문제 텍스트, 이미지, 또는 유튜브 링크 중 하나는 입력해야 합니다.', 'error');
         return;
     }
 
@@ -937,27 +963,30 @@ export async function saveQuestion() {
         answerYoutubeEndTime: null
     };
 
-    // 타입별 데이터 추가
+    // 타입별 데이터 추가 (사용하지 않는 필드는 명시적으로 null 유지)
     if (currentQuestionType === 'text') {
-        // 텍스트 문제: 추가 데이터 없음
+        // 텍스트 문제: 이미지와 유튜브 데이터는 null
+        // imageBase64, answerImageBase64, youtubeUrl 등은 이미 null로 초기화됨
 
     } else if (currentQuestionType === 'image') {
-        // 이미지 문제
+        // 이미지 문제: 유튜브 데이터는 null
         if (!questionImageBase64) {
             showToast('문제 이미지를 업로드하세요.', 'error');
             return;
         }
         finalQuestionData.imageBase64 = questionImageBase64;
         finalQuestionData.answerImageBase64 = answerImageBase64 || null;
+        // youtubeUrl 관련 필드는 이미 null로 초기화됨
 
     } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
-        // 영상/소리 문제
+        // 영상/소리 문제: 이미지 데이터는 명시적으로 null 설정
         const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
         if (!youtubeUrl) {
             showToast('유튜브 URL을 입력하세요.', 'error');
             return;
         }
 
+        // 유튜브 데이터 설정
         finalQuestionData.youtubeUrl = youtubeUrl;
         finalQuestionData.youtubeStartTime = parseTimeToSeconds(document.getElementById('startTime').value) || 0;
         finalQuestionData.youtubeEndTime = parseTimeToSeconds(document.getElementById('endTime').value) || 0;
@@ -967,6 +996,10 @@ export async function saveQuestion() {
             finalQuestionData.answerYoutubeUrl = answerYoutubeUrl;
             finalQuestionData.answerYoutubeStartTime = parseTimeToSeconds(document.getElementById('answerStartTime').value) || 0;
         }
+
+        // 이미지 데이터는 명시적으로 null (이전 이미지 삭제)
+        finalQuestionData.imageBase64 = null;
+        finalQuestionData.answerImageBase64 = null;
     }
 
     // 문제 데이터 업데이트
