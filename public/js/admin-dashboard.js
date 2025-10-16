@@ -367,37 +367,37 @@ function renderQuizTable(quizzes) {
       </td>
       <td class="p-3 text-gray-300 text-sm whitespace-nowrap">${createdDate}</td>
       <td class="p-3">
-        <div class="flex items-center justify-center gap-2 flex-wrap">
+        <div class="flex flex-col gap-1 items-center">
           ${!isSeized ? `
             <button
               onclick="toggleVisibility('${quiz._id}', ${!quiz.isComplete})"
-              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs whitespace-nowrap"
             >
               ${quiz.isComplete ? '비공개' : '공개'}
             </button>
             <button
               onclick="seizeQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
-              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs whitespace-nowrap"
             >
               압수
             </button>
             <button
               onclick="suspendUserFromDashboard('${quiz.creatorId}', '${quiz.creator.nickname.replace(/'/g, "\\'")}')"
-              class="border border-gray-600 hover:bg-yellow-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+              class="border border-gray-600 hover:bg-yellow-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs whitespace-nowrap"
             >
               정지
             </button>
           ` : `
             <button
               onclick="restoreQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
-              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+              class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs whitespace-nowrap"
             >
               복구
             </button>
             ${currentUser && currentUser.role === 'superadmin' ? `
               <button
                 onclick="deleteQuiz('${quiz._id}', '${quiz.title.replace(/'/g, "\\'")}')"
-                class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs"
+                class="border border-gray-600 hover:bg-blue-400 text-white px-3 py-1 rounded-lg shadow transition-colors text-xs whitespace-nowrap"
               >
                 영구삭제
               </button>
