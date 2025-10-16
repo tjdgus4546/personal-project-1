@@ -15,8 +15,11 @@ router.get('/quiz/:quizId/comments', async (req, res) => {
     const mainDb = req.app.get('userDb'); // Comment는 userDb에 저장
     const Comment = require('../models/Comment')(mainDb);
 
-    // 퀴즈별 댓글 조회 (최신순)
-    const comments = await Comment.find({ quizId })
+    // 퀴즈별 댓글 조회 (최신순) - 숨김 처리된 댓글 제외
+    const comments = await Comment.find({
+      quizId,
+      isCommentHidden: { $ne: true }
+    })
       .sort({ createdAt: -1 })
       .lean();
 
