@@ -11,13 +11,28 @@
 </head>
 <body class="bg-[#222230]">
     <!-- 상단바가 여기에 자동으로 삽입됩니다 -->
-    
-    <!-- 메인 컨텐츠 -->
-    <div class="container mx-auto px-4 py-8">
-        <div class="text-center text-[14px]">
 
-            <div class="max-w-[1080px] mx-auto sm:px-0 px-4">
-                <!-- 데스크톱 레이아웃 (lg 이상) -->
+    <!-- 3단 레이아웃 래퍼 (광고 + 콘텐츠 + 광고) -->
+    <div class="flex justify-center gap-4 xl:gap-6 px-2 xl:px-4">
+        <!-- 좌측 광고 영역 (xl 이상에서만 표시) -->
+        <aside class="hidden xl:flex xl:w-[120px] xl:justify-center sticky top-20 self-start">
+            <iframe
+                src="/coupang-ad-left.html"
+                width="120"
+                height="560"
+                frameborder="0"
+                scrolling="no"
+                class="w-[120px] h-[560px] bg-white rounded-lg overflow-hidden"
+            ></iframe>
+        </aside>
+
+        <!-- 중앙 콘텐츠 -->
+        <main class="w-full xl:w-[1080px] py-8">
+            <!-- 메인 컨텐츠 -->
+            <div class="px-2 sm:px-0">
+                <div class="text-center text-[14px]">
+                    <div class="max-w-[1080px] mx-auto sm:px-0 px-4">
+                        <!-- 데스크톱 레이아웃 (lg 이상) -->
                 <div class="hidden lg:flex flex-col lg:flex-row gap-4 lg:gap-6 items-center justify-between">
                     <div class="flex justify-center h-[38px]">
                         <div class="relative">
@@ -146,9 +161,24 @@
                     </div>
                 </div>
             </div>
+                </div>
+            </div>
+        </main>
 
-        </div>
+        <!-- 우측 광고 영역 (xl 이상에서만 표시) -->
+        <aside class="hidden xl:flex xl:w-[120px] xl:justify-center sticky top-20 self-start">
+            <iframe
+                src="/coupang-ad-right.html"
+                width="120"
+                height="492"
+                frameborder="0"
+                scrolling="no"
+                referrerpolicy="unsafe-url"
+                class="w-[120px] h-[492px] bg-white rounded-lg overflow-hidden"
+            ></iframe>
+        </aside>
     </div>
+    <!-- 3단 레이아웃 래퍼 끝 -->
 
     <!-- 퀴즈 모달 -->
     <div id="quizModal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
@@ -226,10 +256,6 @@
     </div>
 
 
-    <!-- JavaScript 파일 로드 -->
-    <script type="module" src="/js/quiz-init-modal.js"></script>
-    <script type="module" src="/js/main.js"></script>
-
     <!-- 푸터 -->
     <footer class="mt-12 pb-8 text-center text-gray-400 text-sm">
         <div class="space-x-4">
@@ -243,6 +269,11 @@
         </div>
         <p class="mt-2">© 2025 PlayCode. All rights reserved.</p>
         <p class="mt-1 text-gray-500 text-xs">Icons from <a href="https://www.figma.com/community" target="_blank" class="hover:text-gray-400 transition-colors underline">Figma Community</a></p>
+        <p class="mt-2 text-gray-500 text-xs">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</p>
     </footer>
+
+    <!-- JavaScript 파일 로드 -->
+    <script type="module" src="/js/quiz-init-modal.js"></script>
+    <script type="module" src="/js/main.js"></script>
 </body>
 </html>
