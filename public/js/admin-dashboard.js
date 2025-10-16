@@ -320,7 +320,7 @@ function renderQuizTable(quizzes) {
 
     tr.innerHTML = `
       <td class="p-3">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <div class="relative group">
             ${quiz.titleImageBase64 ? `
               <img src="${quiz.titleImageBase64}" alt="썸네일" class="w-12 h-12 rounded object-cover cursor-pointer">
