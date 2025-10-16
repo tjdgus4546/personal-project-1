@@ -900,22 +900,22 @@ export async function saveQuestion() {
 
     // 유효성 검사
     if (!text) {
-        alert('문제를 입력하세요.');
+        showToast('문제를 입력하세요.', 'error');
         return;
     }
 
     if (isNaN(timeLimit) || timeLimit < 10 || timeLimit > 300) {
-        alert('제한 시간은 10초에서 300초 사이여야 합니다.');
+        showToast('제한 시간은 10초에서 300초 사이여야 합니다.', 'error');
         return;
     }
 
     if (currentAnswers.length === 0) {
-        alert('최소 1개 이상의 정답을 추가하세요.');
+        showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
         return;
     }
 
     if (isChoice && currentIncorrects.length === 0) {
-        alert('객관식 문제는 최소 1개 이상의 오답이 필요합니다.');
+        showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
         return;
     }
 
@@ -944,7 +944,7 @@ export async function saveQuestion() {
     } else if (currentQuestionType === 'image') {
         // 이미지 문제
         if (!questionImageBase64) {
-            alert('문제 이미지를 업로드하세요.');
+            showToast('문제 이미지를 업로드하세요.', 'error');
             return;
         }
         finalQuestionData.imageBase64 = questionImageBase64;
@@ -954,7 +954,7 @@ export async function saveQuestion() {
         // 영상/소리 문제
         const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
         if (!youtubeUrl) {
-            alert('유튜브 URL을 입력하세요.');
+            showToast('유튜브 URL을 입력하세요.', 'error');
             return;
         }
 
