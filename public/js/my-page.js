@@ -104,6 +104,13 @@ function displayUserInfo(user, stats) {
     } else if (user.googleId) {
         signupMethod = '구글 연동';
     }
+
+    // 디버깅용
+    console.log('[마이페이지 디버깅]');
+    console.log('user.naverId:', user.naverId);
+    console.log('user.googleId:', user.googleId);
+    console.log('최종 가입방법:', signupMethod);
+
     document.getElementById('signupMethod').textContent = signupMethod;
 }
 
