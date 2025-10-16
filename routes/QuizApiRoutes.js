@@ -48,8 +48,8 @@ module.exports = (quizDb) => {
         case 'latest':
           sortCondition = { createdAt: -1 };
           break;
-        case 'oldest':
-          sortCondition = { createdAt: 1 };
+        case 'recommended':
+          sortCondition = { recommendationCount: -1, createdAt: -1 };
           break;
         case 'popular':
         default:
@@ -58,7 +58,7 @@ module.exports = (quizDb) => {
       }
 
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('title description titleImageBase64 createdAt completedGameCount creatorId')
+        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit));
@@ -95,12 +95,29 @@ module.exports = (quizDb) => {
   });
 
   publicRouter.get('/quiz/search', async (req, res) => {
-    const { q, page = 1, limit = 20 } = req.query;
+    const { q, page = 1, limit = 20, sort = 'latest' } = req.query;
     const skip = (page - 1) * limit;
 
     try {
         const userDb = req.app.get('userDb');
         const User = require('../models/User')(userDb);
+
+        // 정렬 조건 설정
+        let sortCondition;
+        switch (sort) {
+            case 'latest':
+                sortCondition = { createdAt: -1 };
+                break;
+            case 'recommended':
+                sortCondition = { recommendationCount: -1, createdAt: -1 };
+                break;
+            case 'popular':
+                sortCondition = { completedGameCount: -1, createdAt: -1 };
+                break;
+            default:
+                sortCondition = { createdAt: -1 };
+                break;
+        }
 
         let quizzes = [];
 
@@ -123,15 +140,15 @@ module.exports = (quizDb) => {
             };
 
             quizzes = await Quiz.find(query)
-                .select('title description titleImageBase64 createdAt completedGameCount creatorId')
-                .sort({ createdAt: -1 })
+                .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
+                .sort(sortCondition)
                 .skip(skip)
                 .limit(parseInt(limit));
         } else {
             // 검색어가 없으면 전체 목록 반환
             quizzes = await Quiz.find({ isComplete: true })
-                .select('title description titleImageBase64 createdAt completedGameCount creatorId')
-                .sort({ createdAt: -1 })
+                .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
+                .sort(sortCondition)
                 .skip(skip)
                 .limit(parseInt(limit));
         }

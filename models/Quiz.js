@@ -145,4 +145,10 @@ quizSchema.index({ title: 'text' });
 // 8. 압수 상태별 조회 최적화
 quizSchema.index({ creatorId: 1, isComplete: 1, createdAt: -1 });
 
+// 9. 추천순 정렬 최적화
+quizSchema.index({ recommendationCount: -1, createdAt: -1 });
+
+// 10. 인기순 정렬 최적화
+quizSchema.index({ completedGameCount: -1, createdAt: -1 });
+
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);
