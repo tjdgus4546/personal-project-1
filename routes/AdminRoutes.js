@@ -1067,4 +1067,210 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// ========== IP 차단 관리 API ==========
+
+// 차단된 IP 목록 조회
+router.get('/blocked-ips', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const BlockedIP = require('../models/BlockedIP')(req.app.get('userDb'));
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, blockedIPs] = await Promise.all([
+      BlockedIP.countDocuments({ isActive: true }),
+      BlockedIP.find({ isActive: true })
+        .sort({ blockedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    // 차단한 관리자 정보 추가
+    const adminIds = blockedIPs
+      .filter(ip => ip.blockedBy)
+      .map(ip => ip.blockedBy);
+
+    const admins = await User.find({ _id: { $in: adminIds } })
+      .select('_id username nickname email')
+      .lean();
+
+    const adminMap = new Map();
+    admins.forEach(admin => {
+      adminMap.set(admin._id.toString(), admin);
+    });
+
+    const blockedIPsWithAdmin = blockedIPs.map(ip => ({
+      ...ip,
+      admin: ip.blockedBy ? adminMap.get(ip.blockedBy.toString()) : null
+    }));
+
+    res.json({
+      success: true,
+      blockedIPs: blockedIPsWithAdmin,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        hasMore: skip + blockedIPs.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Blocked IPs load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '차단 IP 목록을 불러오는데 실패했습니다.'
+    });
+  }
+});
+
+// IP 수동 차단
+router.post('/blocked-ips', async (req, res) => {
+  try {
+    const { ip, reason, details, days } = req.body;
+
+    if (!ip || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'IP와 차단 사유는 필수입니다.'
+      });
+    }
+
+    const BlockedIP = require('../models/BlockedIP')(req.app.get('userDb'));
+
+    // 이미 차단된 IP인지 확인
+    const existing = await BlockedIP.findOne({ ip, isActive: true });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 차단된 IP입니다.'
+      });
+    }
+
+    // 차단 기간 계산
+    let expiresAt = null;
+    if (days && days > 0) {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + parseInt(days));
+    }
+
+    // IP 차단 생성
+    await BlockedIP.create({
+      ip,
+      reason: 'manual_block',
+      details: details || reason,
+      blockedBy: req.user.id,
+      expiresAt,
+      isActive: true
+    });
+
+    const blockMessage = days
+      ? `IP가 ${days}일간 차단되었습니다.`
+      : 'IP가 영구 차단되었습니다.';
+
+    res.json({
+      success: true,
+      message: blockMessage
+    });
+  } catch (err) {
+    console.error('IP block error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'IP 차단 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// IP 차단 해제
+router.delete('/blocked-ips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BlockedIP = require('../models/BlockedIP')(req.app.get('userDb'));
+
+    const blocked = await BlockedIP.findById(id);
+    if (!blocked) {
+      return res.status(404).json({
+        success: false,
+        message: '차단 기록을 찾을 수 없습니다.'
+      });
+    }
+
+    // 차단 해제 (삭제하지 않고 비활성화)
+    await BlockedIP.findByIdAndUpdate(id, {
+      isActive: false
+    });
+
+    res.json({
+      success: true,
+      message: 'IP 차단이 해제되었습니다.'
+    });
+  } catch (err) {
+    console.error('IP unblock error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'IP 차단 해제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 최근 악의적인 접근 시도 조회 (AccessLog 기반)
+router.get('/suspicious-activities', async (req, res) => {
+  try {
+    const AccessLog = require('../models/AccessLog')(req.app.get('userDb'));
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    // 의심스러운 경로 패턴
+    const suspiciousPathPattern = /shouye\.html|mindex\.html|360\.html|wp-admin|phpmyadmin|\.env|\.git|admin\.php|config\.php/i;
+
+    // 최근 1시간 내 의심스러운 접근 조회
+    const suspiciousLogs = await AccessLog.find({
+      timestamp: { $gte: oneHourAgo },
+      $or: [
+        { path: { $regex: suspiciousPathPattern } },
+        { userAgent: { $regex: /sqlmap|nikto|nmap|masscan|acunetix|metasploit/i } }
+      ]
+    })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .lean();
+
+    // IP별로 그룹화
+    const ipGroups = {};
+    suspiciousLogs.forEach(log => {
+      if (!ipGroups[log.ip]) {
+        ipGroups[log.ip] = {
+          ip: log.ip,
+          count: 0,
+          paths: [],
+          userAgent: log.userAgent,
+          lastSeen: log.timestamp
+        };
+      }
+      ipGroups[log.ip].count++;
+      ipGroups[log.ip].paths.push(log.path);
+      if (new Date(log.timestamp) > new Date(ipGroups[log.ip].lastSeen)) {
+        ipGroups[log.ip].lastSeen = log.timestamp;
+      }
+    });
+
+    const activities = Object.values(ipGroups).sort((a, b) => b.count - a.count);
+
+    res.json({
+      success: true,
+      activities,
+      totalCount: activities.length
+    });
+  } catch (err) {
+    console.error('Suspicious activities load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '의심스러운 활동 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 module.exports = router;

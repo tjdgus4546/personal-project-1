@@ -94,6 +94,10 @@ connectDB().then(({ userDb, quizDb }) => {
   app.set('quizDb', quizDb);  // Chat DB를 전역에서 사용 가능하도록 설정
   app.set('io', io); // app 전체에서 io 접근 가능하도록 저장
 
+  // 🛡️ 봇 차단 미들웨어 적용 (Rate Limiter 다음, 다른 미들웨어보다 먼저)
+  const botBlocker = require('./middlewares/BotBlocker');
+  app.use(botBlocker(userDb));
+
   // 접속 로그 수집 미들웨어 (실제 페이지 조회만 카운트)
   const AccessLog = require('./models/AccessLog')(userDb);
   app.use((req, res, next) => {
