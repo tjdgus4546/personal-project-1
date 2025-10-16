@@ -1,7 +1,23 @@
 // quiz-edit.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBase64 } from './quiz-init-modal.js';
-import { fetchWithAuth } from './quiz-init-modal.js'; 
+import { fetchWithAuth } from './quiz-init-modal.js';
+
+// 개발 모드 플래그 (프로덕션 배포 시 false로 설정)
+const IS_DEV_MODE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// 개발 모드 전용 로그 함수
+function devLog(...args) {
+    if (IS_DEV_MODE) {
+        console.log(...args);
+    }
+}
+
+function devError(...args) {
+    if (IS_DEV_MODE) {
+        console.error(...args);
+    }
+}
 
 // 전역 변수
 let currentView = 'overview';
@@ -81,7 +97,7 @@ function updateFormVisibility() {
     
     // 디버깅: 어떤 섹션이 없는지 확인
     Object.entries(sections).forEach(([key, element]) => {
-        if (!element) {
+        if (!element && IS_DEV_MODE) {
             console.warn(`${key} 섹션을 찾을 수 없습니다`);
         }
     });
@@ -134,7 +150,9 @@ function updateFormVisibility() {
             break;
             
         default:
-            console.warn('알 수 없는 문제 타입:', currentQuestionType);
+            if (IS_DEV_MODE) {
+                console.warn('알 수 없는 문제 타입:', currentQuestionType);
+            }
     }
     
     // 객관식 섹션은 타입과 관계없이 처리
@@ -211,7 +229,7 @@ export async function previewImage(input, previewId) {
             }
             
             const sizeKB = Math.round((resizedBase64.length * 3) / 4 / 1024);
-            console.log(`✔ 이미지 압축 완료: ${sizeKB}KB`);
+            devLog(`✔ 이미지 압축 완료: ${sizeKB}KB`);
             
         } catch (error) {
             alert('이미지 처리 실패: ' + error.message);
@@ -560,9 +578,9 @@ export function removeIncorrect(index) {
 function renderQuestions() {
     const container = document.getElementById('questionsList'); // ⭐ HTML과 일치
     const emptyState = document.getElementById('emptyState');
-    
+
     if (!container) {
-        console.error('questionsList 요소를 찾을 수 없습니다');
+        devError('questionsList 요소를 찾을 수 없습니다');
         return;
     }
     
@@ -862,36 +880,45 @@ export function editQuestion(index) {
     renderSidebar();
 }
 
+// 저장 중 플래그
+let isSaving = false;
+
 export async function saveQuestion() {
     if (currentEditingIndex === null) return;
-    
+
+    // 이미 저장 중이면 무시
+    if (isSaving) {
+        devLog('⏳ 이미 저장 중입니다...');
+        return;
+    }
+
     const text = document.getElementById('questionText').value.trim();
     const timeLimitInput = document.getElementById('timeLimit');
     const timeLimitValue = timeLimitInput.value;
     const timeLimit = parseInt(timeLimitValue);
     const isChoice = document.getElementById('isMultipleChoice').checked;
-    
+
     // 유효성 검사
     if (!text) {
         alert('문제를 입력하세요.');
         return;
     }
-    
+
     if (isNaN(timeLimit) || timeLimit < 10 || timeLimit > 300) {
         alert('제한 시간은 10초에서 300초 사이여야 합니다.');
         return;
     }
-    
+
     if (currentAnswers.length === 0) {
         alert('최소 1개 이상의 정답을 추가하세요.');
         return;
     }
-    
+
     if (isChoice && currentIncorrects.length === 0) {
         alert('객관식 문제는 최소 1개 이상의 오답이 필요합니다.');
         return;
     }
-    
+
     // 기본 문제 데이터
     let finalQuestionData = {
         questionType: currentQuestionType,
@@ -909,11 +936,11 @@ export async function saveQuestion() {
         answerYoutubeStartTime: null,
         answerYoutubeEndTime: null
     };
-    
+
     // 타입별 데이터 추가
     if (currentQuestionType === 'text') {
         // 텍스트 문제: 추가 데이터 없음
-        
+
     } else if (currentQuestionType === 'image') {
         // 이미지 문제
         if (!questionImageBase64) {
@@ -922,7 +949,7 @@ export async function saveQuestion() {
         }
         finalQuestionData.imageBase64 = questionImageBase64;
         finalQuestionData.answerImageBase64 = answerImageBase64 || null;
-        
+
     } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
         // 영상/소리 문제
         const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
@@ -930,79 +957,127 @@ export async function saveQuestion() {
             alert('유튜브 URL을 입력하세요.');
             return;
         }
-        
+
         finalQuestionData.youtubeUrl = youtubeUrl;
         finalQuestionData.youtubeStartTime = parseTimeToSeconds(document.getElementById('startTime').value) || 0;
         finalQuestionData.youtubeEndTime = parseTimeToSeconds(document.getElementById('endTime').value) || 0;
-        
+
         const answerYoutubeUrl = document.getElementById('answerYoutubeUrl').value.trim();
         if (answerYoutubeUrl) {
             finalQuestionData.answerYoutubeUrl = answerYoutubeUrl;
             finalQuestionData.answerYoutubeStartTime = parseTimeToSeconds(document.getElementById('answerStartTime').value) || 0;
         }
     }
-    
+
     // 문제 데이터 업데이트
     questions[currentEditingIndex] = finalQuestionData;
 
+    isSaving = true;
+    devLog('💾 문제 저장 시작...');
+
     try {
         await saveCurrentQuestion();  // ✅ 개별 문제만 저장
+        devLog('✅ 문제 저장 성공');
         showToast('저장되었습니다!', 'success');
         renderQuestions();
         renderSidebar();
     } catch (error) {
+        devError('❌ 문제 저장 실패:', error);
         showToast('저장 중 오류가 발생했습니다', 'error');
+    } finally {
+        isSaving = false;
     }
 }
 
-// 개별 문제 저장 (수정 시 사용)
-async function saveCurrentQuestion() {
+// 개별 문제 저장 (수정 시 사용) - 재시도 로직 포함
+async function saveCurrentQuestion(retryCount = 0) {
+    const MAX_RETRIES = 2;
+
     if (currentEditingIndex === null) {
         throw new Error('저장할 문제가 선택되지 않았습니다.');
     }
-    
+
     const questionData = questions[currentEditingIndex];
-    
-    const response = await fetchWithAuth(
-        `/api/quiz/${quizId}/question/${currentEditingIndex}`, 
-        {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(questionData)
+
+    devLog(`📤 API 요청 전송 (시도 ${retryCount + 1}/${MAX_RETRIES + 1}):`, {
+        quizId,
+        questionIndex: currentEditingIndex,
+        questionType: questionData.questionType,
+        hasImage: !!questionData.imageBase64,
+        imageSize: questionData.imageBase64 ? Math.round(questionData.imageBase64.length / 1024) + 'KB' : '없음'
+    });
+
+    try {
+        const response = await fetchWithAuth(
+            `/api/quiz/${quizId}/question/${currentEditingIndex}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(questionData)
+            }
+        );
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            devError('❌ 서버 응답 오류:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData
+            });
+
+            // 500번대 서버 오류이고 재시도 가능하면 재시도
+            if (response.status >= 500 && retryCount < MAX_RETRIES) {
+                devLog(`🔄 ${retryCount + 1}초 후 재시도합니다...`);
+                await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+                return saveCurrentQuestion(retryCount + 1);
+            }
+
+            throw new Error(errorData.message || `서버 저장 실패 (${response.status})`);
         }
-    );
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ 서버 오류:', errorData);
-        throw new Error(errorData.message || '서버 저장 실패');
+
+        const result = await response.json();
+        devLog('✅ 서버 응답 성공:', result);
+        return result;
+
+    } catch (error) {
+        // 네트워크 오류 (TypeError: Failed to fetch 등)
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            devError('❌ 네트워크 오류:', error);
+
+            if (retryCount < MAX_RETRIES) {
+                devLog(`🔄 네트워크 오류 - ${retryCount + 1}초 후 재시도합니다...`);
+                await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+                return saveCurrentQuestion(retryCount + 1);
+            }
+
+            throw new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
+        }
+
+        throw error;
     }
-    
-    const result = await response.json();
-    return result;
 }
 
 // 전체 문제 목록 저장 (삭제 시 사용)
 async function saveAllQuestions() {
-    console.log('📤 전체 문제 저장:', questions.length + '개');
-    
+    devLog('📤 전체 문제 저장:', questions.length + '개');
+
     const response = await fetchWithAuth(
-        `/api/quiz/${quizId}/questions`, 
+        `/api/quiz/${quizId}/questions`,
         {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ questions })
         }
     );
-    
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ 서버 오류:', errorData);
+        devError('❌ 서버 오류:', errorData);
         throw new Error(errorData.message || '서버 저장 실패');
     }
-    
+
     const result = await response.json();
-    console.log('✅ 전체 저장 성공:', result);
+    devLog('✅ 전체 저장 성공:', result);
     return result;
 }
 
@@ -1148,7 +1223,7 @@ export async function saveRandomOrderSetting() {
             feedbackEl.textContent = '오류 발생';
             feedbackEl.classList.remove('opacity-0');
         }
-        console.error('❌ 저장 중 오류가 발생했습니다: ', error.message);
+        devError('❌ 저장 중 오류가 발생했습니다: ', error.message);
     }
 }
 
