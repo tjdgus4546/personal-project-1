@@ -99,7 +99,12 @@ function displayUserInfo(user, stats) {
     document.getElementById('createdQuizzesCount').textContent = `${stats.createdQuizzes || 0}개`;
     
     // 가입 방법 표시
-    const signupMethod = user.naverId ? '네이버 연동' : '일반 가입';
+    let signupMethod = '일반 가입';
+    if (user.naverId) {
+        signupMethod = '네이버 연동';
+    } else if (user.googleId) {
+        signupMethod = '구글 연동';
+    }
     document.getElementById('signupMethod').textContent = signupMethod;
 }
 
