@@ -31,10 +31,25 @@ export function initializeComments(quizId, user) {
     });
   }
 
-  // 댓글 수정/삭제 버튼 이벤트 위임
+  // 댓글 수정/삭제/신고 버튼 이벤트 위임
   const commentsContainer = document.getElementById('commentsContainer');
   if (commentsContainer) {
     commentsContainer.addEventListener('click', async (e) => {
+      // 프로필 이미지 클릭 → 신고 버튼 토글
+      if (e.target.classList.contains('comment-profile-image') || e.target.classList.contains('comment-profile-avatar')) {
+        const commentItem = e.target.closest('.comment-item');
+        const reportBtn = commentItem.querySelector('.report-comment-btn');
+        if (reportBtn) {
+          reportBtn.classList.toggle('hidden');
+        }
+      }
+
+      // 신고 버튼 클릭
+      if (e.target.classList.contains('report-comment-btn')) {
+        const commentId = e.target.dataset.commentId;
+        await reportComment(commentId);
+      }
+
       // 수정 버튼 클릭
       if (e.target.classList.contains('edit-comment-btn')) {
         const commentId = e.target.dataset.commentId;
@@ -140,13 +155,13 @@ function createCommentHTML(comment) {
   // 현재 사용자가 댓글 작성자인지 확인
   const isAuthor = currentUser && comment.userId && String(currentUser._id) === String(comment.userId);
 
-  // 프로필 이미지 또는 기본 아바타
+  // 프로필 이미지 또는 기본 아바타 (클릭 가능하도록 cursor-pointer 추가)
   const avatarHTML = profileImage
-    ? `<img src="${profileImage}" alt="${nickname}님의 프로필" class="w-10 h-10 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-       <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm" style="display: none;">
+    ? `<img src="${profileImage}" alt="${nickname}님의 프로필" class="comment-profile-image w-10 h-10 rounded-full object-cover cursor-pointer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+       <div class="comment-profile-avatar w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer" style="display: none;">
          ${nickname.charAt(0).toUpperCase()}
        </div>`
-    : `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+    : `<div class="comment-profile-avatar w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer">
          ${nickname.charAt(0).toUpperCase()}
        </div>`;
 
@@ -159,11 +174,17 @@ function createCommentHTML(comment) {
        </div>`
     : '';
 
+  // 신고 버튼 (작성자가 아닐 때만 표시, absolute positioning으로 주변 레이아웃에 영향 없음)
+  const reportButton = !isAuthor
+    ? `<button class="report-comment-btn hidden absolute top-12 left-0 z-10 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg shadow-lg transition-all whitespace-nowrap" data-comment-id="${commentId}">신고하기</button>`
+    : '';
+
   return `
     <div class="py-3 comment-item" data-comment-id="${commentId}">
       <div class="flex items-start space-x-3">
-        <div class="flex-shrink-0">
+        <div class="flex-shrink-0 relative">
           ${avatarHTML}
+          ${reportButton}
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between mb-2">
@@ -367,6 +388,84 @@ async function deleteComment(commentId) {
     }
   } catch (error) {
     console.error('댓글 삭제 오류:', error);
+    alert(error.message);
+  }
+}
+
+/**
+ * 댓글 신고
+ * @param {string} commentId - 댓글 ID
+ */
+async function reportComment(commentId) {
+  // 신고 사유 선택
+  const reason = prompt(
+    '신고 사유를 선택해주세요:\n\n' +
+    '1. 스팸\n' +
+    '2. 욕설/비방\n' +
+    '3. 부적절한 내용\n' +
+    '4. 기타\n\n' +
+    '번호를 입력하세요 (1-4):'
+  );
+
+  if (!reason) return;
+
+  const reasonMap = {
+    '1': 'spam',
+    '2': 'abuse',
+    '3': 'inappropriate',
+    '4': 'other'
+  };
+
+  const reasonKey = reasonMap[reason.trim()];
+  if (!reasonKey) {
+    alert('올바른 번호를 입력해주세요 (1-4)');
+    return;
+  }
+
+  let description = '';
+  if (reasonKey === 'other') {
+    description = prompt('신고 사유를 간단히 설명해주세요 (최대 200자):') || '';
+    if (description.length > 200) {
+      alert('신고 사유는 최대 200자까지 입력할 수 있습니다.');
+      return;
+    }
+  }
+
+  if (!confirm('정말로 이 댓글을 신고하시겠습니까?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/quiz/${currentQuizId}/comment/${commentId}/report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        reason: reasonKey,
+        description,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || '댓글 신고에 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('댓글이 신고되었습니다.');
+      // 신고 버튼 숨기기
+      const commentItem = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+      const reportBtn = commentItem?.querySelector('.report-comment-btn');
+      if (reportBtn) {
+        reportBtn.classList.add('hidden');
+      }
+    }
+  } catch (error) {
+    console.error('댓글 신고 오류:', error);
     alert(error.message);
   }
 }

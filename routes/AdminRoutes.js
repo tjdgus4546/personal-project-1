@@ -471,6 +471,162 @@ router.delete('/quizzes/:quizId/reports', async (req, res) => {
   }
 });
 
+// 신고된 댓글 목록 조회
+router.get('/reported-comments', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 40;
+    const skip = (page - 1) * limit;
+
+    const Comment = require('../models/Comment')(req.app.get('userDb'));
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    // 병렬로 카운트와 데이터 조회
+    const [totalCount, comments] = await Promise.all([
+      Comment.countDocuments({ 'commentReports.0': { $exists: true } }),
+      Comment.find({ 'commentReports.0': { $exists: true } })
+        .sort({ 'commentReports.0.reportedAt': -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    // 사용자 ID 수집
+    const userIds = new Set();
+    comments.forEach(comment => {
+      if (comment.userId) userIds.add(comment.userId.toString());
+      comment.commentReports?.forEach(report => {
+        if (report.reporterId) userIds.add(report.reporterId.toString());
+      });
+    });
+
+    // 한 번에 모든 사용자 정보 조회
+    const users = await User.find({ _id: { $in: Array.from(userIds) } })
+      .select('_id username nickname email')
+      .lean();
+
+    const userMap = new Map();
+    users.forEach(user => {
+      userMap.set(user._id.toString(), user);
+    });
+
+    // 댓글에 사용자 정보 추가
+    const commentsWithDetails = comments.map(comment => ({
+      ...comment,
+      author: userMap.get(comment.userId?.toString()) || { nickname: 'Unknown', email: 'N/A' },
+      commentReports: comment.commentReports?.map(report => ({
+        ...report,
+        reporter: userMap.get(report.reporterId?.toString()) || { nickname: 'Unknown', email: 'N/A' }
+      }))
+    }));
+
+    res.json({
+      success: true,
+      comments: commentsWithDetails,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        hasMore: skip + comments.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Reported comments load error:', err);
+    res.status(500).json({
+      success: false,
+      message: '신고된 댓글 목록을 불러오는데 실패했습니다.'
+    });
+  }
+});
+
+// 댓글 신고 삭제
+router.delete('/comments/:commentId/reports', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { reportIds } = req.body;
+
+    const Comment = require('../models/Comment')(req.app.get('userDb'));
+
+    if (reportIds && Array.isArray(reportIds)) {
+      await Comment.findByIdAndUpdate(commentId, {
+        $pull: {
+          commentReports: { _id: { $in: reportIds } }
+        }
+      });
+    } else {
+      await Comment.findByIdAndUpdate(commentId, {
+        $set: { commentReports: [] }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '댓글 신고가 삭제되었습니다.'
+    });
+  } catch (err) {
+    console.error('Comment report delete error:', err);
+    res.status(500).json({
+      success: false,
+      message: '댓글 신고 삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 댓글 숨김 처리
+router.patch('/comments/:commentId/hide', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { reason } = req.body;
+
+    const Comment = require('../models/Comment')(req.app.get('userDb'));
+
+    await Comment.findByIdAndUpdate(commentId, {
+      isCommentHidden: true,
+      commentHiddenReason: reason || '관리자 조치',
+      commentHiddenAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: '댓글이 숨김 처리되었습니다.'
+    });
+  } catch (err) {
+    console.error('Comment hide error:', err);
+    res.status(500).json({
+      success: false,
+      message: '댓글 숨김 처리 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 댓글 영구 삭제
+router.delete('/comments/:commentId', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const Comment = require('../models/Comment')(req.app.get('userDb'));
+
+    const comment = await Comment.findByIdAndDelete(commentId);
+
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: '댓글을 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '댓글이 영구 삭제되었습니다.'
+    });
+  } catch (err) {
+    console.error('Comment delete error:', err);
+    res.status(500).json({
+      success: false,
+      message: '댓글 삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // ========== 접속 통계 API ==========
 
 // 퀴즈 이미지 조회 (호버링 시 사용)

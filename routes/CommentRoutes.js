@@ -189,4 +189,74 @@ router.delete('/quiz/:quizId/comment/:commentId', authenticateToken, async (req,
   }
 });
 
+// POST /api/quiz/:quizId/comment/:commentId/report - 댓글 신고
+router.post('/quiz/:quizId/comment/:commentId/report', authenticateToken, async (req, res) => {
+  const { quizId, commentId } = req.params;
+  const { reason, description } = req.body;
+
+  if (!ObjectId.isValid(quizId) || !ObjectId.isValid(commentId)) {
+    return res.status(400).json({ message: '유효하지 않은 ID입니다.' });
+  }
+
+  if (!reason) {
+    return res.status(400).json({ message: '신고 사유를 선택해주세요.' });
+  }
+
+  const validReasons = ['spam', 'abuse', 'inappropriate', 'other'];
+  if (!validReasons.includes(reason)) {
+    return res.status(400).json({ message: '유효하지 않은 신고 사유입니다.' });
+  }
+
+  try {
+    const mainDb = req.app.get('userDb');
+    const Comment = require('../models/Comment')(mainDb);
+    const User = require('../models/User')(mainDb);
+
+    // 댓글 조회
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: '댓글을 찾을 수 없습니다.' });
+    }
+
+    // 자신의 댓글은 신고할 수 없음
+    if (comment.userId.toString() === req.user.id) {
+      return res.status(403).json({ message: '자신의 댓글은 신고할 수 없습니다.' });
+    }
+
+    // 이미 신고했는지 확인
+    const alreadyReported = comment.commentReports.some(
+      report => report.reporterId.toString() === req.user.id
+    );
+
+    if (alreadyReported) {
+      return res.status(400).json({ message: '이미 신고한 댓글입니다.' });
+    }
+
+    // 사용자 정보 조회
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 신고 추가
+    comment.commentReports.push({
+      reporterId: req.user.id,
+      reporterNickname: user.nickname,
+      reason,
+      description: description?.trim() || '',
+      reportedAt: new Date(),
+    });
+
+    await comment.save();
+
+    res.json({
+      success: true,
+      message: '댓글이 신고되었습니다.',
+    });
+  } catch (error) {
+    console.error('Error reporting comment:', error);
+    res.status(500).json({ message: '댓글 신고 중 오류가 발생했습니다.', error: error.message });
+  }
+});
+
 module.exports = router;

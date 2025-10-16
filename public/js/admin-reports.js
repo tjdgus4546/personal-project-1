@@ -8,6 +8,13 @@ let hasMore = true;
 let currentUser = null;
 let tooltipHideTimer = null;
 
+// 댓글 신고 관련 변수
+let allReportedComments = [];
+let commentCurrentPage = 1;
+let isCommentLoading = false;
+let commentHasMore = true;
+let currentTab = 'quiz'; // 'quiz' or 'comment'
+
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
@@ -52,7 +59,10 @@ async function initializePage() {
 
     currentUser = user;
 
-    // 신고된 퀴즈 목록 로드
+    // 탭 이벤트 리스너 설정
+    setupTabListeners();
+
+    // 신고된 퀴즈 목록 로드 (기본 탭)
     await loadReportedQuizzes();
 
     // 무한 스크롤 이벤트 리스너
@@ -61,6 +71,49 @@ async function initializePage() {
     console.error('페이지 초기화 실패:', error);
     alert('페이지 초기화 중 오류가 발생했습니다.');
   }
+}
+
+// 탭 이벤트 리스너 설정
+function setupTabListeners() {
+  const quizTab = document.getElementById('quizTab');
+  const commentTab = document.getElementById('commentTab');
+
+  quizTab.addEventListener('click', () => {
+    if (currentTab === 'quiz') return;
+
+    currentTab = 'quiz';
+
+    // 탭 스타일 변경
+    quizTab.classList.add('border-red-500', 'text-red-500');
+    quizTab.classList.remove('border-transparent', 'text-gray-400');
+    commentTab.classList.remove('border-red-500', 'text-red-500');
+    commentTab.classList.add('border-transparent', 'text-gray-400');
+
+    // 섹션 표시/숨김
+    document.getElementById('quizReportsSection').classList.remove('hidden');
+    document.getElementById('commentReportsSection').classList.add('hidden');
+  });
+
+  commentTab.addEventListener('click', async () => {
+    if (currentTab === 'comment') return;
+
+    currentTab = 'comment';
+
+    // 탭 스타일 변경
+    commentTab.classList.add('border-red-500', 'text-red-500');
+    commentTab.classList.remove('border-transparent', 'text-gray-400');
+    quizTab.classList.remove('border-red-500', 'text-red-500');
+    quizTab.classList.add('border-transparent', 'text-gray-400');
+
+    // 섹션 표시/숨김
+    document.getElementById('commentReportsSection').classList.remove('hidden');
+    document.getElementById('quizReportsSection').classList.add('hidden');
+
+    // 댓글 신고 목록이 비어있으면 로드
+    if (allReportedComments.length === 0) {
+      await loadReportedComments();
+    }
+  });
 }
 
 // 신고된 퀴즈 목록 로드
@@ -78,11 +131,11 @@ async function loadReportedQuizzes(reset = false) {
 
     // 로딩 상태 표시
     if (currentPage === 1) {
-      document.getElementById('loadingState').classList.remove('hidden');
-      document.getElementById('reportsContainer').classList.add('hidden');
-      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('quizLoadingState').classList.remove('hidden');
+      document.getElementById('quizReportsContainer').classList.add('hidden');
+      document.getElementById('quizEmptyState').classList.add('hidden');
     } else {
-      showLoadMoreIndicator();
+      showLoadMoreIndicator('quiz');
     }
 
     const response = await fetchWithAuth(`/admin/reported-quizzes?page=${currentPage}&limit=40`);
@@ -106,13 +159,13 @@ async function loadReportedQuizzes(reset = false) {
     renderReportedQuizzes();
 
     // 로딩 상태 업데이트
-    document.getElementById('loadingState').classList.add('hidden');
-    hideLoadMoreIndicator();
+    document.getElementById('quizLoadingState').classList.add('hidden');
+    hideLoadMoreIndicator('quiz');
 
     if (allReportedQuizzes.length === 0) {
-      document.getElementById('emptyState').classList.remove('hidden');
+      document.getElementById('quizEmptyState').classList.remove('hidden');
     } else {
-      document.getElementById('reportsContainer').classList.remove('hidden');
+      document.getElementById('quizReportsContainer').classList.remove('hidden');
     }
 
     // 다음 페이지 준비
@@ -120,14 +173,14 @@ async function loadReportedQuizzes(reset = false) {
   } catch (err) {
     console.error('신고된 퀴즈 로드 에러:', err);
     if (currentPage === 1) {
-      document.getElementById('loadingState').innerHTML = `
+      document.getElementById('quizLoadingState').innerHTML = `
         <p class="text-red-400">신고된 퀴즈 목록을 불러오는데 실패했습니다.</p>
         <button onclick="location.reload()" class="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
           다시 시도
         </button>
       `;
     }
-    hideLoadMoreIndicator();
+    hideLoadMoreIndicator('quiz');
   } finally {
     isLoading = false;
   }
@@ -204,11 +257,92 @@ function setupTooltipEvents(thumbnailElement, tooltip) {
 
 // 신고된 퀴즈 렌더링
 function renderReportedQuizzes() {
-  const container = document.getElementById('reportsContainer');
+  const container = document.getElementById('quizReportsContainer');
   container.innerHTML = '';
 
   allReportedQuizzes.forEach(quiz => {
     const card = createQuizCard(quiz);
+    container.appendChild(card);
+  });
+}
+
+// 신고된 댓글 목록 로드
+async function loadReportedComments(reset = false) {
+  if (isCommentLoading || (!commentHasMore && !reset)) return;
+
+  try {
+    isCommentLoading = true;
+
+    if (reset) {
+      commentCurrentPage = 1;
+      allReportedComments = [];
+      commentHasMore = true;
+    }
+
+    // 로딩 상태 표시
+    if (commentCurrentPage === 1) {
+      document.getElementById('commentLoadingState').classList.remove('hidden');
+      document.getElementById('commentReportsContainer').classList.add('hidden');
+      document.getElementById('commentEmptyState').classList.add('hidden');
+    } else {
+      showLoadMoreIndicator('comment');
+    }
+
+    const response = await fetchWithAuth(`/admin/reported-comments?page=${commentCurrentPage}&limit=40`);
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        alert('관리자 권한이 필요합니다.');
+        window.location.href = '/';
+        return;
+      }
+      throw new Error('신고된 댓글 목록 로드 실패');
+    }
+
+    const data = await response.json();
+
+    // 새로운 댓글 추가
+    allReportedComments = [...allReportedComments, ...data.comments];
+    commentHasMore = data.pagination.hasMore;
+
+    // 렌더링
+    renderReportedComments();
+
+    // 로딩 상태 업데이트
+    document.getElementById('commentLoadingState').classList.add('hidden');
+    hideLoadMoreIndicator('comment');
+
+    if (allReportedComments.length === 0) {
+      document.getElementById('commentEmptyState').classList.remove('hidden');
+    } else {
+      document.getElementById('commentReportsContainer').classList.remove('hidden');
+    }
+
+    // 다음 페이지 준비
+    commentCurrentPage++;
+  } catch (err) {
+    console.error('신고된 댓글 로드 에러:', err);
+    if (commentCurrentPage === 1) {
+      document.getElementById('commentLoadingState').innerHTML = `
+        <p class="text-red-400">신고된 댓글 목록을 불러오는데 실패했습니다.</p>
+        <button onclick="location.reload()" class="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
+          다시 시도
+        </button>
+      `;
+    }
+    hideLoadMoreIndicator('comment');
+  } finally {
+    isCommentLoading = false;
+  }
+}
+
+// 신고된 댓글 렌더링
+function renderReportedComments() {
+  const container = document.getElementById('commentReportsContainer');
+  container.innerHTML = '';
+
+  allReportedComments.forEach(comment => {
+    const card = createCommentCard(comment);
     container.appendChild(card);
   });
 }
@@ -354,6 +488,116 @@ function createQuizCard(quiz) {
   return card;
 }
 
+// 댓글 카드 생성
+function createCommentCard(comment) {
+  const card = document.createElement('div');
+  card.className = 'bg-black/30 rounded-2xl p-6 shadow-xl border border-gray-600';
+
+  const createdDate = new Date(comment.createdAt).toLocaleDateString('ko-KR');
+  const isHidden = comment.isCommentHidden;
+
+  // 신고 사유를 한글로 변환
+  const reasonMap = {
+    'spam': '스팸',
+    'abuse': '욕설/비방',
+    'inappropriate': '부적절한 내용',
+    'other': '기타'
+  };
+
+  card.innerHTML = `
+    <!-- 댓글 정보 -->
+    <div class="mb-4">
+      <div class="flex items-start gap-4">
+        <div class="flex-shrink-0">
+          ${comment.profileImage ? `
+            <img src="${comment.profileImage}" alt="프로필" class="w-12 h-12 rounded-full object-cover">
+          ` : `
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
+              ${comment.nickname.charAt(0)}
+            </div>
+          `}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-white font-semibold">${comment.nickname}</span>
+            ${comment.author ? `<span class="text-gray-500 text-xs">(${comment.author.email})</span>` : ''}
+            <span class="text-gray-500 text-xs">${createdDate}</span>
+            ${isHidden ? `
+              <span class="px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500">
+                숨김
+              </span>
+            ` : ''}
+          </div>
+          <p class="text-gray-300 text-sm mb-2">${comment.content}</p>
+          ${comment.quizId ? `
+            <div class="text-gray-500 text-xs">
+              퀴즈 ID: <a href="/quiz/session?quizId=${comment.quizId}" class="text-blue-400 hover:underline" target="_blank">${comment.quizId}</a>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- 신고 내역 -->
+    <div class="border-t border-gray-700 pt-4">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-lg font-semibold text-red-400">신고 내역 (${comment.commentReports?.length || 0}건)</h4>
+        <div class="flex gap-2">
+          ${!isHidden ? `
+            <button
+              onclick="hideCommentFromReport('${comment._id}', '${comment.content.replace(/'/g, "\\'").substring(0, 30)}...')"
+              class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              숨기기
+            </button>
+          ` : ''}
+          ${currentUser && currentUser.role === 'superadmin' ? `
+            <button
+              onclick="deleteCommentFromReport('${comment._id}', '${comment.content.replace(/'/g, "\\'").substring(0, 30)}...')"
+              class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              영구삭제
+            </button>
+          ` : ''}
+          <button
+            onclick="dismissCommentReports('${comment._id}', '${comment.content.replace(/'/g, "\\'").substring(0, 30)}...')"
+            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            신고 삭제
+          </button>
+        </div>
+      </div>
+
+      <!-- 신고 목록 -->
+      <div class="space-y-2">
+        ${comment.commentReports?.map((report, index) => `
+          <div class="bg-gray-800/50 rounded-lg p-3">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-white font-medium">${report.reporterNickname}</span>
+                  ${report.reporter ? `<span class="text-gray-500 text-xs">(${report.reporter.email})</span>` : ''}
+                  <span class="text-gray-500 text-xs">
+                    ${new Date(report.reportedAt).toLocaleString('ko-KR')}
+                  </span>
+                </div>
+                <div class="text-gray-300 text-sm mb-1">
+                  <span class="font-semibold text-red-400">${reasonMap[report.reason] || report.reason}</span>
+                </div>
+                ${report.description ? `
+                  <p class="text-gray-400 text-xs">${report.description}</p>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  return card;
+}
+
 // 퀴즈 압수
 async function seizeQuizFromReport(quizId, title) {
   const reason = prompt(`"${title}" 퀴즈를 압수하시겠습니까?\n\n압수 사유를 입력하세요 (선택사항):`);
@@ -458,6 +702,85 @@ async function dismissReports(quizId, title) {
   }
 }
 
+// 댓글 숨기기
+async function hideCommentFromReport(commentId, preview) {
+  const reason = prompt(`"${preview}" 댓글을 숨기시겠습니까?\n\n숨김 사유를 입력하세요 (선택사항):`);
+
+  if (reason === null) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/comments/${commentId}/hide`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '관리자 조치' })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadReportedComments(true); // 목록 새로고침
+    } else {
+      alert(data.message || '숨김 처리 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Comment hide error:', err);
+    alert('숨김 처리 중 오류가 발생했습니다.');
+  }
+}
+
+// 댓글 영구 삭제
+async function deleteCommentFromReport(commentId, preview) {
+  if (!confirm(`"${preview}" 댓글을 영구 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/comments/${commentId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadReportedComments(true); // 목록 새로고침
+    } else {
+      alert(data.message || '삭제 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Comment delete error:', err);
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+// 댓글 신고 삭제 (조치 없이 신고만 삭제)
+async function dismissCommentReports(commentId, preview) {
+  if (!confirm(`"${preview}" 댓글의 모든 신고를 삭제하시겠습니까?\n\n댓글은 그대로 유지됩니다.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/comments/${commentId}/reports`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadReportedComments(true); // 목록 새로고침
+    } else {
+      alert(data.message || '신고 삭제 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('Comment report dismiss error:', err);
+    alert('신고 삭제 중 오류가 발생했습니다.');
+  }
+}
+
 // 무한 스크롤 핸들러
 function handleScroll() {
   const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -466,29 +789,38 @@ function handleScroll() {
 
   // 하단에서 200px 정도 남았을 때 로드
   if (scrollTop + clientHeight >= scrollHeight - 200) {
-    loadReportedQuizzes();
+    if (currentTab === 'quiz') {
+      loadReportedQuizzes();
+    } else {
+      loadReportedComments();
+    }
   }
 }
 
 // 로딩 인디케이터 표시
-function showLoadMoreIndicator() {
-  let indicator = document.getElementById('loadMoreIndicator');
+function showLoadMoreIndicator(tab = 'quiz') {
+  const indicatorId = tab === 'quiz' ? 'loadMoreIndicatorQuiz' : 'loadMoreIndicatorComment';
+  const containerId = tab === 'quiz' ? 'quizReportsContainer' : 'commentReportsContainer';
+  const loadingText = tab === 'quiz' ? '추가 퀴즈를 불러오는 중...' : '추가 댓글을 불러오는 중...';
+
+  let indicator = document.getElementById(indicatorId);
   if (!indicator) {
     indicator = document.createElement('div');
-    indicator.id = 'loadMoreIndicator';
+    indicator.id = indicatorId;
     indicator.className = 'text-center py-8';
     indicator.innerHTML = `
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
-      <p class="text-gray-400 mt-2">추가 퀴즈를 불러오는 중...</p>
+      <p class="text-gray-400 mt-2">${loadingText}</p>
     `;
-    document.getElementById('reportsContainer').appendChild(indicator);
+    document.getElementById(containerId).appendChild(indicator);
   }
   indicator.classList.remove('hidden');
 }
 
 // 로딩 인디케이터 숨기기
-function hideLoadMoreIndicator() {
-  const indicator = document.getElementById('loadMoreIndicator');
+function hideLoadMoreIndicator(tab = 'quiz') {
+  const indicatorId = tab === 'quiz' ? 'loadMoreIndicatorQuiz' : 'loadMoreIndicatorComment';
+  const indicator = document.getElementById(indicatorId);
   if (indicator) {
     indicator.classList.add('hidden');
   }
@@ -499,6 +831,9 @@ window.seizeQuizFromReport = seizeQuizFromReport;
 window.restoreQuizFromReport = restoreQuizFromReport;
 window.deleteQuizFromReport = deleteQuizFromReport;
 window.dismissReports = dismissReports;
+window.hideCommentFromReport = hideCommentFromReport;
+window.deleteCommentFromReport = deleteCommentFromReport;
+window.dismissCommentReports = dismissCommentReports;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
