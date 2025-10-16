@@ -4,6 +4,7 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/DB');
 const authRoutes = require('./routes/AuthRoutes');
 const naverAuthRoutes = require('./routes/NaverAuthRoutes');
@@ -30,6 +31,37 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// Rate Limiting 설정
+// 1. 전역 제한: 모든 요청에 적용 (느슨하게)
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1분
+  max: 100, // 1분당 최대 100개 요청
+  message: '너무 많은 요청을 보냈습니다. 잠시 후 다시 시도해주세요.',
+  standardHeaders: true, // RateLimit-* 헤더 반환
+  legacyHeaders: false, // X-RateLimit-* 헤더 비활성화
+});
+
+// 2. API 제한: 일반 API 엔드포인트 (중간)
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1분
+  max: 60, // 1분당 최대 60개 요청
+  message: 'API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 3. 인증 제한: 로그인/회원가입 (엄격하게)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 5, // 15분당 최대 5개 요청
+  message: '로그인 시도가 너무 많습니다. 15분 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 전역 limiter 적용
+app.use(globalLimiter);
 
 app.use(session({
   secret: process.env.JWT_SECRET,
@@ -122,15 +154,19 @@ connectDB().then(({ userDb, quizDb }) => {
   
   const { publicRouter, privateRouter } = quizApiRoutesFactory(quizDb);
 
+  // authLimiter를 라우트에서 사용할 수 있도록 app에 저장
+  app.set('authLimiter', authLimiter);
+  app.set('apiLimiter', apiLimiter);
+
   // 라우트 설정
   app.use('/auth', authRoutes);
   app.use('/auth', naverAuthRoutes);
   app.use('/auth', googleAuthRoutes);
   app.use('/', authRoutes);
   app.use('/', quizRoutes);
-  app.use('/api', publicRouter); // 인증이 필요없는 API
-  app.use('/api', authenticateToken, privateRouter); // 인증이 필요한 API
-  app.use('/game', authenticateToken, gameRoutes);
+  app.use('/api', apiLimiter, publicRouter); // API에 중간 제한
+  app.use('/api', apiLimiter, authenticateToken, privateRouter);
+  app.use('/game', apiLimiter, authenticateToken, gameRoutes);
   app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
   app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)
 

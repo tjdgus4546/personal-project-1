@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
@@ -14,6 +15,15 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // 임시 사용자 정보 저장용 (실제로는 Redis나 DB 사용 권장)
 const tempUserData = new Map();
+
+// OAuth 닉네임 설정 제한
+const oauthSignupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 5, // 15분당 최대 5개 요청
+  message: '회원가입 시도가 너무 많습니다. 15분 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // 구글 로그인 시작
 router.get('/google', (req, res) => {
@@ -52,7 +62,7 @@ router.get('/google/temp-info', (req, res) => {
 });
 
 // 닉네임 설정 완료
-router.post('/google/complete-signup', async (req, res) => {
+router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
   const tempToken = req.headers.authorization?.replace('Bearer ', '');
   const { nickname } = req.body;
 
