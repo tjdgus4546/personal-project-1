@@ -248,15 +248,14 @@ function displayQuizInfo(quiz) {
         copyBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
-    // 추천 버튼 표시 및 상태 설정 (자신의 퀴즈가 아닐 경우만)
-    const isMyQuiz = quiz.creatorId && userId && quiz.creatorId.toString() === String(userId);
+    // 추천 버튼 표시 및 상태 설정
     const recommendSection = document.getElementById('recommendSection');
     const recommendBtn = document.getElementById('recommendBtn');
     const recommendIcon = document.getElementById('recommendIcon');
     const recommendCount = document.getElementById('recommendCount');
 
-    if (!isMyQuiz && recommendSection && recommendBtn) {
-        // 자신의 퀴즈가 아니면 추천 버튼 표시
+    if (recommendSection && recommendBtn) {
+        // 추천 버튼 표시
         recommendSection.classList.remove('hidden');
 
         // 추천 수 표시
