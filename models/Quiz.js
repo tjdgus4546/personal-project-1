@@ -113,6 +113,10 @@ const quizSchema = new Schema({
     type: Boolean,
     default: false
   },
+  recommendationCount: {
+    type: Number,
+    default: 0
+  },
 });
 
 // ========== 성능 최적화를 위한 인덱스 ==========

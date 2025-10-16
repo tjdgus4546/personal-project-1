@@ -98,4 +98,95 @@ router.post('/quiz/:quizId/comment', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /api/quiz/:quizId/comment/:commentId - 댓글 수정
+router.put('/quiz/:quizId/comment/:commentId', authenticateToken, async (req, res) => {
+  const { quizId, commentId } = req.params;
+  const { content } = req.body;
+
+  if (!ObjectId.isValid(quizId) || !ObjectId.isValid(commentId)) {
+    return res.status(400).json({ message: '유효하지 않은 ID입니다.' });
+  }
+
+  if (!content || content.trim().length === 0) {
+    return res.status(400).json({ message: '댓글 내용을 입력해주세요.' });
+  }
+
+  if (content.length > 500) {
+    return res.status(400).json({ message: '댓글은 최대 500자까지 작성할 수 있습니다.' });
+  }
+
+  try {
+    const mainDb = req.app.get('userDb');
+    const Comment = require('../models/Comment')(mainDb);
+
+    // 댓글 조회
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: '댓글을 찾을 수 없습니다.' });
+    }
+
+    // 권한 확인 (댓글 작성자만 수정 가능)
+    if (comment.userId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '댓글을 수정할 권한이 없습니다.' });
+    }
+
+    // 댓글 수정
+    comment.content = content.trim();
+    await comment.save();
+
+    res.json({
+      success: true,
+      message: '댓글이 수정되었습니다.',
+      comment: {
+        _id: comment._id,
+        quizId: comment.quizId,
+        userId: comment.userId,
+        nickname: comment.nickname,
+        profileImage: comment.profileImage,
+        content: comment.content,
+        createdAt: comment.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ message: '댓글 수정 중 오류가 발생했습니다.', error: error.message });
+  }
+});
+
+// DELETE /api/quiz/:quizId/comment/:commentId - 댓글 삭제
+router.delete('/quiz/:quizId/comment/:commentId', authenticateToken, async (req, res) => {
+  const { quizId, commentId } = req.params;
+
+  if (!ObjectId.isValid(quizId) || !ObjectId.isValid(commentId)) {
+    return res.status(400).json({ message: '유효하지 않은 ID입니다.' });
+  }
+
+  try {
+    const mainDb = req.app.get('userDb');
+    const Comment = require('../models/Comment')(mainDb);
+
+    // 댓글 조회
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: '댓글을 찾을 수 없습니다.' });
+    }
+
+    // 권한 확인 (댓글 작성자만 삭제 가능)
+    if (comment.userId.toString() !== req.user.id) {
+      return res.status(403).json({ message: '댓글을 삭제할 권한이 없습니다.' });
+    }
+
+    // 댓글 삭제
+    await Comment.findByIdAndDelete(commentId);
+
+    res.json({
+      success: true,
+      message: '댓글이 삭제되었습니다.',
+    });
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ message: '댓글 삭제 중 오류가 발생했습니다.', error: error.message });
+  }
+});
+
 module.exports = router;

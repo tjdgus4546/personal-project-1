@@ -96,15 +96,15 @@ router.put('/quiz/:id', authenticateToken, async (req, res) => {
   try {
     // 업데이트할 필드 준비
     const updateFields = {};
-    
+
     if (title !== undefined) {
       updateFields.title = title;
     }
-    
+
     if (description !== undefined) {
       updateFields.description = description;
     }
-    
+
     if (titleImageBase64 !== undefined) {
       updateFields.titleImageBase64 = titleImageBase64;
     }
@@ -118,11 +118,76 @@ router.put('/quiz/:id', authenticateToken, async (req, res) => {
     if (!quiz) {
       return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ message: '퀴즈 수정 완료', quiz });
   } catch (err) {
     console.error('퀴즈 수정 실패:', err);
     res.status(500).json({ message: '퀴즈 수정 실패', error: err.message });
+  }
+});
+
+// 퀴즈 추천 토글 (추천/추천 취소)
+router.post('/quiz/:quizId/recommend', authenticateToken, async (req, res) => {
+  const { quizId } = req.params;
+  const userId = req.user.id;
+
+  if (!ObjectId.isValid(quizId)) {
+    return res.status(400).json({ message: '유효하지 않은 퀴즈 ID입니다.' });
+  }
+
+  try {
+    const quizDb = req.app.get('quizDb');
+    const Quiz = require('../models/Quiz')(quizDb);
+    const Recommendation = require('../models/Recommendation')(quizDb);
+
+    const quiz = await Quiz.findById(quizId);
+
+    if (!quiz) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    }
+
+    // 자신이 만든 퀴즈는 추천할 수 없음
+    if (quiz.creatorId.toString() === userId) {
+      return res.status(403).json({ message: '자신이 만든 퀴즈는 추천할 수 없습니다.' });
+    }
+
+    // ObjectId로 변환
+    const userObjectId = new ObjectId(userId);
+    const quizObjectId = new ObjectId(quizId);
+
+    // 이미 추천했는지 확인 (O(1) 인덱스 검색)
+    const existingRecommendation = await Recommendation.findOne({
+      userId: userObjectId,
+      quizId: quizObjectId
+    });
+
+    let recommended;
+    if (existingRecommendation) {
+      // 추천 취소
+      await Recommendation.deleteOne({ _id: existingRecommendation._id });
+      quiz.recommendationCount = Math.max(0, quiz.recommendationCount - 1);
+      recommended = false;
+    } else {
+      // 추천 추가
+      await Recommendation.create({
+        userId: userObjectId,
+        quizId: quizObjectId
+      });
+      quiz.recommendationCount += 1;
+      recommended = true;
+    }
+
+    await quiz.save();
+
+    res.json({
+      success: true,
+      recommended,
+      recommendationCount: quiz.recommendationCount,
+      message: recommended ? '퀴즈를 추천했습니다.' : '추천을 취소했습니다.',
+    });
+  } catch (err) {
+    console.error('퀴즈 추천 처리 실패:', err);
+    res.status(500).json({ message: '추천 처리 중 오류가 발생했습니다.', error: err.message });
   }
 });
 

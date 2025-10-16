@@ -31,14 +31,27 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: '이 세션에 접근할 권한이 없습니다.' });
     }
 
-    // 퀴즈 정보 가져오기
+    // 퀴즈 정보 가져오기 (추천 정보 포함)
     const quiz = await Quiz.findById(session.quizId).lean();
     if (!quiz) return res.status(404).json({ message: '퀴즈 없음' });
+
+    // 현재 사용자가 이 퀴즈를 추천했는지 확인 (O(1) 인덱스 검색)
+    let hasRecommended = false;
+    try {
+      const Recommendation = require('../models/Recommendation')(quizDb);
+      hasRecommended = await Recommendation.exists({
+        userId: new ObjectId(req.user.id),
+        quizId: new ObjectId(session.quizId)
+      });
+    } catch (recErr) {
+      console.error('추천 확인 중 오류 (무시하고 계속):', recErr);
+      // 에러가 나도 계속 진행 (추천 기능만 비활성화)
+    }
 
     // 각 플레이어의 최신 프로필 이미지 정보 가져오기
     const playerIds = session.players.map(p => p.userId);
     const users = await User.find({ _id: { $in: playerIds } }).select('_id nickname profileImage').lean();
-    
+
     // 사용자 정보를 ID로 매핑
     const userMap = {};
     users.forEach(user => {
@@ -60,6 +73,9 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
     quiz.questions.forEach((q, i) => {
       q.correctUsers = correctUsers[i] || [];
     });
+
+    // 추천 정보 추가
+    quiz.hasRecommended = !!hasRecommended;
 
     // 세션 데이터에 업데이트된 플레이어 정보 포함
     const responseData = {

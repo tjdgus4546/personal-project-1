@@ -31,6 +31,37 @@ export function initializeComments(quizId, user) {
     });
   }
 
+  // 댓글 수정/삭제 버튼 이벤트 위임
+  const commentsContainer = document.getElementById('commentsContainer');
+  if (commentsContainer) {
+    commentsContainer.addEventListener('click', async (e) => {
+      // 수정 버튼 클릭
+      if (e.target.classList.contains('edit-comment-btn')) {
+        const commentId = e.target.dataset.commentId;
+        showEditForm(commentId);
+      }
+
+      // 삭제 버튼 클릭
+      if (e.target.classList.contains('delete-comment-btn')) {
+        const commentId = e.target.dataset.commentId;
+        await deleteComment(commentId);
+      }
+
+      // 수정 취소 버튼 클릭
+      if (e.target.classList.contains('cancel-edit-btn')) {
+        const commentItem = e.target.closest('.comment-item');
+        hideEditForm(commentItem);
+      }
+
+      // 수정 저장 버튼 클릭
+      if (e.target.classList.contains('save-edit-btn')) {
+        const commentItem = e.target.closest('.comment-item');
+        const commentId = commentItem.dataset.commentId;
+        await saveEditComment(commentId, commentItem);
+      }
+    });
+  }
+
   // 초기 댓글 로드
   loadComments();
 }
@@ -104,6 +135,10 @@ function createCommentHTML(comment) {
   const nickname = comment.nickname || 'Unknown';
   const content = escapeHtml(comment.content);
   const createdAt = formatDate(comment.createdAt);
+  const commentId = comment._id;
+
+  // 현재 사용자가 댓글 작성자인지 확인
+  const isAuthor = currentUser && comment.userId && String(currentUser._id) === String(comment.userId);
 
   // 프로필 이미지 또는 기본 아바타
   const avatarHTML = profileImage
@@ -115,18 +150,37 @@ function createCommentHTML(comment) {
          ${nickname.charAt(0).toUpperCase()}
        </div>`;
 
+  // 작성자에게만 수정/삭제 버튼 표시
+  const actionButtons = isAuthor
+    ? `<div class="flex items-center space-x-2 ml-2">
+         <button class="edit-comment-btn text-xs text-blue-400 hover:text-blue-300 transition-colors" data-comment-id="${commentId}">수정</button>
+         <span class="text-gray-500">|</span>
+         <button class="delete-comment-btn text-xs text-red-400 hover:text-red-300 transition-colors" data-comment-id="${commentId}">삭제</button>
+       </div>`
+    : '';
+
   return `
-    <div class="py-3">
+    <div class="py-3 comment-item" data-comment-id="${commentId}">
       <div class="flex items-start space-x-3">
         <div class="flex-shrink-0">
           ${avatarHTML}
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold text-white text-sm">${nickname}</span>
+            <div class="flex items-center">
+              <span class="font-semibold text-white text-sm">${nickname}</span>
+              ${actionButtons}
+            </div>
             <span class="text-xs text-gray-400">${createdAt}</span>
           </div>
-          <p class="text-sm text-gray-200 whitespace-pre-wrap break-words">${content}</p>
+          <p class="comment-content text-sm text-gray-200 whitespace-pre-wrap break-words">${content}</p>
+          <div class="comment-edit-form hidden mt-2">
+            <textarea class="edit-textarea w-full px-3 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300 text-sm resize-none" rows="3" maxlength="500"></textarea>
+            <div class="flex items-center justify-end space-x-2 mt-2">
+              <button class="cancel-edit-btn px-3 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">취소</button>
+              <button class="save-edit-btn px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">저장</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -202,6 +256,118 @@ async function submitComment() {
     // 버튼 원상복구
     submitCommentBtn.innerHTML = originalText;
     submitCommentBtn.disabled = false;
+  }
+}
+
+/**
+ * 댓글 수정 폼 표시
+ * @param {string} commentId - 댓글 ID
+ */
+function showEditForm(commentId) {
+  const commentItem = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+  if (!commentItem) return;
+
+  const commentContent = commentItem.querySelector('.comment-content');
+  const editForm = commentItem.querySelector('.comment-edit-form');
+  const editTextarea = editForm.querySelector('.edit-textarea');
+
+  // 현재 댓글 내용을 textarea에 설정 (HTML 디코딩)
+  const currentText = commentContent.textContent;
+  editTextarea.value = currentText;
+
+  // 댓글 내용 숨기고 수정 폼 표시
+  commentContent.classList.add('hidden');
+  editForm.classList.remove('hidden');
+  editTextarea.focus();
+}
+
+/**
+ * 댓글 수정 폼 숨기기
+ * @param {HTMLElement} commentItem - 댓글 아이템 요소
+ */
+function hideEditForm(commentItem) {
+  const commentContent = commentItem.querySelector('.comment-content');
+  const editForm = commentItem.querySelector('.comment-edit-form');
+
+  commentContent.classList.remove('hidden');
+  editForm.classList.add('hidden');
+}
+
+/**
+ * 댓글 수정 저장
+ * @param {string} commentId - 댓글 ID
+ * @param {HTMLElement} commentItem - 댓글 아이템 요소
+ */
+async function saveEditComment(commentId, commentItem) {
+  const editTextarea = commentItem.querySelector('.edit-textarea');
+  const content = editTextarea.value.trim();
+
+  if (!content) {
+    alert('댓글 내용을 입력해주세요.');
+    return;
+  }
+
+  if (content.length > 500) {
+    alert('댓글은 최대 500자까지 작성할 수 있습니다.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/quiz/${currentQuizId}/comment/${commentId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || '댓글 수정에 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      // 댓글 목록 새로고침
+      await loadComments();
+    }
+  } catch (error) {
+    console.error('댓글 수정 오류:', error);
+    alert(error.message);
+  }
+}
+
+/**
+ * 댓글 삭제
+ * @param {string} commentId - 댓글 ID
+ */
+async function deleteComment(commentId) {
+  if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/quiz/${currentQuizId}/comment/${commentId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || '댓글 삭제에 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      // 댓글 목록 새로고침
+      await loadComments();
+    }
+  } catch (error) {
+    console.error('댓글 삭제 오류:', error);
+    alert(error.message);
   }
 }
 

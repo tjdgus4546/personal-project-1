@@ -59,14 +59,11 @@ async function initializeUser() {
         const userData = await response.json();
         userId = userData._id;
 
-        // Socket이 연결될 때까지 기다린 후 joinSession 실행
+        // userId 설정 완료 후 joinSession
         if (socket.connected) {
             socket.emit('joinSession', { sessionId });
-        } else {
-            socket.on('connect', () => {
-                socket.emit('joinSession', { sessionId });
-            });
         }
+        // connect 이벤트는 setupSocketListeners에서 처리됨
     } catch (error) {
         console.error('Error fetching user info:', error);
         window.location.href = '/login';
@@ -220,21 +217,59 @@ function displayQuizInfo(quiz) {
 
     // 썸네일 이미지 표시
     const thumbnailContainer = document.getElementById('quizThumbnail');
+    const defaultThumbnail = document.getElementById('defaultThumbnail');
+
     if (quiz.titleImageBase64) {
-        thumbnailContainer.innerHTML = `
-            <img src="${quiz.titleImageBase64}" alt="${quiz.title}" 
-                 class="w-full h-full object-cover rounded-xl">
-        `;
+        // 기본 Q 텍스트 숨기기
+        if (defaultThumbnail) {
+            defaultThumbnail.style.display = 'none';
+        }
+
+        // 기존 이미지가 있는지 확인
+        let imgElement = thumbnailContainer.querySelector('img:not(#recommendIcon)');
+        if (!imgElement) {
+            // 이미지가 없으면 새로 생성
+            imgElement = document.createElement('img');
+            imgElement.className = 'absolute inset-0 w-full h-full object-cover';
+            imgElement.alt = quiz.title;
+            // 컨테이너에 추가 (추천 버튼보다 먼저 배치)
+            thumbnailContainer.insertBefore(imgElement, thumbnailContainer.firstChild);
+        }
+        imgElement.src = quiz.titleImageBase64;
     }
 
     // 초대코드 표시 및 버튼 활성화
     const inviteCodeDisplay = document.getElementById('inviteCodeDisplay');
     const copyBtn = document.getElementById('copyInviteBtn');
-  
+
     if (sessionData && sessionData.inviteCode) {
         inviteCodeDisplay.textContent = sessionData.inviteCode;
         copyBtn.disabled = false;
         copyBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    // 추천 버튼 표시 및 상태 설정 (자신의 퀴즈가 아닐 경우만)
+    const isMyQuiz = quiz.creatorId && userId && quiz.creatorId.toString() === String(userId);
+    const recommendSection = document.getElementById('recommendSection');
+    const recommendBtn = document.getElementById('recommendBtn');
+    const recommendIcon = document.getElementById('recommendIcon');
+    const recommendCount = document.getElementById('recommendCount');
+
+    if (!isMyQuiz && recommendSection && recommendBtn) {
+        // 자신의 퀴즈가 아니면 추천 버튼 표시
+        recommendSection.classList.remove('hidden');
+
+        // 추천 수 표시
+        recommendCount.textContent = quiz.recommendationCount || 0;
+
+        // 추천 상태에 따라 아이콘 변경
+        if (quiz.hasRecommended) {
+            recommendIcon.src = '/images/Thumbsup2.png';
+        } else {
+            recommendIcon.src = '/images/Thumbsup1.png';
+        }
+
+        // 추천 버튼 클릭 이벤트 (이벤트 리스너는 setupEventListeners에서 설정)
     }
 }
 
@@ -976,8 +1011,66 @@ function showAnswer({ answers, answerImageBase64, revealedAt }) {
     }, waitTime * 1000);
 }
 
+// 퀴즈 추천 토글
+async function toggleRecommendation() {
+    if (!sessionData || !sessionData.quiz || !sessionData.quiz._id) {
+        return;
+    }
+
+    const quizId = sessionData.quiz._id;
+    const recommendBtn = document.getElementById('recommendBtn');
+    const recommendIcon = document.getElementById('recommendIcon');
+    const recommendCount = document.getElementById('recommendCount');
+
+    // 버튼 비활성화 (중복 클릭 방지)
+    if (recommendBtn) recommendBtn.disabled = true;
+
+    try {
+        const response = await fetchWithAuth(`/quiz/${quizId}/recommend`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || '추천 처리에 실패했습니다.');
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            // 아이콘 및 추천 수 업데이트
+            if (data.recommended) {
+                recommendIcon.src = '/images/Thumbsup2.png';
+            } else {
+                recommendIcon.src = '/images/Thumbsup1.png';
+            }
+
+            recommendCount.textContent = data.recommendationCount;
+
+            // sessionData 업데이트
+            sessionData.quiz.hasRecommended = data.recommended;
+            sessionData.quiz.recommendationCount = data.recommendationCount;
+        }
+    } catch (error) {
+        console.error('추천 처리 오류:', error);
+        alert(error.message);
+    } finally {
+        // 버튼 재활성화
+        if (recommendBtn) recommendBtn.disabled = false;
+    }
+}
+
 // 이벤트 리스너 설정
 function setupEventListeners() {
+    // 추천 버튼
+    const recommendBtn = document.getElementById('recommendBtn');
+    if (recommendBtn) {
+        recommendBtn.addEventListener('click', toggleRecommendation);
+    }
+
     // 스킵 투표 버튼
     document.getElementById('voteSkipBtn').addEventListener('click', () => {
         socket.emit('voteSkip', { sessionId });
@@ -1091,8 +1184,8 @@ function setupEventListeners() {
 function setupSocketListeners() {
     // Socket 연결 상태 모니터링
     socket.on('connect', () => {
-        // 이미 사용자 정보가 있다면 즉시 joinSession 실행
-        if (userId ) {
+        // userId가 설정되어 있으면 joinSession 실행
+        if (userId) {
             socket.emit('joinSession', { sessionId });
         }
     });
@@ -1469,31 +1562,31 @@ function renderFinalRanking(players) {
 // 페이지 초기화
 async function initializePage() {
     try {
-        // Socket 이벤트 리스너 먼저 설정
+        // Socket 이벤트 리스너 먼저 설정 (이벤트를 놓치지 않도록)
         setupSocketListeners();
         setupEventListeners();
 
         window.addEventListener('beforeunload', () => {
             document.removeEventListener('keydown', handleChoiceKeyPress);
         });
-                
+
         // 병렬로 실행하여 로딩 시간 단축
         const [user] = await Promise.all([
             renderNavbar(),
             // 다른 독립적인 작업들도 여기에 추가 가능
         ]);
-        
+
         highlightCurrentPage();
-        
+
         // 로그인 체크
         if (!user) {
             window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');
             return;
         }
-        
-        // 사용자 정보 초기화
+
+        // 사용자 정보 초기화 (userId 설정 후 joinSession 전송)
         await initializeUser();
-        
+
         // 채팅 기록은 비동기로 로드 (페이지 로딩 속도에 영향 없음)
         loadChatHistory().catch(err => console.error('채팅 기록 로딩 실패:', err));
         
