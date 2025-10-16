@@ -26,6 +26,11 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy 설정 (Nginx 등 리버스 프록시 뒤에서 실행될 때 필요)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1); // 첫 번째 프록시를 신뢰
+}
+
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false // index.html 자동 제공 비활성화 (명시적 라우트 사용)
 }));
