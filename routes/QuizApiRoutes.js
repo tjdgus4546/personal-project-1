@@ -18,11 +18,30 @@ module.exports = (quizDb) => {
 
   // --- Public Routes (인증 불필요) ---
 
+  // 사용자 닉네임 조회 (공개)
+  publicRouter.get('/user/:userId/nickname', async (req, res) => {
+    try {
+      const userDb = req.app.get('userDb');
+      const User = require('../models/User')(userDb);
+
+      const user = await User.findById(req.params.userId).select('nickname');
+
+      if (!user) {
+        return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+      }
+
+      res.json({ nickname: user.nickname });
+    } catch (err) {
+      console.error('사용자 닉네임 조회 실패:', err);
+      res.status(500).json({ message: '사용자 닉네임 조회 실패', error: err.message });
+    }
+  });
+
   // 공개된 퀴즈 목록만 반환 (메인페이지용)
   publicRouter.get('/quiz/list', async (req, res) => {
     const { page = 1, limit = 20, sort = 'popular' } = req.query;
     const skip = (page - 1) * limit;
-    
+
     try {
       let sortCondition;
       switch (sort) {
@@ -38,17 +57,37 @@ module.exports = (quizDb) => {
           break;
       }
 
-      const quizzes = await Quiz.find(
-        { isComplete: true },
-        'title description titleImageBase64 createdAt completedGameCount'
-      )
-      .sort(sortCondition)
-      .skip(skip)
-      .limit(parseInt(limit));
-      
+      const quizzes = await Quiz.find({ isComplete: true })
+        .select('title description titleImageBase64 createdAt completedGameCount creatorId')
+        .sort(sortCondition)
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      // 제작자 정보 추가
+      const userDb = req.app.get('userDb');
+      const User = require('../models/User')(userDb);
+
+      const quizzesWithCreator = await Promise.all(quizzes.map(async (quiz) => {
+        const quizObj = quiz.toObject();
+
+        // 압수된 퀴즈는 제작자를 "관리자"로 표시
+        if (quizObj.creatorId === 'seized') {
+          quizObj.creatorNickname = '관리자';
+        } else {
+          try {
+            const creator = await User.findById(quizObj.creatorId).select('nickname');
+            quizObj.creatorNickname = creator ? creator.nickname : '알 수 없음';
+          } catch (err) {
+            quizObj.creatorNickname = '알 수 없음';
+          }
+        }
+
+        return quizObj;
+      }));
+
       const hasMore = quizzes.length === parseInt(limit);
-      
-      res.json({ quizzes, hasMore, page: parseInt(page), limit: parseInt(limit), sort: sort });
+
+      res.json({ quizzes: quizzesWithCreator, hasMore, page: parseInt(page), limit: parseInt(limit), sort: sort });
     } catch (err) {
       console.error('퀴즈 목록 불러오기 실패:', err);
       res.status(500).json({ message: '퀴즈 목록 불러오기 실패', error: err.message });
@@ -58,25 +97,67 @@ module.exports = (quizDb) => {
   publicRouter.get('/quiz/search', async (req, res) => {
     const { q, page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
-    
+
     try {
-        let query = { isComplete: true };
+        const userDb = req.app.get('userDb');
+        const User = require('../models/User')(userDb);
+
+        let quizzes = [];
+
         if (q && q.trim()) {
-            query.$or = [
-                { title: { $regex: q.trim(), $options: 'i' } },
-                { description: { $regex: q.trim(), $options: 'i' } }
-            ];
+            // 1. 닉네임으로 검색된 사용자 찾기
+            const users = await User.find({
+                nickname: { $regex: q.trim(), $options: 'i' }
+            }).select('_id');
+
+            const userIds = users.map(user => user._id.toString());
+
+            // 2. 제목, 설명, 제작자로 퀴즈 검색
+            const query = {
+                isComplete: true,
+                $or: [
+                    { title: { $regex: q.trim(), $options: 'i' } },
+                    { description: { $regex: q.trim(), $options: 'i' } },
+                    { creatorId: { $in: userIds } }
+                ]
+            };
+
+            quizzes = await Quiz.find(query)
+                .select('title description titleImageBase64 createdAt completedGameCount creatorId')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit));
+        } else {
+            // 검색어가 없으면 전체 목록 반환
+            quizzes = await Quiz.find({ isComplete: true })
+                .select('title description titleImageBase64 createdAt completedGameCount creatorId')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit));
         }
-        
-        const quizzes = await Quiz.find(query)
-            .select('title description titleImageBase64 createdAt completedGameCount')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
-        
+
+        // 제작자 정보 추가
+        const quizzesWithCreator = await Promise.all(quizzes.map(async (quiz) => {
+            const quizObj = quiz.toObject();
+
+            // 압수된 퀴즈는 제작자를 "관리자"로 표시
+            if (quizObj.creatorId === 'seized') {
+                quizObj.creatorNickname = '관리자';
+            } else {
+                try {
+                    const creator = await User.findById(quizObj.creatorId).select('nickname');
+                    quizObj.creatorNickname = creator ? creator.nickname : '알 수 없음';
+                } catch (err) {
+                    quizObj.creatorNickname = '알 수 없음';
+                }
+            }
+
+            return quizObj;
+        }));
+
         const hasMore = quizzes.length === parseInt(limit);
-        
-        res.json({ quizzes, hasMore, page: parseInt(page), limit: parseInt(limit) });
+
+        res.json({ quizzes: quizzesWithCreator, hasMore, page: parseInt(page), limit: parseInt(limit) });
     } catch (err) {
         console.error('검색 API 에러:', err);
         res.status(500).json({ message: '검색 중 오류가 발생했습니다', error: err.message });

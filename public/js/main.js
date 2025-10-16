@@ -272,7 +272,7 @@ function renderQuizList(quizzes) {
     const quizHTML = quizzes.map(quiz => `
         <div class="quiz-card bg-white rounded-lg shadow-md overflow-hidden cursor-pointer" onclick="openQuizModal('${quiz._id}')">
             <div class="relative">
-                ${quiz.titleImageBase64 ? 
+                ${quiz.titleImageBase64 ?
                     `<img src="${quiz.titleImageBase64}" alt="${quiz.title}" class="w-full h-48 object-cover">` :
                     `<div class="w-full h-48 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center">
                         <span class="text-white text-4xl font-bold">Q</span>
@@ -281,13 +281,16 @@ function renderQuizList(quizzes) {
             </div>
             <div class="p-5">
                 <div class="font-bold text-[15px] mb-2 text-gray-800 truncate text-left" title="${quiz.title}">${quiz.title}</div>
-                <p class="text-gray-600 text-[15px] mb-4 line-clamp-2 min-h-[2.5rem] text-left">${quiz.description || '퀴즈에 도전해보세요!'}</p>
-                <div class="flex justify-between items-center text-xs text-gray-500">
+                <p class="text-gray-600 text-[15px] mb-3 line-clamp-2 min-h-[2.5rem] text-left">${quiz.description || '퀴즈에 도전해보세요!'}</p>
+                <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                     <div class="flex items-center space-x-1">
                         <span>플레이:</span>
                         <span>${quiz.completedGameCount || 0}회</span>
                     </div>
                     <span>생성일: ${new Date(quiz.createdAt).toLocaleDateString('ko-KR')}</span>
+                </div>
+                <div class="flex items-center text-xs text-gray-600 pt-2 border-t border-gray-200">
+                    <span class="truncate" title="${quiz.creatorNickname || '알 수 없음'}">제작자: ${quiz.creatorNickname || '알 수 없음'}</span>
                 </div>
             </div>
         </div>

@@ -77,6 +77,21 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
     // 추천 정보 추가
     quiz.hasRecommended = !!hasRecommended;
 
+    // 제작자 닉네임 추가
+    if (quiz.creatorId === 'seized') {
+      quiz.creatorNickname = '관리자';
+    } else if (quiz.creatorId) {
+      try {
+        const creator = await User.findById(quiz.creatorId).select('nickname').lean();
+        quiz.creatorNickname = creator ? creator.nickname : '알 수 없음';
+      } catch (err) {
+        console.error('제작자 정보 조회 실패:', err);
+        quiz.creatorNickname = '알 수 없음';
+      }
+    } else {
+      quiz.creatorNickname = '알 수 없음';
+    }
+
     // 세션 데이터에 업데이트된 플레이어 정보 포함
     const responseData = {
       ...session,

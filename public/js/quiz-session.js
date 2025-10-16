@@ -270,6 +270,30 @@ function displayQuizInfo(quiz) {
 
         // 추천 버튼 클릭 이벤트 (이벤트 리스너는 setupEventListeners에서 설정)
     }
+
+    // 제작자 정보 표시
+    displayCreatorInfo(quiz);
+}
+
+// 제작자 정보 표시 함수
+function displayCreatorInfo(quiz) {
+    const creatorSection = document.getElementById('creatorSection');
+    const creatorNickname = document.getElementById('creatorNickname');
+    const endCreatorNickname = document.getElementById('endCreatorNickname');
+
+    if (!creatorSection || !creatorNickname) return;
+
+    // 서버에서 받은 제작자 닉네임 사용
+    const nickname = quiz.creatorNickname || '알 수 없음';
+
+    // 대기 화면에 표시
+    creatorNickname.textContent = nickname;
+    creatorSection.classList.remove('hidden');
+
+    // 종료 화면에도 저장 (나중에 사용)
+    if (endCreatorNickname) {
+        endCreatorNickname.textContent = nickname;
+    }
 }
 
 // 퀴즈 정보 섹션 표시
