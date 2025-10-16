@@ -80,6 +80,11 @@ const SUSPICIOUS_PATHS = [
 // 404 추적을 위한 메모리 캐시 (IP별 404 카운트)
 const notFoundTracker = new Map();
 
+// ⚡ 차단된 IP 메모리 캐시 (성능 최적화)
+const blockedIPCache = new Set();
+let lastCacheUpdate = 0;
+const CACHE_TTL = 60 * 1000; // 1분마다 갱신
+
 // 정리 주기 (10분마다 오래된 기록 삭제)
 setInterval(() => {
   const now = Date.now();
@@ -112,6 +117,27 @@ function isSuspiciousPath(path) {
   return SUSPICIOUS_PATHS.some(pattern => pattern.test(path));
 }
 
+// ⚡ 차단된 IP 캐시 갱신 (1분마다)
+async function updateBlockedIPCache(BlockedIP) {
+  try {
+    const blockedIPs = await BlockedIP.find({
+      isActive: true,
+      $or: [
+        { expiresAt: null },
+        { expiresAt: { $gt: new Date() } }
+      ]
+    })
+      .select('ip')
+      .lean();
+
+    blockedIPCache.clear();
+    blockedIPs.forEach(doc => blockedIPCache.add(doc.ip));
+    lastCacheUpdate = Date.now();
+  } catch (err) {
+    console.error('IP 캐시 갱신 실패:', err);
+  }
+}
+
 // IP 차단 (블랙리스트에 추가)
 async function blockIP(userDb, ip, reason, details = '', expiresIn = null) {
   try {
@@ -132,6 +158,9 @@ async function blockIP(userDb, ip, reason, details = '', expiresIn = null) {
       blockData,
       { upsert: true, new: true }
     );
+
+    // 캐시에 즉시 추가
+    blockedIPCache.add(ip);
 
     console.log(`🚫 IP 차단: ${ip} (사유: ${reason})`);
   } catch (err) {
@@ -172,24 +201,45 @@ function track404(req, ip, userDb) {
 function botBlocker(userDb) {
   const BlockedIP = require('../models/BlockedIP')(userDb);
 
+  // 초기 캐시 로드
+  updateBlockedIPCache(BlockedIP);
+
   return async (req, res, next) => {
     const ip = getClientIp(req);
     const userAgent = req.headers['user-agent'] || '';
     const path = req.path;
 
     try {
-      // 1. 블랙리스트 확인 (가장 먼저 체크)
-      const blocked = await BlockedIP.findOne({
-        ip,
-        isActive: true,
-        $or: [
-          { expiresAt: null },  // 영구 차단
-          { expiresAt: { $gt: new Date() } }  // 만료 전 임시 차단
-        ]
-      });
+      // ⚡ 성능 최적화: 정적 파일은 스킵
+      if (
+        path.startsWith('/css') ||
+        path.startsWith('/js') ||
+        path.startsWith('/images') ||
+        path.startsWith('/fonts') ||
+        path.endsWith('.css') ||
+        path.endsWith('.js') ||
+        path.endsWith('.png') ||
+        path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.gif') ||
+        path.endsWith('.svg') ||
+        path.endsWith('.ico') ||
+        path.endsWith('.woff') ||
+        path.endsWith('.woff2') ||
+        path.endsWith('.ttf')
+      ) {
+        return next();
+      }
 
-      if (blocked) {
-        console.warn(`🚫 차단된 IP 접근 시도: ${ip} (사유: ${blocked.reason})`);
+      // ⚡ 캐시 갱신 (1분마다)
+      const now = Date.now();
+      if (now - lastCacheUpdate > CACHE_TTL) {
+        updateBlockedIPCache(BlockedIP); // 비동기 실행 (기다리지 않음)
+      }
+
+      // 1. ⚡ 메모리 캐시로 블랙리스트 확인 (MongoDB 쿼리 없음!)
+      if (blockedIPCache.has(ip)) {
+        console.warn(`🚫 차단된 IP 접근 시도: ${ip}`);
         return res.status(403).json({
           message: '접근이 차단되었습니다.',
           reason: 'blocked_ip'
