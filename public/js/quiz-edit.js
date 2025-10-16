@@ -544,7 +544,7 @@ function renderQuestions() {
                 </div>
                 <h3 class="text-white font-medium mb-2 line-clamp-2">${q.text || '제목 없음'}</h3>
                 <div class="flex items-center justify-between text-sm text-gray-400">
-                    <span>${q.timeLimit || 90}초</span>
+                    <span>${q.timeLimit || 30}초</span>
                     <span>${q.answers?.length || 0}개 정답</span>
                 </div>
                 ${q.isChoice ? '<div class="mt-2 text-xs text-purple-400">객관식</div>' : ''}
@@ -640,7 +640,7 @@ function renderSidebar() {
                     <span class="text-xs font-medium ${isActive ? 'text-blue-100' : 'text-gray-400'}">문제 ${index + 1}</span>
                 </div>
                 <p class="text-xs font-medium truncate ${isActive ? 'text-white' : 'text-gray-300'}">${q.text || '제목 없음'}</p>
-                <p class="text-xs ${isActive ? 'text-blue-100' : 'text-gray-500'} mt-1">${q.timeLimit || 60}초 • ${q.answers?.length || 0}개 정답</p>
+                <p class="text-xs ${isActive ? 'text-blue-100' : 'text-gray-500'} mt-1">${q.timeLimit || 30}초 • ${q.answers?.length || 0}개 정답</p>
             </div>
         `;
         
@@ -663,7 +663,7 @@ export function createNewQuestion() {
     const newQuestion = {
         questionType: 'text', // 기본값: 텍스트 문제
         text: '',
-        timeLimit: 60, // 90초 → 60초로 변경
+        timeLimit: 30,
         youtubeUrl: '',
         youtubeStartTime: 0,
         youtubeEndTime: 0,
@@ -708,7 +708,7 @@ export function editQuestion(index) {
     
     // 폼 데이터 채우기
     document.getElementById('questionText').value = question.text || '';
-    document.getElementById('timeLimit').value = question.timeLimit || 90;
+    document.getElementById('timeLimit').value = question.timeLimit || 30;
     document.getElementById('isMultipleChoice').checked = question.isChoice || false;
     
     // 이미지 데이터 로드

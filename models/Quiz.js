@@ -42,7 +42,7 @@ const questionSchema = new Schema({
   isChoice: { type: Boolean, default: false },
   answerImageBase64: { type: String },
   order: { type: Number, required: true },
-  timeLimit: {type: Number, default: 90 , min: 5, max: 1800 },
+  timeLimit: {type: Number, default: 30 , min: 5, max: 1800 },
 });
 
 const quizSchema = new Schema({
