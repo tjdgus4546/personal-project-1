@@ -348,9 +348,9 @@ export function initializeQuizModal() {
   }
 
   const modalHTML = `
-    <div id="createQuizModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 p-4 hidden" onclick="handleQuizModalClick(event)">
-      <div class="bg-[#222230] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" onclick="event.stopPropagation()">
-        <div class="sticky top-0 border-b border-gray-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+    <div id="createQuizModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden" onclick="handleQuizModalClick(event)">
+      <div class="bg-[#222230] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+        <div class="bg-[#222230] border-b border-gray-600 px-6 py-4 flex justify-between items-center rounded-t-2xl flex-shrink-0">
           <h2 class="text-xl font-bold text-white">새 퀴즈 만들기</h2>
           <button onclick="closeCreateQuizModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -359,7 +359,7 @@ export function initializeQuizModal() {
           </button>
         </div>
 
-        <div class="p-6 space-y-6">
+        <div class="p-6 space-y-6 overflow-y-auto flex-1">
           <div>
             <label for="createQuizTitle" class="block text-sm font-semibold text-white mb-2">
               퀴즈 제목 <span class="text-red-500">*</span>
@@ -436,16 +436,16 @@ export function initializeQuizModal() {
           </div>
         </div>
 
-        <div class="sticky bottom-0 px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-gray-600">
-          <button 
-            onclick="closeCreateQuizModal()" 
+        <div class="bg-[#222230] px-6 py-4 flex justify-end gap-3 rounded-b-2xl border-t border-gray-600 flex-shrink-0">
+          <button
+            onclick="closeCreateQuizModal()"
             class="px-6 py-2.5 border border-gray-300 text-white rounded-lg hover:bg-blue-400 hover:border-blue-400 transition-colors font-medium"
           >
             취소
           </button>
-          <button 
+          <button
             id="createQuizBtn"
-            onclick="submitCreateQuiz()" 
+            onclick="submitCreateQuiz()"
             class="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all shadow-md hover:shadow-lg font-medium"
           >
             퀴즈 만들기
