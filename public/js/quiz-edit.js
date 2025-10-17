@@ -803,6 +803,16 @@ export function createNewQuestion() {
         return;
     }
 
+    // 현재 편집 중인 문제가 저장되지 않았는지 확인
+    if (currentEditingIndex !== null) {
+        const currentQuestion = questions[currentEditingIndex];
+        // 정답이 없으면 저장되지 않은 것으로 판단
+        if (!currentQuestion.answers || currentQuestion.answers.length === 0) {
+            showToast('이전 문제를 저장해야 합니다!', 'error');
+            return;
+        }
+    }
+
     const newQuestion = {
         questionType: 'text', // 기본값: 텍스트 문제
         text: '',
