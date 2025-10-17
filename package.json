@@ -26,6 +26,7 @@
     "nodemailer": "^7.0.9",
     "socket.io": "^4.8.1",
     "socket.io-cookie-parser": "^1.0.0",
+    "systeminformation": "^5.27.11",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

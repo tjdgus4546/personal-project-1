@@ -1072,6 +1072,70 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// 서버 리소스 정보 조회 (CPU, 메모리, 디스크)
+router.get('/server-resources', async (req, res) => {
+  try {
+    const si = require('systeminformation');
+
+    // 병렬로 모든 시스템 정보 수집
+    const [cpuLoad, memInfo, fsSize, osInfo, currentLoad] = await Promise.all([
+      si.currentLoad(),
+      si.mem(),
+      si.fsSize(),
+      si.osInfo(),
+      si.currentLoad()
+    ]);
+
+    // CPU 사용률
+    const cpuUsage = currentLoad.currentLoad.toFixed(2);
+
+    // 메모리 사용률
+    const totalMem = memInfo.total;
+    const usedMem = memInfo.used;
+    const freeMem = memInfo.free;
+    const memUsagePercent = ((usedMem / totalMem) * 100).toFixed(2);
+
+    // 디스크 사용률 (첫 번째 파티션)
+    const disk = fsSize[0] || {};
+    const diskUsagePercent = disk.use ? disk.use.toFixed(2) : 0;
+
+    res.json({
+      success: true,
+      resources: {
+        cpu: {
+          usage: parseFloat(cpuUsage),
+          cores: currentLoad.cpus?.length || 0
+        },
+        memory: {
+          total: totalMem,
+          used: usedMem,
+          free: freeMem,
+          usagePercent: parseFloat(memUsagePercent)
+        },
+        disk: {
+          size: disk.size || 0,
+          used: disk.used || 0,
+          available: disk.available || 0,
+          usagePercent: parseFloat(diskUsagePercent)
+        },
+        os: {
+          platform: osInfo.platform,
+          distro: osInfo.distro,
+          release: osInfo.release,
+          arch: osInfo.arch
+        },
+        uptime: process.uptime() // Node.js 프로세스 실행 시간 (초)
+      }
+    });
+  } catch (err) {
+    console.error('Server resources error:', err);
+    res.status(500).json({
+      success: false,
+      message: '서버 리소스 정보를 불러오는데 실패했습니다.'
+    });
+  }
+});
+
 // ========== IP 차단 관리 API ==========
 
 // 차단된 IP 목록 조회

@@ -6,6 +6,7 @@ let isAutoRefreshEnabled = true; // 기본값: 자동 갱신 활성화
 document.addEventListener('DOMContentLoaded', function() {
   loadStats();
   loadDebugInfo();
+  loadServerResources();
 
   // 자동 갱신 시작 (30초마다)
   startAutoRefresh();
@@ -215,6 +216,7 @@ function startAutoRefresh() {
       if (!document.hidden) {
         loadStats();
         loadDebugInfo();
+        loadServerResources();
       }
     }, 15000); // 15초마다
   }
@@ -275,6 +277,7 @@ function handleVisibilityChange() {
     // 페이지가 다시 보이면 즉시 갱신
     loadStats();
     loadDebugInfo();
+    loadServerResources();
   }
 }
 
@@ -298,6 +301,112 @@ function showNotification(message) {
     notification.style.opacity = '0';
     setTimeout(() => notification.remove(), 300);
   }, 3000);
+}
+
+// 서버 리소스 정보 로드
+async function loadServerResources() {
+  try {
+    const response = await fetch('/admin/server-resources', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error('서버 리소스 정보를 불러오는데 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      displayServerResources(data.resources);
+    } else {
+      throw new Error(data.message || '서버 리소스 정보를 불러오는데 실패했습니다.');
+    }
+  } catch (error) {
+    console.error('Server resources load error:', error);
+    document.getElementById('cpuUsage').textContent = 'N/A';
+    document.getElementById('memUsage').textContent = 'N/A';
+    document.getElementById('diskUsage').textContent = 'N/A';
+  }
+}
+
+// 서버 리소스 정보 표시
+function displayServerResources(resources) {
+  // CPU 사용률
+  const cpuUsage = resources.cpu.usage || 0;
+  document.getElementById('cpuUsage').textContent = cpuUsage.toFixed(1);
+  document.getElementById('cpuUsageBar').style.width = `${cpuUsage}%`;
+  document.getElementById('cpuCores').textContent = `${resources.cpu.cores || 0} Cores`;
+
+  // CPU 사용률에 따라 색상 변경
+  const cpuBar = document.getElementById('cpuUsageBar');
+  if (cpuUsage > 80) {
+    cpuBar.classList.remove('bg-blue-500', 'bg-yellow-500');
+    cpuBar.classList.add('bg-red-500');
+  } else if (cpuUsage > 60) {
+    cpuBar.classList.remove('bg-blue-500', 'bg-red-500');
+    cpuBar.classList.add('bg-yellow-500');
+  } else {
+    cpuBar.classList.remove('bg-yellow-500', 'bg-red-500');
+    cpuBar.classList.add('bg-blue-500');
+  }
+
+  // 메모리 사용률
+  const memUsage = resources.memory.usagePercent || 0;
+  const memTotal = (resources.memory.total / (1024**3)).toFixed(2); // GB
+  const memUsed = (resources.memory.used / (1024**3)).toFixed(2); // GB
+  document.getElementById('memUsage').textContent = memUsage.toFixed(1);
+  document.getElementById('memUsageBar').style.width = `${memUsage}%`;
+  document.getElementById('memInfo').textContent = `${memUsed} GB / ${memTotal} GB`;
+
+  // 메모리 사용률에 따라 색상 변경
+  const memBar = document.getElementById('memUsageBar');
+  if (memUsage > 80) {
+    memBar.classList.remove('bg-green-500', 'bg-yellow-500');
+    memBar.classList.add('bg-red-500');
+  } else if (memUsage > 60) {
+    memBar.classList.remove('bg-green-500', 'bg-red-500');
+    memBar.classList.add('bg-yellow-500');
+  } else {
+    memBar.classList.remove('bg-yellow-500', 'bg-red-500');
+    memBar.classList.add('bg-green-500');
+  }
+
+  // 디스크 사용률
+  const diskUsage = resources.disk.usagePercent || 0;
+  const diskTotal = (resources.disk.size / (1024**3)).toFixed(2); // GB
+  const diskUsed = (resources.disk.used / (1024**3)).toFixed(2); // GB
+  document.getElementById('diskUsage').textContent = diskUsage.toFixed(1);
+  document.getElementById('diskUsageBar').style.width = `${diskUsage}%`;
+  document.getElementById('diskInfo').textContent = `${diskUsed} GB / ${diskTotal} GB`;
+
+  // 디스크 사용률에 따라 색상 변경
+  const diskBar = document.getElementById('diskUsageBar');
+  if (diskUsage > 80) {
+    diskBar.classList.remove('bg-orange-500', 'bg-yellow-500');
+    diskBar.classList.add('bg-red-500');
+  } else if (diskUsage > 60) {
+    diskBar.classList.remove('bg-orange-500', 'bg-red-500');
+    diskBar.classList.add('bg-yellow-500');
+  } else {
+    diskBar.classList.remove('bg-yellow-500', 'bg-red-500');
+    diskBar.classList.add('bg-orange-500');
+  }
+
+  // 서버 정보
+  document.getElementById('osInfo').textContent = `${resources.os.distro || resources.os.platform || 'Unknown'}`;
+  document.getElementById('archInfo').textContent = resources.os.arch || 'Unknown';
+
+  // 업타임 (초 -> 시간:분:초)
+  const uptime = resources.uptime || 0;
+  const hours = Math.floor(uptime / 3600);
+  const minutes = Math.floor((uptime % 3600) / 60);
+  const seconds = Math.floor(uptime % 60);
+  document.getElementById('uptimeInfo').textContent = `${hours}h ${minutes}m ${seconds}s`;
+
+  // 마지막 갱신 시간
+  const now = new Date();
+  document.getElementById('lastUpdateInfo').textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 }
 
 // 전역 함수로 등록
