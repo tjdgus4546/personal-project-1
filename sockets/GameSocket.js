@@ -88,13 +88,28 @@ module.exports = (io, app) => {
         const userDb = app.get('userDb');
         const GameSession = require('../models/GameSession')(quizDb);
         const User = require('../models/User')(userDb);
-        
+
         const userId = socket.userId;
-        
+
         if (!ObjectId.isValid(sessionId)) return;
-        
+
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session) return;
+
+        // 최대 인원 체크 (12명)
+        const MAX_PLAYERS = 12;
+        const existingPlayer = session.players.find(p => p.userId.toString() === userId.toString());
+        const connectedPlayers = session.players.filter(p => p.connected);
+
+        // 기존 플레이어가 아니고, 이미 12명이 접속 중이면 거부
+        if (!existingPlayer && connectedPlayers.length >= MAX_PLAYERS) {
+          socket.emit('join-error', {
+            success: false,
+            message: '게임 세션에 정원이 다 찼습니다!'
+          });
+          return;
+        }
+
         const user = await User.findById(userId).select('nickname profileImage');
 
         if (!sessionUserCache.has(sessionId)) {

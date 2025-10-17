@@ -1217,6 +1217,11 @@ function setupSocketListeners() {
         loadSessionData();
     });
 
+    socket.on('join-error', ({ success, message }) => {
+        alert(message || '게임 세션 참가에 실패했습니다.');
+        window.location.href = '/';
+    });
+
     socket.on('waiting-room', ({ success, data, message }) => {
 
         if (!success) {
