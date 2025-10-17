@@ -113,29 +113,39 @@ connectDB().then(({ userDb, quizDb }) => {
   // 접속 로그 수집 미들웨어 (실제 페이지 조회만 카운트)
   const AccessLog = require('./models/AccessLog')(userDb);
   app.use((req, res, next) => {
-    // ✅ 페이지뷰 = 실제 HTML 페이지를 조회한 경우만 카운트
-    // GET 요청이 아니면 제외
-    if (req.method !== 'GET') {
-      return next();
+    // ✅ quiz-edit API 요청은 현재 접속자 집계를 위해 로그에 기록
+    const isQuizEditAPI =
+      (req.method === 'PUT' || req.method === 'POST') &&
+      (req.path.match(/^\/api\/quiz\/[^\/]+\/question/) ||
+       req.path.match(/^\/api\/quiz\/[^\/]+\/questions$/));
+
+    // quiz-edit API가 아니면 기존 로직 적용
+    if (!isQuizEditAPI) {
+      // ✅ 페이지뷰 = 실제 HTML 페이지를 조회한 경우만 카운트
+      // GET 요청이 아니면 제외
+      if (req.method !== 'GET') {
+        return next();
+      }
+
+      // 정적 파일, API, 관리자 페이지 등은 제외
+      if (
+        req.path.startsWith('/css') ||
+        req.path.startsWith('/js') ||
+        req.path.startsWith('/images') ||
+        req.path.startsWith('/socket.io') ||
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/auth/') ||
+        req.path.startsWith('/game/') ||
+        req.path.startsWith('/admin') ||
+        req.path === '/favicon.ico'
+      ) {
+        return next();
+      }
     }
 
-    // 정적 파일, API, 관리자 페이지 등은 제외
-    if (
-      req.path.startsWith('/css') ||
-      req.path.startsWith('/js') ||
-      req.path.startsWith('/images') ||
-      req.path.startsWith('/socket.io') ||
-      req.path.startsWith('/api/') ||
-      req.path.startsWith('/auth/') ||
-      req.path.startsWith('/game/') ||
-      req.path.startsWith('/admin') ||
-      req.path === '/favicon.ico'
-    ) {
-      return next();
-    }
-
-    // ✅ 화이트리스트: 실제 페이지만 카운트
+    // ✅ 화이트리스트: 실제 페이지만 카운트 (또는 quiz-edit API)
     const isPageView =
+      isQuizEditAPI ||                                       // quiz-edit API 요청
       req.path === '/' ||                                    // 메인 페이지
       req.path === '/my-page' ||                             // 마이페이지
       req.path === '/edit-profile' ||                        // 내 정보 수정
