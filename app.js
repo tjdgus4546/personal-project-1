@@ -33,6 +33,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // HTTPS 강제 리다이렉트 (프로덕션)
+// ⚠️ EC2에 SSL 인증서가 없어서 임시 비활성화
+// TODO: SSL 인증서 추가하면 다시 활성화
+/*
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
     if (req.header('x-forwarded-proto') !== 'https') {
@@ -42,6 +45,7 @@ if (process.env.NODE_ENV === 'production') {
     }
   });
 }
+*/
 
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false // index.html 자동 제공 비활성화 (명시적 라우트 사용)
