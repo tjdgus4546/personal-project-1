@@ -23,8 +23,14 @@ let globalYoutubeVolume = 50;
 let questionOrder = [];
 let correctUsersThisQuestion = new Set(); // 현재 문제에서 정답 맞춘 사용자 닉네임
 
-// Socket.IO 연결
-const socket = io();
+// Socket.IO 연결 (안정성 개선)
+const socket = io({
+  withCredentials: true,
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 const sessionId = window.location.pathname.split('/').pop();
 let userId = null;
 
