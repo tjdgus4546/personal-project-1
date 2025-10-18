@@ -728,6 +728,79 @@ router.post('/users/:userId/unsuspend', async (req, res) => {
   }
 });
 
+// 사용자 닉네임 수정 (관리자 전용)
+router.patch('/users/:userId/nickname', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { nickname } = req.body;
+
+    if (!nickname || nickname.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '닉네임을 입력해주세요.'
+      });
+    }
+
+    const trimmedNickname = nickname.trim();
+
+    // 닉네임 길이 검증
+    if (trimmedNickname.length < 2 || trimmedNickname.length > 20) {
+      return res.status(400).json({
+        success: false,
+        message: '닉네임은 2자 이상 20자 이하로 입력해주세요.'
+      });
+    }
+
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 관리자는 닉네임 변경 불가
+    if (user.role === 'admin' || user.role === 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: '관리자의 닉네임은 변경할 수 없습니다.'
+      });
+    }
+
+    // 닉네임 중복 확인 (자신 제외)
+    const existingUser = await User.findOne({
+      nickname: trimmedNickname,
+      _id: { $ne: userId }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 사용 중인 닉네임입니다.'
+      });
+    }
+
+    // 닉네임 업데이트
+    await User.findByIdAndUpdate(userId, {
+      nickname: trimmedNickname
+    });
+
+    res.json({
+      success: true,
+      message: '닉네임이 성공적으로 변경되었습니다.',
+      nickname: trimmedNickname
+    });
+  } catch (err) {
+    console.error('User nickname update error:', err);
+    res.status(500).json({
+      success: false,
+      message: '닉네임 변경 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // ========== 접속 통계 API ==========
 
 // 퀴즈 이미지 조회 (호버링 시 사용)

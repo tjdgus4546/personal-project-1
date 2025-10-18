@@ -365,7 +365,13 @@ function renderQuizTable(quizzes) {
         </div>
       </td>
       <td class="p-3">
-        <div class="text-white">${quiz.creator.nickname}</div>
+        <div
+          class="text-white cursor-pointer hover:text-blue-400 transition-colors"
+          onclick="event.stopPropagation(); changeUserNickname('${quiz.creatorId}', '${quiz.creator.nickname.replace(/'/g, "\\'")}')"
+          title="클릭하여 닉네임 수정"
+        >
+          ${quiz.creator.nickname}
+        </div>
         <div class="text-xs text-gray-400">${quiz.creator.email}</div>
       </td>
       <td class="p-3 text-gray-300 whitespace-nowrap">${quiz.questionCount || 0}개</td>
@@ -823,6 +829,51 @@ async function suspendUserFromDashboard(userId, nickname) {
   }
 }
 
+// 사용자 닉네임 변경 (관리자 전용)
+async function changeUserNickname(userId, currentNickname) {
+  const newNickname = prompt(`"${currentNickname}" 사용자의 닉네임을 변경하시겠습니까?\n\n새 닉네임을 입력하세요 (2-20자):`, currentNickname);
+
+  if (newNickname === null) {
+    return;
+  }
+
+  const trimmedNickname = newNickname.trim();
+
+  if (trimmedNickname.length < 2 || trimmedNickname.length > 20) {
+    alert('닉네임은 2자 이상 20자 이하로 입력해주세요.');
+    return;
+  }
+
+  if (trimmedNickname === currentNickname) {
+    alert('기존 닉네임과 동일합니다.');
+    return;
+  }
+
+  if (!confirm(`닉네임을 "${currentNickname}"에서 "${trimmedNickname}"으로 변경하시겠습니까?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/users/${userId}/nickname`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: trimmedNickname })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      await loadQuizzes(true); // 목록 새로고침
+    } else {
+      alert(data.message || '닉네임 변경 중 오류가 발생했습니다.');
+    }
+  } catch (err) {
+    console.error('User nickname change error:', err);
+    alert('닉네임 변경 중 오류가 발생했습니다.');
+  }
+}
+
 // 전역 함수로 등록
 window.toggleVisibility = toggleVisibility;
 window.seizeQuiz = seizeQuiz;
@@ -830,6 +881,7 @@ window.restoreQuiz = restoreQuiz;
 window.deleteQuiz = deleteQuiz;
 window.toggleAutoRefresh = toggleAutoRefresh;
 window.suspendUserFromDashboard = suspendUserFromDashboard;
+window.changeUserNickname = changeUserNickname;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', initializePage);
