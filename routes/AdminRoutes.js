@@ -961,10 +961,19 @@ router.get('/stats', async (req, res) => {
       ip: { $nin: knownBotIPs }
     };
 
-    // 기본 봇 필터 (User-Agent + IP 블랙리스트)
+    // AWS 내부 IP 필터 (172.16.0.0/12, 10.0.0.0/8)
+    // MongoDB에서 IP 범위를 직접 필터링하기 위한 정규식
+    const awsInternalIPFilter = {
+      ip: {
+        $not: /^::ffff:(172\.(1[6-9]|2[0-9]|3[0-1])\.|10\.)/i
+      }
+    };
+
+    // 기본 봇 필터 (User-Agent + IP 블랙리스트 + AWS 내부 IP)
     const botFilter = {
       userAgent: { $not: botPattern },
-      ...ipBlacklistFilter
+      ...ipBlacklistFilter,
+      ...awsInternalIPFilter
     };
 
     // 게임 플레이 중인 유저 집계
@@ -1009,7 +1018,10 @@ router.get('/stats', async (req, res) => {
         $match: {
           timestamp: { $gte: today },
           userAgent: { $not: botPattern },
-          ip: { $nin: knownBotIPs }
+          ip: {
+            $nin: knownBotIPs,
+            $not: /^::ffff:(172\.(1[6-9]|2[0-9]|3[0-1])\.|10\.)/i  // AWS 내부 IP 제외
+          }
         }
       },
       {
@@ -1047,7 +1059,10 @@ router.get('/stats', async (req, res) => {
         $match: {
           timestamp: { $gte: weekAgo },
           userAgent: { $not: botPattern },
-          ip: { $nin: knownBotIPs }
+          ip: {
+            $nin: knownBotIPs,
+            $not: /^::ffff:(172\.(1[6-9]|2[0-9]|3[0-1])\.|10\.)/i  // AWS 내부 IP 제외
+          }
         }
       },
       {
