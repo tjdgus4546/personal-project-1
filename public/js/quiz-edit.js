@@ -798,8 +798,8 @@ function updateQuestionCount() {
 
 // 새 문제 만들기
 export function createNewQuestion() {
-    if (questions.length >= 70) {
-        alert('퀴즈에는 최대 70개의 문제만 추가할 수 있습니다.');
+    if (questions.length >= 50) {
+        alert('퀴즈에는 최대 50개의 문제만 추가할 수 있습니다.');
         return;
     }
 
