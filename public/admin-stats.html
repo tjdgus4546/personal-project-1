@@ -272,7 +272,17 @@
 
         <!-- 최근 로그 -->
         <div>
-          <h3 class="text-lg font-semibold mb-2 text-gray-200">최근 접속 로그 (최대 50개)</h3>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-lg font-semibold text-gray-200">최근 접속 로그 (최대 50개)</h3>
+            <div class="flex gap-2">
+              <button id="filterUserOnly" onclick="setLogFilter('user')" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold transition-colors">
+                유저만 보기
+              </button>
+              <button id="filterAll" onclick="setLogFilter('all')" class="bg-gray-600 text-white px-3 py-1 rounded text-xs font-semibold transition-colors">
+                전체 보기
+              </button>
+            </div>
+          </div>
           <div class="overflow-x-auto">
             <table class="w-full text-xs">
               <thead>

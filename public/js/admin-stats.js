@@ -2,6 +2,8 @@
 
 let autoRefreshInterval = null;
 let isAutoRefreshEnabled = true; // 기본값: 자동 갱신 활성화
+let currentLogFilter = 'user'; // 기본값: 유저만 보기 ('user' | 'all')
+let cachedDebugData = null; // 디버그 데이터 캐싱
 
 document.addEventListener('DOMContentLoaded', function() {
   loadStats();
@@ -419,8 +421,12 @@ function displayServerResources(resources) {
 
 // 전역 함수로 등록
 window.toggleAutoRefresh = toggleAutoRefresh;
+window.setLogFilter = setLogFilter;
 
 function displayDebugInfo(data) {
+  // 데이터 캐싱 (필터 변경 시 재사용)
+  cachedDebugData = data;
+
   // 고유 IP 개수 표시 (실제 사용자 vs 전체)
   const countText = `${data.uniqueIpCountReal || 0} 명 (봇 제외)`;
   const allCountText = `전체 ${data.uniqueIpCount || 0}명 (봇 포함)`;
@@ -449,25 +455,18 @@ function displayDebugInfo(data) {
     ipListEl.textContent = '수집된 실제 사용자 IP가 없습니다.';
   }
 
-  // 최근 로그 표시 (봇 여부 표시)
+  // 최근 로그 표시 (필터 적용)
+  renderRecentLogs(data.recentLogs);
+
+  // 필터 버튼 초기 상태 설정
+  updateLogFilterButtons();
+}
+
+// 최근 로그 렌더링 (필터 적용)
+function renderRecentLogs(logs) {
   const logsTable = document.getElementById('debugRecentLogs');
-  if (data.recentLogs && data.recentLogs.length > 0) {
-    logsTable.innerHTML = data.recentLogs.map(log => {
-      const date = new Date(log.timestamp);
-      const timeStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
 
-      const botBadge = log.isBot ? '<span class="text-xs bg-red-500/30 text-red-300 px-2 py-0.5 rounded ml-2">BOT</span>' : '<span class="text-xs bg-green-500/30 text-green-300 px-2 py-0.5 rounded ml-2">USER</span>';
-      const rowClass = log.isBot ? 'bg-red-900/10' : '';
-
-      return `
-        <tr class="border-b border-gray-700 ${rowClass}">
-          <td class="p-2 text-gray-300">${log.ip}${botBadge}</td>
-          <td class="p-2 text-gray-300">${log.path}</td>
-          <td class="p-2 text-gray-400">${timeStr}</td>
-        </tr>
-      `;
-    }).join('');
-  } else {
+  if (!logs || logs.length === 0) {
     logsTable.innerHTML = `
       <tr>
         <td colspan="3" class="text-center text-gray-500 py-8">
@@ -475,5 +474,69 @@ function displayDebugInfo(data) {
         </td>
       </tr>
     `;
+    return;
+  }
+
+  // 필터 적용
+  const filteredLogs = currentLogFilter === 'user'
+    ? logs.filter(log => !log.isBot)
+    : logs;
+
+  if (filteredLogs.length === 0) {
+    logsTable.innerHTML = `
+      <tr>
+        <td colspan="3" class="text-center text-gray-500 py-8">
+          ${currentLogFilter === 'user' ? '유저 로그가 없습니다.' : '수집된 로그가 없습니다.'}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  logsTable.innerHTML = filteredLogs.map(log => {
+    const date = new Date(log.timestamp);
+    const timeStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+
+    const botBadge = log.isBot ? '<span class="text-xs bg-red-500/30 text-red-300 px-2 py-0.5 rounded ml-2">BOT</span>' : '<span class="text-xs bg-green-500/30 text-green-300 px-2 py-0.5 rounded ml-2">USER</span>';
+    const rowClass = log.isBot ? 'bg-red-900/10' : '';
+
+    return `
+      <tr class="border-b border-gray-700 ${rowClass}">
+        <td class="p-2 text-gray-300">${log.ip}${botBadge}</td>
+        <td class="p-2 text-gray-300">${log.path}</td>
+        <td class="p-2 text-gray-400">${timeStr}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 로그 필터 변경
+function setLogFilter(filter) {
+  currentLogFilter = filter;
+  updateLogFilterButtons();
+
+  // 캐시된 데이터로 로그 재렌더링
+  if (cachedDebugData && cachedDebugData.recentLogs) {
+    renderRecentLogs(cachedDebugData.recentLogs);
+  }
+}
+
+// 로그 필터 버튼 상태 업데이트
+function updateLogFilterButtons() {
+  const userOnlyBtn = document.getElementById('filterUserOnly');
+  const allBtn = document.getElementById('filterAll');
+
+  if (userOnlyBtn && allBtn) {
+    if (currentLogFilter === 'user') {
+      userOnlyBtn.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+      userOnlyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+      allBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+      allBtn.classList.add('bg-gray-600', 'hover:bg-gray-500');
+    } else {
+      userOnlyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+      userOnlyBtn.classList.add('bg-gray-600', 'hover:bg-gray-500');
+      allBtn.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+      allBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    }
   }
 }
