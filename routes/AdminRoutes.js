@@ -790,6 +790,20 @@ router.get('/stats/debug-ips', async (req, res) => {
       '89.248.168.222'    // 감지된 봇
     ];
 
+    // AWS 내부 IP 확인 함수 (172.16.0.0/12 대역)
+    function isAWSInternalIP(ip) {
+      // IPv4-mapped IPv6 주소에서 IPv4 추출 (::ffff:172.31.x.x)
+      const ipv4 = ip.replace(/^::ffff:/i, '');
+      const parts = ipv4.split('.').map(Number);
+
+      if (parts.length !== 4) return false;
+
+      // 172.16.0.0/12 = 172.16.0.0 ~ 172.31.255.255
+      // 10.0.0.0/8 = 10.0.0.0 ~ 10.255.255.255 (AWS VPC 사설 IP)
+      return (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+             (parts[0] === 10);
+    }
+
     // 봇 판별 함수 (User-Agent + IP + 행동 패턴)
     function isBotRequest(log) {
       // 1. User-Agent 기반
@@ -802,7 +816,12 @@ router.get('/stats/debug-ips', async (req, res) => {
         return true;
       }
 
-      // 3. 행동 패턴 (공격 시도)
+      // 3. AWS 내부 IP (헬스 체크 등)
+      if (isAWSInternalIP(log.ip)) {
+        return true;
+      }
+
+      // 4. 행동 패턴 (공격 시도)
       if (log.path && (
         log.path.includes('/.git') ||
         log.path.includes('/.env') ||
@@ -890,6 +909,20 @@ router.get('/stats', async (req, res) => {
       '89.248.168.222'    // 감지된 봇
     ];
 
+    // AWS 내부 IP 확인 함수 (172.16.0.0/12 대역)
+    function isAWSInternalIP(ip) {
+      // IPv4-mapped IPv6 주소에서 IPv4 추출 (::ffff:172.31.x.x)
+      const ipv4 = ip.replace(/^::ffff:/i, '');
+      const parts = ipv4.split('.').map(Number);
+
+      if (parts.length !== 4) return false;
+
+      // 172.16.0.0/12 = 172.16.0.0 ~ 172.31.255.255
+      // 10.0.0.0/8 = 10.0.0.0 ~ 10.255.255.255 (AWS VPC 사설 IP)
+      return (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+             (parts[0] === 10);
+    }
+
     // 봇 판별 함수 (User-Agent + IP + 행동 패턴)
     function isBotRequest(log) {
       // 1. User-Agent 기반
@@ -902,7 +935,12 @@ router.get('/stats', async (req, res) => {
         return true;
       }
 
-      // 3. 행동 패턴 (공격 시도)
+      // 3. AWS 내부 IP (헬스 체크 등)
+      if (isAWSInternalIP(log.ip)) {
+        return true;
+      }
+
+      // 4. 행동 패턴 (공격 시도)
       if (log.path && (
         log.path.includes('/.git') ||
         log.path.includes('/.env') ||
