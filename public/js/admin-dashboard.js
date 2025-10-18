@@ -72,6 +72,14 @@ async function initializePage() {
     // 페이지 가시성 변경 감지 (탭 전환 시)
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // 페이지 종료 시 타이머 정리 (메모리 누수 방지)
+    window.addEventListener('beforeunload', () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+    });
+
     // 초기 버튼 상태 설정
     updateAutoRefreshButton();
   } catch (error) {

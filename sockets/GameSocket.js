@@ -57,6 +57,7 @@ module.exports = (io, app) => {
   const Quiz = require('../models/Quiz')(quizDb);
   const ChatLog = require('../models/ChatLog')(quizDb);
   const sessionUserCache = new Map();
+  const disconnectTimers = new Map(); // 사용자별 disconnect 타이머 저장
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
   const { ObjectId } = require('mongoose').Types;
 
@@ -231,8 +232,14 @@ module.exports = (io, app) => {
         const quizDb = app.get('quizDb');
         const GameSession = require('../models/GameSession')(quizDb);
 
+        // 기존 타이머가 있으면 취소 (빠른 재접속 시 중복 방지)
+        if (disconnectTimers.has(userId)) {
+          clearTimeout(disconnectTimers.get(userId));
+          disconnectTimers.delete(userId);
+        }
+
         // 3초 후에도 같은 사용자가 다시 접속해 있지 않다면 제거
-        setTimeout(async () => {
+        const timer = setTimeout(async () => {
           try {
             let socketsInRoom;
             try {
@@ -360,8 +367,27 @@ module.exports = (io, app) => {
             }
           } catch (error) {
             handleSocketError(socket, error, 'disconnect:setTimeout');
+          } finally {
+            // 타이머 정리
+            disconnectTimers.delete(userId);
           }
         }, 3000); // 3초 후에도 접속 안 되어 있으면 제거
+
+        // 타이머를 Map에 저장
+        disconnectTimers.set(userId, timer);
+
+        // 모든 소켓 이벤트 리스너 제거 (메모리 누수 방지)
+        socket.removeAllListeners('joinSession');
+        socket.removeAllListeners('startGame');
+        socket.removeAllListeners('client-ready');
+        socket.removeAllListeners('chatMessage');
+        socket.removeAllListeners('correct');
+        socket.removeAllListeners('choiceQuestionCorrect');
+        socket.removeAllListeners('choiceQuestionIncorrect');
+        socket.removeAllListeners('voteSkip');
+        socket.removeAllListeners('forceSkip');
+        socket.removeAllListeners('revealAnswer');
+        socket.removeAllListeners('nextQuestion');
       } catch (error) {
         handleSocketError(socket, error, 'disconnect');
       }
@@ -976,6 +1002,18 @@ module.exports = (io, app) => {
           session.quizId,
           { $inc: { completedGameCount: 1 } }
         );
+
+        // 세션 관련 캐시 정리 (메모리 누수 방지)
+        if (sessionUserCache.has(sessionId)) {
+          sessionUserCache.delete(sessionId);
+          console.log(`🧹 세션 캐시 정리: ${sessionId}`);
+        }
+
+        // firstCorrectUsers 정리
+        if (app.firstCorrectUsers && app.firstCorrectUsers[sessionId]) {
+          delete app.firstCorrectUsers[sessionId];
+          console.log(`🧹 firstCorrectUsers 정리: ${sessionId}`);
+        }
 
         io.to(sessionId).emit('end', {
           success: true,

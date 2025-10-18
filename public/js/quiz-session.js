@@ -1127,28 +1127,26 @@ function setupEventListeners() {
         }
     });
 
-    document.addEventListener('keydown', handleChoiceKeyPress);
-
-    // ESC 키: 포커스 해제
-    document.addEventListener('keydown', (e) => {
+    // ESC 키: 포커스 해제 핸들러
+    function handleEscapeKey(e) {
         if (e.key === 'Escape') {
-            if (document.activeElement.tagName === 'INPUT' || 
+            if (document.activeElement.tagName === 'INPUT' ||
                 document.activeElement.tagName === 'TEXTAREA') {
                 document.activeElement.blur();
             }
         }
-    });
+    }
 
-    // Enter 키: 채팅창 포커스
-    document.addEventListener('keydown', (e) => {
+    // Enter 키: 채팅창 포커스 핸들러
+    function handleEnterKey(e) {
         if (e.key === 'Enter') {
-            if (document.activeElement.tagName !== 'INPUT' && 
+            if (document.activeElement.tagName !== 'INPUT' &&
                 document.activeElement.tagName !== 'TEXTAREA' &&
                 document.activeElement.tagName !== 'BUTTON') {
-                
+
                 const gameSection = document.getElementById('gameSection');
                 const quizInfoSection = document.getElementById('quizInfoSection');
-                
+
                 if (!gameSection.classList.contains('hidden')) {
                     document.getElementById('chatInput').focus();
                 } else if (!quizInfoSection.classList.contains('hidden')) {
@@ -1156,24 +1154,24 @@ function setupEventListeners() {
                 }
             }
         }
-    });
+    }
 
-    // K 키: 스킵 투표
-    document.addEventListener('keydown', (e) => {
+    // K 키: 스킵 투표 핸들러
+    function handleSkipVoteKey(e) {
         if (e.key === 'k' || e.key === 'K') {
-            if (document.activeElement.tagName !== 'INPUT' && 
+            if (document.activeElement.tagName !== 'INPUT' &&
                 document.activeElement.tagName !== 'TEXTAREA') {
-                
+
                 const gameSection = document.getElementById('gameSection');
-                
+
                 if (!gameSection.classList.contains('hidden')) {
                     const voteSkipBtn = document.getElementById('voteSkipBtn');
                     const voteSkipBtnMobile = document.getElementById('voteSkipBtnMobile');
-                    
-                    if (!voteSkipBtn.classList.contains('hidden') || 
+
+                    if (!voteSkipBtn.classList.contains('hidden') ||
                         !voteSkipBtnMobile.classList.contains('hidden')) {
                         socket.emit('voteSkip', { sessionId });
-                        
+
                         // 시각적 피드백
                         [voteSkipBtn, voteSkipBtnMobile].forEach(btn => {
                             if (!btn.classList.contains('hidden')) {
@@ -1187,7 +1185,13 @@ function setupEventListeners() {
                 }
             }
         }
-    });
+    }
+
+    // 이벤트 리스너 등록
+    document.addEventListener('keydown', handleChoiceKeyPress);
+    document.addEventListener('keydown', handleEscapeKey);
+    document.addEventListener('keydown', handleEnterKey);
+    document.addEventListener('keydown', handleSkipVoteKey);
 
     const toggleCodeBtn = document.getElementById('toggleCodeBtn');
     if (toggleCodeBtn) {
@@ -1601,7 +1605,17 @@ async function initializePage() {
         setupEventListeners();
 
         window.addEventListener('beforeunload', () => {
+            // 모든 keydown 이벤트 리스너 정리 (메모리 누수 방지)
             document.removeEventListener('keydown', handleChoiceKeyPress);
+            document.removeEventListener('keydown', handleEscapeKey);
+            document.removeEventListener('keydown', handleEnterKey);
+            document.removeEventListener('keydown', handleSkipVoteKey);
+
+            // Socket.IO 리스너도 정리
+            if (socket) {
+                socket.removeAllListeners();
+                socket.disconnect();
+            }
         });
 
         // 병렬로 실행하여 로딩 시간 단축

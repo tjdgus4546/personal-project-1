@@ -14,6 +14,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 이메일 인증 버튼 이벤트 리스너
     setupEmailVerification();
+
+    // 페이지 종료 시 타이머 정리 (메모리 누수 방지)
+    window.addEventListener('beforeunload', () => {
+        if (verificationTimer) {
+            clearInterval(verificationTimer);
+            verificationTimer = null;
+        }
+    });
 });
 
 // URL 파라미터에서 에러/성공 메시지 처리
