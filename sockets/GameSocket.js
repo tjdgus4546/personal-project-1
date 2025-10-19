@@ -615,32 +615,37 @@ module.exports = (io, app) => {
         }
 
         const isFirst = !app.firstCorrectUsers[sessionId];
+        const scoreIncrement = isFirst ? 2 : 1;
+
         if (isFirst) {
           app.firstCorrectUsers[sessionId] = displayName;
-          player.score += 2;
-        } else {
-          player.score += 1;
-        }
-        player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
-        player.lastCorrectTime = new Date(); // 정답 맞춘 시간 기록
-
-        session.correctUsers = session.correctUsers || {};
-        if (!session.correctUsers[qIndex]) {
-          session.correctUsers[qIndex] = [];
-        }
-        if (!session.correctUsers[qIndex].includes(displayName)) {
-          session.correctUsers[qIndex].push(displayName);
         }
 
-        session.set(`players.${playerIndex}.answered.${qIndex}`, true);
-        session.markModified('correctUsers');
-        session.markModified('players');
-        
-        const success = await safeSaveSession(session);
-        if (!success) {
-          console.error('⌧ 세션 저장 중 에러 발생 - correct');
+        // 원자적 업데이트로 버전 충돌 방지
+        const updateResult = await GameSession.findByIdAndUpdate(
+          sessionId,
+          {
+            $set: {
+              [`players.${playerIndex}.answered.${qIndex}`]: true,
+              [`players.${playerIndex}.lastCorrectTime`]: new Date()
+            },
+            $inc: {
+              [`players.${playerIndex}.score`]: scoreIncrement,
+              [`players.${playerIndex}.correctAnswersCount`]: 1
+            },
+            $addToSet: {
+              [`correctUsers.${qIndex}`]: displayName
+            }
+          },
+          { new: true }
+        );
+
+        if (!updateResult) {
+          console.error('❌ 세션 업데이트 실패 - correct');
           return;
         }
+
+        session = updateResult;
 
         const userInfo = sessionUserCache.get(sessionId)?.get(socket.userId) || {
             nickname: null,
@@ -1029,20 +1034,34 @@ module.exports = (io, app) => {
 
       const quiz = await Quiz.findById(session.quizId);
 
-      session.revealedAt = null;
-      session.currentQuestionIndex += 1; // questionOrder 배열의 다음 위치로 이동
-      session.skipVotes = [];
-      session.readyPlayers = []; // 준비 상태 초기화
+      const nextQuestionIndex = session.currentQuestionIndex + 1;
 
       // 모든 문제를 완료한 경우
-      if (session.currentQuestionIndex >= session.questionOrder.length) {
-        session.isActive = false;
-        session.endedAt = new Date()
-        const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion');
-            return;
-          }
+      if (nextQuestionIndex >= session.questionOrder.length) {
+        // 원자적 업데이트로 게임 종료 처리
+        const updateResult = await GameSession.findByIdAndUpdate(
+          sessionId,
+          {
+            $set: {
+              isActive: false,
+              endedAt: new Date(),
+              revealedAt: null,
+              currentQuestionIndex: nextQuestionIndex
+            },
+            $unset: {
+              skipVotes: "",
+              readyPlayers: ""
+            }
+          },
+          { new: true }
+        );
+
+        if (!updateResult) {
+          console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion');
+          return;
+        }
+
+        session = updateResult;
 
         // 완료된 게임 수 증가
         await Quiz.findByIdAndUpdate(
@@ -1078,11 +1097,26 @@ module.exports = (io, app) => {
         return;
       }
 
-        const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion2');
-            return;
+      // 다음 문제로 이동 (원자적 업데이트)
+      const updateResult = await GameSession.findByIdAndUpdate(
+        sessionId,
+        {
+          $set: {
+            revealedAt: null,
+            currentQuestionIndex: nextQuestionIndex,
+            skipVotes: [],
+            readyPlayers: []
           }
+        },
+        { new: true }
+      );
+
+      if (!updateResult) {
+        console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion2');
+        return;
+      }
+
+      session = updateResult;
 
       // 문제 데이터만 전송 (타이머 시작 X)
       io.to(sessionId).emit('next', {

@@ -24,7 +24,7 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
     if (!session) return res.status(404).json({ message: '세션 없음' });
 
     // 인가 로직: 이 사용자가 해당 세션에 참여할 권한이 있는가?
-    const isHost = session.host.toString() === req.user.id;
+    const isHost = session.host ? session.host.toString() === req.user.id : false;
     const isParticipant = session.players.some(p => p.userId.toString() === req.user.id);
 
     if (!isHost && !isParticipant) {
