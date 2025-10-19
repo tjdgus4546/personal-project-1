@@ -79,7 +79,8 @@ const SUSPICIOUS_PATHS = [
 
 // 404 추적을 위한 메모리 캐시 (IP별 404 카운트)
 const notFoundTracker = new Map();
-const MAX_TRACKER_SIZE = 10000; // 🛡️ 최대 10,000개로 제한 (메모리 고갈 방지)
+const MAX_TRACKER_SIZE = 1000; // 🛡️ 최대 1,000개로 제한 (메모리 누수 방지 - 10,000→1,000 축소)
+const MAX_PATH_ARRAY_SIZE = 10; // 🛡️ IP당 경로 배열 최대 10개로 제한 (50→10 축소)
 
 // ⚡ 차단된 IP 메모리 캐시 (성능 최적화)
 const blockedIPCache = new Set();
@@ -206,8 +207,8 @@ function track404(req, ip, userDb) {
     data.count++;
     data.lastAttempt = Date.now();
 
-    // 🛡️ 경로 배열 크기 제한 (메모리 절약)
-    if (data.paths.length < 50) {
+    // 🛡️ 경로 배열 크기 제한 (메모리 절약 - 50→10으로 축소)
+    if (data.paths.length < MAX_PATH_ARRAY_SIZE) {
       data.paths.push(req.path);
     }
 

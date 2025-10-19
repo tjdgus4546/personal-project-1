@@ -15,6 +15,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // 임시 사용자 정보 저장용 (실제로는 Redis나 DB 사용 권장)
 const tempUserData = new Map();
+const MAX_TEMP_USER_DATA_SIZE = 100; // 🛡️ 최대 100개로 제한 (메모리 누수 방지)
 
 // OAuth 닉네임 설정 제한
 const oauthSignupLimiter = rateLimit({
@@ -251,6 +252,13 @@ router.get('/google/callback', async (req, res) => {
 
     // 새 사용자 - 닉네임 설정 페이지로
     const tempToken = uuidv4();
+
+    // 🛡️ 최대 크기 초과 시 가장 오래된 항목 삭제 (LRU 방식)
+    if (tempUserData.size >= MAX_TEMP_USER_DATA_SIZE) {
+      const firstKey = tempUserData.keys().next().value;
+      tempUserData.delete(firstKey);
+      console.warn(`⚠️ tempUserData 크기 제한 초과: 가장 오래된 항목 삭제됨`);
+    }
 
     // 구글 사용자 정보 저장 (sub는 구글의 고유 사용자 ID)
     tempUserData.set(tempToken, {

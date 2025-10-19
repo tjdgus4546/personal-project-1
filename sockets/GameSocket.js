@@ -61,6 +61,38 @@ module.exports = (io, app) => {
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
   const { ObjectId } = require('mongoose').Types;
 
+  // 🛡️ 30분마다 오래된 세션 캐시 정리 (메모리 누수 방지)
+  setInterval(() => {
+    const now = Date.now();
+    const THIRTY_MINUTES = 30 * 60 * 1000;
+
+    for (const [sessionId] of sessionUserCache.entries()) {
+      // 세션이 DB에 없거나 3시간 TTL로 만료되었다면 캐시에서 삭제
+      GameSession.findById(sessionId).then(session => {
+        if (!session) {
+          sessionUserCache.delete(sessionId);
+          console.log(`🧹 만료된 세션 캐시 정리: ${sessionId}`);
+        }
+      }).catch(err => {
+        // DB 조회 실패 시 무시
+      });
+    }
+
+    // firstCorrectUsers도 같은 방식으로 정리
+    if (app.firstCorrectUsers) {
+      for (const sessionId in app.firstCorrectUsers) {
+        GameSession.findById(sessionId).then(session => {
+          if (!session) {
+            delete app.firstCorrectUsers[sessionId];
+            console.log(`🧹 만료된 firstCorrectUsers 정리: ${sessionId}`);
+          }
+        }).catch(err => {
+          // DB 조회 실패 시 무시
+        });
+      }
+    }
+  }, 30 * 60 * 1000); // 30분마다 실행
+
   io.use(cookieParser());
 
   io.use(async (socket, next) => {
@@ -286,6 +318,19 @@ module.exports = (io, app) => {
             if (!session) return;
 
             const connectedCount = session.players.filter(p => p.connected).length;
+
+            // 🛡️ 모든 플레이어가 나간 경우 즉시 메모리 정리
+            if (connectedCount === 0) {
+              if (sessionUserCache.has(sessionId)) {
+                sessionUserCache.delete(sessionId);
+                console.log(`🧹 모든 플레이어 퇴장 - 세션 캐시 즉시 정리: ${sessionId}`);
+              }
+              if (app.firstCorrectUsers && app.firstCorrectUsers[sessionId]) {
+                delete app.firstCorrectUsers[sessionId];
+                console.log(`🧹 모든 플레이어 퇴장 - firstCorrectUsers 즉시 정리: ${sessionId}`);
+              }
+              return;
+            }
 
             // 분기 처리
             if (session.isStarted) {
@@ -1176,4 +1221,9 @@ module.exports = (io, app) => {
     }
   }
 
+  // 📊 메모리 모니터링을 위해 캐시 크기 반환
+  return {
+    getSessionUserCacheSize: () => sessionUserCache.size,
+    getDisconnectTimersSize: () => disconnectTimers.size
+  };
 };
