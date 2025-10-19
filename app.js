@@ -114,6 +114,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production', // 프로덕션에서만 true
     httpOnly: true,
+    sameSite: 'lax', // OAuth 리다이렉트 시 쿠키 전송 허용
     maxAge: 30 * 60 * 1000 // 30분
   },
   proxy: process.env.NODE_ENV === 'production' // 프로덕션에서만 true
