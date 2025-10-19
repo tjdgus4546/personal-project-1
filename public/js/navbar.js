@@ -57,6 +57,9 @@ function createNavbarHTML(user = null) {
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
               >
               <span class="text-lg sm:text-xl font-bold text-white hidden" id="fallbackLogo">QQ</span>
+              <div class="text-[20px] font-bold">
+              PLAYCODE.GG
+              </div>
             </a>
             
             ${user ? `
