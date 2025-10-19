@@ -589,7 +589,7 @@ module.exports = (io, app) => {
     socket.on('correct', async ({ sessionId, questionIndex, currentIndex }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
-        const session = await safeFindSessionById(GameSession, sessionId);
+        let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
         const userId = socket.userId;
@@ -603,7 +603,7 @@ module.exports = (io, app) => {
         const actualQuestionIndex = questionIndex !== undefined ? questionIndex : session.questionOrder[session.currentQuestionIndex];
         const qIndex = String(actualQuestionIndex);
 
-        // 중복 정답 방지
+        // 중복 정답 방지 (DB에서 확인)
         if (player.answered?.[qIndex]) {
           return;
         }
@@ -621,9 +621,12 @@ module.exports = (io, app) => {
           app.firstCorrectUsers[sessionId] = displayName;
         }
 
-        // 원자적 업데이트로 버전 충돌 방지
-        const updateResult = await GameSession.findByIdAndUpdate(
-          sessionId,
+        // 원자적 업데이트로 버전 충돌 방지 + 중복 방지 조건 추가
+        const updateResult = await GameSession.findOneAndUpdate(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 이미 답변하지 않은 경우만 업데이트
+          },
           {
             $set: {
               [`players.${playerIndex}.answered.${qIndex}`]: true,
@@ -640,8 +643,9 @@ module.exports = (io, app) => {
           { new: true }
         );
 
+        // 업데이트 실패 = 이미 답변했거나 세션이 없음
         if (!updateResult) {
-          console.error('❌ 세션 업데이트 실패 - correct');
+          console.log(`⚠️ 중복 정답 시도 방지: ${displayName} (문제 ${qIndex})`);
           return;
         }
 
@@ -689,7 +693,7 @@ module.exports = (io, app) => {
     socket.on('choiceQuestionCorrect', async ({ sessionId, questionIndex, currentIndex }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
-        const session = await safeFindSessionById(GameSession, sessionId);
+        let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
         const userId = socket.userId;
@@ -707,23 +711,29 @@ module.exports = (io, app) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        session.choiceQuestionCorrectUsers = session.choiceQuestionCorrectUsers || {};
-        if (!session.choiceQuestionCorrectUsers[qIndex]) {
-          session.choiceQuestionCorrectUsers[qIndex] = [];
-        }
-        if (!session.choiceQuestionCorrectUsers[qIndex].includes(displayName)) {
-          session.choiceQuestionCorrectUsers[qIndex].push(displayName);
-        }
+        // 원자적 업데이트로 중복 방지
+        const updateResult = await GameSession.findOneAndUpdate(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true }
+          },
+          {
+            $set: {
+              [`players.${playerIndex}.answered.${qIndex}`]: true
+            },
+            $addToSet: {
+              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName
+            }
+          },
+          { new: true }
+        );
 
-        session.set(`players.${playerIndex}.answered.${qIndex}`, true);
-        session.markModified('choiceQuestionCorrectUsers');
-        session.markModified('players');
-        
-        const success = await safeSaveSession(session);
-        if (!success) {
-          console.error('❌ 세션 저장 중 에러 발생 - chatMessage');
+        if (!updateResult) {
+          console.log(`⚠️ 중복 답변 방지: ${displayName} (객관식 문제 ${qIndex})`);
           return;
         }
+
+        session = updateResult;
 
         await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
 
@@ -735,7 +745,7 @@ module.exports = (io, app) => {
     socket.on('choiceQuestionIncorrect', async ({sessionId, questionIndex, currentIndex}) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
-        const session = await safeFindSessionById(GameSession, sessionId);
+        let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
         const userId = socket.userId;
@@ -751,14 +761,26 @@ module.exports = (io, app) => {
 
         if (player.answered?.[qIndex]) return;
 
-        session.set(`players.${playerIndex}.answered.${qIndex}`, true);
-        session.markModified('players');
+        // 원자적 업데이트로 중복 방지
+        const updateResult = await GameSession.findOneAndUpdate(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true }
+          },
+          {
+            $set: {
+              [`players.${playerIndex}.answered.${qIndex}`]: true
+            }
+          },
+          { new: true }
+        );
 
-        const success = await safeSaveSession(session);
-        if (!success) {
-          console.error('세션 저장 중 에러 발생 - choiceQuestionIncorrect');
+        if (!updateResult) {
+          console.log(`⚠️ 중복 답변 방지: 오답 (객관식 문제 ${qIndex})`);
           return;
         }
+
+        session = updateResult;
 
         await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
 
@@ -856,7 +878,7 @@ module.exports = (io, app) => {
   socket.on('revealAnswer', async ({ sessionId }) => {
     try {
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await safeFindSessionById(GameSession, sessionId);
+      let session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
 
       if (session.revealedAt) return;
@@ -866,28 +888,40 @@ module.exports = (io, app) => {
       const actualIndex = session.questionOrder[orderIndex];
       const question = quiz.questions[actualIndex];
       const qIndex = String(actualIndex);
-      
+
       if (!quiz || !quiz.questions || !quiz.questions[actualIndex]) return;
 
-      session.revealedAt = new Date();
+      const revealedAt = new Date();
 
-      // choiceQuestionCorrectUsers → correctUsers로 데이터 이동
+      // choiceQuestionCorrectUsers → correctUsers로 데이터 이동 준비
+      const updateOps = {
+        $set: {
+          revealedAt: revealedAt
+        }
+      };
+
+      // 객관식 정답자 데이터가 있으면 이동
       if (session.choiceQuestionCorrectUsers && session.choiceQuestionCorrectUsers[qIndex]) {
-        session.correctUsers = session.correctUsers || {};
-        session.correctUsers[qIndex] = [...session.choiceQuestionCorrectUsers[qIndex]];
-        
-        // 임시 데이터 정리
-        delete session.choiceQuestionCorrectUsers[qIndex];
-        
-        session.markModified('correctUsers');
-        session.markModified('choiceQuestionCorrectUsers');
+        updateOps.$set[`correctUsers.${qIndex}`] = [...session.choiceQuestionCorrectUsers[qIndex]];
+        updateOps.$unset = { [`choiceQuestionCorrectUsers.${qIndex}`]: "" };
       }
 
-      const success = await safeSaveSession(session);
-        if (!success) {
-          console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
-          return;
-        }
+      // 원자적 업데이트
+      const updateResult = await GameSession.findOneAndUpdate(
+        {
+          _id: sessionId,
+          revealedAt: null
+        },
+        updateOps,
+        { new: true }
+      );
+
+      if (!updateResult) {
+        console.log('⚠️ 이미 정답이 공개되었거나 세션이 없음 - revealAnswer event');
+        return;
+      }
+
+      session = updateResult;
 
       // 현재 문제의 정답자 목록 가져오기
       const correctUsers = session.correctUsers?.[qIndex] || [];
@@ -965,7 +999,7 @@ module.exports = (io, app) => {
     return async () => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
-        const session = await safeFindSessionById(GameSession, sessionId);
+        let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
         // 중복투표 방지
@@ -979,25 +1013,35 @@ module.exports = (io, app) => {
 
         const revealedAt = new Date();
 
-        session.revealedAt = revealedAt;
-
-        // choiceQuestionCorrectUsers → correctUsers로 데이터 이동
-        if (session.choiceQuestionCorrectUsers && session.choiceQuestionCorrectUsers[qIndex]) {
-          session.correctUsers = session.correctUsers || {};
-          session.correctUsers[qIndex] = [...session.choiceQuestionCorrectUsers[qIndex]];
-          
-          // 임시 데이터 정리
-          delete session.choiceQuestionCorrectUsers[qIndex];
-          
-          session.markModified('correctUsers');
-          session.markModified('choiceQuestionCorrectUsers');
-        }
-        
-        const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - revealAnswer');
-            return;
+        // choiceQuestionCorrectUsers → correctUsers로 데이터 이동 준비
+        const updateOps = {
+          $set: {
+            revealedAt: revealedAt
           }
+        };
+
+        // 객관식 정답자 데이터가 있으면 이동
+        if (session.choiceQuestionCorrectUsers && session.choiceQuestionCorrectUsers[qIndex]) {
+          updateOps.$set[`correctUsers.${qIndex}`] = [...session.choiceQuestionCorrectUsers[qIndex]];
+          updateOps.$unset = { [`choiceQuestionCorrectUsers.${qIndex}`]: "" };
+        }
+
+        // 원자적 업데이트 + 중복 방지 (revealedAt이 없는 경우만)
+        const updateResult = await GameSession.findOneAndUpdate(
+          {
+            _id: sessionId,
+            revealedAt: null // 아직 정답이 공개되지 않은 경우만
+          },
+          updateOps,
+          { new: true }
+        );
+
+        if (!updateResult) {
+          console.log('⚠️ 이미 정답이 공개되었거나 세션이 없음');
+          return;
+        }
+
+        session = updateResult;
 
         // 현재 문제의 정답자 목록 가져오기
         const correctUsers = session.correctUsers?.[qIndex] || [];
@@ -1029,7 +1073,7 @@ module.exports = (io, app) => {
       const Quiz = require('../models/Quiz')(quizDb);
 
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await safeFindSessionById(GameSession, sessionId);
+      let session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
 
       const quiz = await Quiz.findById(session.quizId);
@@ -1098,8 +1142,11 @@ module.exports = (io, app) => {
       }
 
       // 다음 문제로 이동 (원자적 업데이트)
-      const updateResult = await GameSession.findByIdAndUpdate(
-        sessionId,
+      const updateResult = await GameSession.findOneAndUpdate(
+        {
+          _id: sessionId,
+          isActive: true // 활성 세션만 업데이트
+        },
         {
           $set: {
             revealedAt: null,
