@@ -1215,10 +1215,10 @@ router.get('/server-resources', async (req, res) => {
     // CPU 사용률
     const cpuUsage = currentLoad.currentLoad.toFixed(2);
 
-    // 메모리 사용률
+    // 메모리 사용률 (buff/cache 제외한 실제 사용량)
     const totalMem = memInfo.total;
-    const usedMem = memInfo.used;
-    const freeMem = memInfo.free;
+    const usedMem = memInfo.active || memInfo.used; // active = 실제 사용 중인 메모리 (buff/cache 제외)
+    const freeMem = memInfo.available || memInfo.free; // available = 실제 사용 가능한 메모리
     const memUsagePercent = ((usedMem / totalMem) * 100).toFixed(2);
 
     // 디스크 사용률 (첫 번째 파티션)
