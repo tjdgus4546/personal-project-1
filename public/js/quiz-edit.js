@@ -816,7 +816,7 @@ export function createNewQuestion() {
     const newQuestion = {
         questionType: 'text', // 기본값: 텍스트 문제
         text: '',
-        timeLimit: 30,
+        timeLimit: '', // 빈 값으로 시작 (editQuestion에서 채움)
         youtubeUrl: '',
         youtubeStartTime: 0,
         youtubeEndTime: 0,
@@ -861,7 +861,21 @@ export function editQuestion(index) {
     
     // 폼 데이터 채우기
     document.getElementById('questionText').value = question.text || '';
-    document.getElementById('timeLimit').value = question.timeLimit || 30;
+
+    // 🔄 제한시간: 빈 값이면 이전 문제 값 또는 30초 기본값
+    let timeLimitValue;
+    if (question.timeLimit === '' || question.timeLimit === undefined || question.timeLimit === null) {
+        // 새 문제인 경우: 이전 문제의 제한시간 가져오기
+        if (currentEditingIndex > 0 && questions[currentEditingIndex - 1]) {
+            timeLimitValue = questions[currentEditingIndex - 1].timeLimit || 30;
+        } else {
+            timeLimitValue = 30; // 첫 문제는 30초 기본값
+        }
+    } else {
+        timeLimitValue = question.timeLimit; // 기존 값 사용
+    }
+    document.getElementById('timeLimit').value = timeLimitValue;
+
     document.getElementById('isMultipleChoice').checked = question.isChoice || false;
     
     // 이미지 데이터 로드
