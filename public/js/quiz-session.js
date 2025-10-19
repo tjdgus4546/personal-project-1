@@ -523,11 +523,11 @@ function sendMessage() {
     const rawAnswers = questions[actualIndex].answers || [];
     const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
     const userInput = message.replace(/\s+/g, '').toLowerCase();
-    
+
     const isCorrect = answers.includes(userInput);
 
     if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('correct', { sessionId });
+        socket.emit('correct', { sessionId, questionIndex: actualIndex, currentIndex });
     } else {
         socket.emit('chatMessage', { sessionId, message });
     }
@@ -878,13 +878,13 @@ function selectChoice(choice) {
     const rawAnswers = questions[actualIndex].answers || [];
     const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
     const userInput = choice.replace(/\s+/g, '').toLowerCase();
-    
+
     const isCorrect = answers.includes(userInput);
 
     if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('choiceQuestionCorrect', { sessionId });
+        socket.emit('choiceQuestionCorrect', { sessionId, questionIndex: actualIndex, currentIndex });
     } else {
-        socket.emit('choiceQuestionIncorrect', { sessionId });
+        socket.emit('choiceQuestionIncorrect', { sessionId, questionIndex: actualIndex, currentIndex });
     }
 }
 

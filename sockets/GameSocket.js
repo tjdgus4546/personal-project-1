@@ -586,7 +586,7 @@ module.exports = (io, app) => {
     });
 
     // 클라이언트에서 정답 판별 후 전송하는 이벤트
-    socket.on('correct', async ({ sessionId }) => {
+    socket.on('correct', async ({ sessionId, questionIndex, currentIndex }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         const session = await safeFindSessionById(GameSession, sessionId);
@@ -599,14 +599,14 @@ module.exports = (io, app) => {
         const player = session.players[playerIndex];
         if (!player) return;
 
-        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        // 클라이언트에서 받은 문제 인덱스 사용 (네트워크 지연 대응)
+        const actualQuestionIndex = questionIndex !== undefined ? questionIndex : session.questionOrder[session.currentQuestionIndex];
         const qIndex = String(actualQuestionIndex);
 
+        // 중복 정답 방지
         if (player.answered?.[qIndex]) {
           return;
         }
-
-        if (player.answered?.[qIndex]) return;
 
         const displayName = player.nickname || 'Unknown';
 
@@ -681,7 +681,7 @@ module.exports = (io, app) => {
     });
 
     //객관식 문제 정답처리
-    socket.on('choiceQuestionCorrect', async ({ sessionId }) => {
+    socket.on('choiceQuestionCorrect', async ({ sessionId, questionIndex, currentIndex }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         const session = await safeFindSessionById(GameSession, sessionId);
@@ -694,7 +694,8 @@ module.exports = (io, app) => {
         const player = session.players[playerIndex];
         if (!player) return;
 
-        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        // 클라이언트에서 받은 문제 인덱스 사용 (네트워크 지연 대응)
+        const actualQuestionIndex = questionIndex !== undefined ? questionIndex : session.questionOrder[session.currentQuestionIndex];
         const qIndex = String(actualQuestionIndex);
 
         if (player.answered?.[qIndex]) return;
@@ -726,7 +727,7 @@ module.exports = (io, app) => {
       }
     });
 
-    socket.on('choiceQuestionIncorrect', async ({sessionId}) => {
+    socket.on('choiceQuestionIncorrect', async ({sessionId, questionIndex, currentIndex}) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         const session = await safeFindSessionById(GameSession, sessionId);
@@ -739,7 +740,8 @@ module.exports = (io, app) => {
         const player = session.players[playerIndex];
         if (!player) return;
 
-        const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+        // 클라이언트에서 받은 문제 인덱스 사용 (네트워크 지연 대응)
+        const actualQuestionIndex = questionIndex !== undefined ? questionIndex : session.questionOrder[session.currentQuestionIndex];
         const qIndex = String(actualQuestionIndex);
 
         if (player.answered?.[qIndex]) return;
