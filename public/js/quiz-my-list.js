@@ -199,7 +199,7 @@ function createQuizCard(quiz) {
 
                 <div class="flex gap-2 mt-2">
                     <button
-                        onclick="event.stopPropagation(); openEditModal('${quiz._id}', '${escapeHtml(quiz.title)}', '${escapeHtml(quiz.description || '')}')"
+                        onclick="event.stopPropagation(); openEditModal('${quiz._id}')"
                         class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors"
                     >
                         퀴즈 수정
