@@ -959,14 +959,40 @@ export async function saveQuestion() {
         return;
     }
 
+    // 🔄 정답 입력란에 값이 있으면 자동으로 추가
+    const answerInput = document.getElementById('answerInput');
+    const answerInputValue = answerInput?.value?.trim();
+
     if (currentAnswers.length === 0) {
-        showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
-        return;
+        // 정답이 없는데 입력란에 값이 있으면 자동 추가
+        if (answerInputValue) {
+            currentAnswers.push(answerInputValue);
+            answerInput.value = ''; // 입력란 초기화
+            renderAnswers(); // 화면 업데이트
+            devLog('✅ 정답 입력란의 값을 자동으로 추가했습니다:', answerInputValue);
+        } else {
+            showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
+            return;
+        }
     }
 
-    if (isChoice && currentIncorrects.length === 0) {
-        showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
-        return;
+    // 🔄 객관식: 오답 입력란에 값이 있으면 자동으로 추가
+    if (isChoice) {
+        const incorrectInput = document.getElementById('incorrectInput');
+        const incorrectInputValue = incorrectInput?.value?.trim();
+
+        if (currentIncorrects.length === 0) {
+            // 오답이 없는데 입력란에 값이 있으면 자동 추가
+            if (incorrectInputValue) {
+                currentIncorrects.push(incorrectInputValue);
+                incorrectInput.value = ''; // 입력란 초기화
+                renderIncorrects(); // 화면 업데이트
+                devLog('✅ 오답 입력란의 값을 자동으로 추가했습니다:', incorrectInputValue);
+            } else {
+                showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
+                return;
+            }
+        }
     }
 
     // 기본 문제 데이터
