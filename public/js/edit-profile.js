@@ -5,11 +5,11 @@ let newProfileImageBase64 = null;
 let removeCurrentImage = false;
 
 // 이미지를 리사이즈하여 Base64로 변환
-async function resizeImageToBase64(file, maxKB = 200, minKB = 30) {
+async function resizeImageToBase64(file, maxKB = 1024, minKB = 100) {
     return new Promise((resolve, reject) => {
         const sizeMB = file.size / (1024 * 1024);
-        if (sizeMB > 5) {
-            return reject(new Error('5MB를 초과한 이미지는 업로드할 수 없습니다.'));
+        if (sizeMB > 10) {
+            return reject(new Error('10MB를 초과한 이미지는 업로드할 수 없습니다.'));
         }
 
         const reader = new FileReader();
@@ -25,7 +25,8 @@ async function resizeImageToBase64(file, maxKB = 200, minKB = 30) {
                     canvas.width = img.width * scale;
                     canvas.height = img.height * scale;
 
-                    let qualities = sizeMB >= 2 ? [0.5, 0.3, 0.1] : [0.9, 0.8, 0.7, 0.6];
+                    // 더 높은 품질 우선 시도
+                    let qualities = sizeMB >= 5 ? [0.8, 0.7, 0.5, 0.3] : [0.95, 0.9, 0.85, 0.8, 0.7];
 
                     for (let q of qualities) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -41,18 +42,18 @@ async function resizeImageToBase64(file, maxKB = 200, minKB = 30) {
                     return false;
                 };
 
-                // 다양한 스케일로 시도
-                const scales = [1.0, 0.8, 0.6, 0.4];
+                // 다양한 스케일로 시도 (더 큰 해상도부터)
+                const scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5];
                 for (let s of scales) {
                     if (tryResize(s)) return;
                 }
 
-                // 폴백
-                canvas.width = img.width * 0.3;
-                canvas.height = img.height * 0.3;
+                // 폴백 (최소 품질)
+                canvas.width = img.width * 0.5;
+                canvas.height = img.height * 0.5;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const fallback = canvas.toDataURL('image/jpeg', 0.3);
+                const fallback = canvas.toDataURL('image/jpeg', 0.6);
                 resolve(fallback);
             };
             img.onerror = reject;

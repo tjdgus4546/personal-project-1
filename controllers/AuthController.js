@@ -278,10 +278,10 @@ const updateProfile = async (req, res) => {
         return res.status(400).json({ message: '유효하지 않은 이미지 형식입니다.' });
       }
 
-      // 이미지 크기 확인 (Base64 디코딩 후 대략 200KB 이하)
+      // 이미지 크기 확인 (Base64 디코딩 후 대략 1MB 이하)
       const imageSize = Math.round((profileImage.length * 3) / 4 / 1024); // KB
-      if (imageSize > 200) {
-        return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 200KB)' });
+      if (imageSize > 1024) {
+        return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 1MB)' });
       }
 
       try {
