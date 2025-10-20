@@ -87,6 +87,7 @@ const blockedIPCache = new Set();
 let lastCacheUpdate = 0;
 const CACHE_TTL = 60 * 1000; // 1분마다 갱신
 let isCacheReady = false; // 🛡️ 초기 캐시 로드 완료 여부
+let isUpdatingCache = false; // 🛡️ 캐시 갱신 중 플래그 (중복 호출 방지)
 
 // 정리 주기 (10분마다 오래된 기록 삭제)
 setInterval(() => {
@@ -134,6 +135,13 @@ function isSuspiciousPath(path) {
 
 // ⚡ 차단된 IP 캐시 갱신 (1분마다)
 async function updateBlockedIPCache(BlockedIP) {
+  // 🛡️ 이미 갱신 중이면 중복 실행 방지
+  if (isUpdatingCache) {
+    return;
+  }
+
+  isUpdatingCache = true; // 락 설정
+
   try {
     const blockedIPs = await BlockedIP.find({
       isActive: true,
@@ -155,6 +163,8 @@ async function updateBlockedIPCache(BlockedIP) {
     console.error('❌ IP 캐시 갱신 실패:', err);
     // 🛡️ 에러 발생 시에도 계속 작동 (fail-open)
     isCacheReady = true;
+  } finally {
+    isUpdatingCache = false; // 락 해제
   }
 }
 
@@ -303,8 +313,8 @@ function botBlocker(userDb) {
 
       // ⚡ 캐시 갱신 (1분마다, 백그라운드)
       const now = Date.now();
-      if (now - lastCacheUpdate > CACHE_TTL) {
-        updateBlockedIPCache(BlockedIP); // 비동기 실행 (기다리지 않음)
+      if (now - lastCacheUpdate > CACHE_TTL && !isUpdatingCache) {
+        updateBlockedIPCache(BlockedIP); // 비동기 실행 (기다리지 않음, 락으로 중복 방지)
       }
 
       // 1. ⚡ 메모리 캐시로 블랙리스트 확인 (MongoDB 쿼리 없음!)
