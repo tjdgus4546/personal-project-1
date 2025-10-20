@@ -60,11 +60,12 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
+        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId -questions')
+        // -questions: 문제 배열 제외 (imageBase64, answerImageBase64 포함되어 있어 용량 큼!)
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit))
-        .lean(); // ⚡ lean() 추가로 성능 향상 (mongoose 객체 변환 생략)
+        .lean();
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
 
