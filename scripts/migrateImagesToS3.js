@@ -174,17 +174,34 @@ async function migrateAllQuizzes() {
 
     const Quiz = quizDb.model('Quiz', new mongoose.Schema({}, { strict: false }));
 
-    // 마이그레이션 대상 퀴즈 조회 (Base64가 있는 퀴즈만)
-    console.log('🔍 마이그레이션 대상 퀴즈 조회 중...');
-    const quizzesWithBase64 = await Quiz.find({
-      $or: [
-        { titleImageBase64: { $regex: '^data:image' } }, // Base64로 시작
-        { 'questions.imageBase64': { $regex: '^data:image' } },
-        { 'questions.answerImageBase64': { $regex: '^data:image' } }
-      ]
-    }).lean();
+    // 🔥 마이그레이션 대상 퀴즈 조회 (모든 퀴즈 가져오고 JavaScript에서 필터링)
+    console.log('🔍 모든 퀴즈 조회 중...');
+    const allQuizzes = await Quiz.find({}).lean();
 
-    console.log(`📊 총 ${quizzesWithBase64.length}개 퀴즈 발견\n`);
+    console.log(`📊 총 ${allQuizzes.length}개 퀴즈 조회 완료`);
+    console.log('🔍 Base64 이미지가 있는 퀴즈 필터링 중...');
+
+    // JavaScript에서 Base64 필터링 (훨씬 빠름!)
+    const quizzesWithBase64 = allQuizzes.filter(quiz => {
+      // 썸네일이 Base64인지
+      if (quiz.titleImageBase64 && quiz.titleImageBase64.startsWith('data:image')) {
+        return true;
+      }
+
+      // 문제 이미지가 Base64인지
+      if (quiz.questions && Array.isArray(quiz.questions)) {
+        for (const q of quiz.questions) {
+          if ((q.imageBase64 && q.imageBase64.startsWith('data:image')) ||
+              (q.answerImageBase64 && q.answerImageBase64.startsWith('data:image'))) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    });
+
+    console.log(`📊 총 ${quizzesWithBase64.length}개 퀴즈에서 Base64 이미지 발견\n`);
 
     if (quizzesWithBase64.length === 0) {
       console.log('✅ 마이그레이션할 퀴즈가 없습니다!');
