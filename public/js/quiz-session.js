@@ -1047,12 +1047,20 @@ async function toggleRecommendation() {
     }
 
     const quizId = sessionData.quiz._id;
+
+    // 양쪽 버튼 모두 가져오기
     const recommendBtn = document.getElementById('recommendBtn');
+    const endRecommendBtn = document.getElementById('endRecommendBtn');
+
     const recommendIcon = document.getElementById('recommendIcon');
     const recommendCount = document.getElementById('recommendCount');
 
+    const endRecommendIcon = document.getElementById('endRecommendIcon');
+    const endRecommendCount = document.getElementById('endRecommendCount');
+
     // 버튼 비활성화 (중복 클릭 방지)
     if (recommendBtn) recommendBtn.disabled = true;
+    if (endRecommendBtn) endRecommendBtn.disabled = true;
 
     try {
         const response = await fetchWithAuth(`/quiz/${quizId}/recommend`, {
@@ -1070,18 +1078,24 @@ async function toggleRecommendation() {
         const data = await response.json();
 
         if (data.success) {
-            // 아이콘 및 추천 수 업데이트
-            if (data.recommended) {
-                recommendIcon.src = '/images/Thumbsup2.png';
-            } else {
-                recommendIcon.src = '/images/Thumbsup1.png';
-            }
+            // 아이콘 및 추천 수 업데이트 (양쪽 모두)
+            const newIconSrc = data.recommended ? '/images/Thumbsup2.png' : '/images/Thumbsup1.png';
 
-            recommendCount.textContent = data.recommendationCount;
+            if (recommendIcon) recommendIcon.src = newIconSrc;
+            if (endRecommendIcon) endRecommendIcon.src = newIconSrc;
+
+            if (recommendCount) recommendCount.textContent = data.recommendationCount;
+            if (endRecommendCount) endRecommendCount.textContent = data.recommendationCount;
 
             // sessionData 업데이트
             sessionData.quiz.hasRecommended = data.recommended;
             sessionData.quiz.recommendationCount = data.recommendationCount;
+
+            // quizData도 업데이트 (종료 화면에서 사용)
+            if (quizData) {
+                quizData.hasRecommended = data.recommended;
+                quizData.recommendationCount = data.recommendationCount;
+            }
         }
     } catch (error) {
         console.error('추천 처리 오류:', error);
@@ -1089,15 +1103,22 @@ async function toggleRecommendation() {
     } finally {
         // 버튼 재활성화
         if (recommendBtn) recommendBtn.disabled = false;
+        if (endRecommendBtn) endRecommendBtn.disabled = false;
     }
 }
 
 // 이벤트 리스너 설정
 function setupEventListeners() {
-    // 추천 버튼
+    // 추천 버튼 (대기 화면)
     const recommendBtn = document.getElementById('recommendBtn');
     if (recommendBtn) {
         recommendBtn.addEventListener('click', toggleRecommendation);
+    }
+
+    // 추천 버튼 (종료 화면)
+    const endRecommendBtn = document.getElementById('endRecommendBtn');
+    if (endRecommendBtn) {
+        endRecommendBtn.addEventListener('click', toggleRecommendation);
     }
 
     // 스킵 투표 버튼
@@ -1517,6 +1538,20 @@ function showGameEndScreen(players) {
     // 종료 화면 표시
     const gameEndSection = document.getElementById('gameEndSection');
     gameEndSection.classList.remove('hidden');
+
+    // 종료 화면에 퀴즈 정보 표시
+    if (quizData) {
+        document.getElementById('endQuizTitle').textContent = quizData.title;
+        document.getElementById('endRecommendCount').textContent = quizData.recommendationCount || 0;
+
+        // 추천 상태에 따라 아이콘 변경
+        const endRecommendIcon = document.getElementById('endRecommendIcon');
+        if (quizData.hasRecommended) {
+            endRecommendIcon.src = '/images/Thumbsup2.png';
+        } else {
+            endRecommendIcon.src = '/images/Thumbsup1.png';
+        }
+    }
 
     // 최종 순위 렌더링
     renderFinalRanking(players);

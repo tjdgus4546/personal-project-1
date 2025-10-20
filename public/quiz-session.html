@@ -378,6 +378,18 @@
           <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 mb-2">
             퀴즈 종료!
           </h1>
+
+          <!-- 퀴즈 제목 + 추천 버튼 -->
+          <div class="flex items-center justify-center gap-3 mb-3">
+            <h2 id="endQuizTitle" class="text-2xl font-bold text-white">-</h2>
+
+            <!-- 추천 버튼 -->
+            <button id="endRecommendBtn" class="group flex items-center gap-1.5 bg-gray-700/50 px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-gray-600/50 border border-gray-500">
+              <img id="endRecommendIcon" src="/images/Thumbsup1.png" alt="추천" class="w-5 h-5 transition-transform duration-200 group-hover:scale-110">
+              <span id="endRecommendCount" class="text-white font-semibold text-sm">0</span>
+            </button>
+          </div>
+
           <p class="text-gray-300">
             <span>제작자: </span><span id="endCreatorNickname" class="font-semibold text-white">-</span><span>, 수고하셨습니다! 최종 순위를 확인해보세요.</span>
           </p>
