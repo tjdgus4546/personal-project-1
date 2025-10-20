@@ -77,11 +77,21 @@ module.exports = (quizDb) => {
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
 
-      // 🔍 디버깅: questions가 실제로 제외되었는지 확인
+      // 🔍 디버깅: titleImageBase64 크기 확인
       if (quizzes.length > 0) {
-        console.log(`🔍 첫 번째 퀴즈에 questions 있나?`, quizzes[0]?.questions ? 'YES (문제!)' : 'NO (정상)');
-        console.log(`🔍 questions 배열 길이:`, quizzes[0]?.questions?.length || 0);
-        console.log(`🔍 첫 번째 퀴즈 필드 목록:`, Object.keys(quizzes[0]).join(', '));
+        const imageSizes = quizzes.map((q, i) => ({
+          index: i,
+          size: (q.titleImageBase64?.length || 0) / 1024
+        }));
+        const totalImageSize = imageSizes.reduce((sum, img) => sum + img.size, 0);
+        const avgImageSize = totalImageSize / quizzes.length;
+
+        console.log(`🖼️ 평균 이미지 크기: ${avgImageSize.toFixed(2)} KB`);
+        console.log(`🖼️ 전체 이미지 크기: ${totalImageSize.toFixed(2)} KB`);
+
+        // 가장 큰 이미지 3개 찾기
+        const top3 = imageSizes.sort((a, b) => b.size - a.size).slice(0, 3);
+        console.log(`🖼️ 가장 큰 이미지 TOP3:`, top3.map(img => `${img.size.toFixed(0)}KB`).join(', '));
       }
 
       // 🔍 디버깅: 실제 응답 크기 확인
