@@ -6,11 +6,13 @@ const connectDB = async () => {
   try {
     // 사용자 DB 연결
     const userDb = await mongoose.createConnection(process.env.USER_DB_URI, {
+      autoIndex: true, // 🔧 인덱스 자동 생성 활성화
     });
     console.log('UserDB 연결 성공');
 
     // 퀴즈 DB 연결
     const quizDb = await mongoose.createConnection(process.env.QUIZ_DB_URI, {
+      autoIndex: true, // 🔧 인덱스 자동 생성 활성화
     });
     console.log('QuizDB 연결 성공');
 
