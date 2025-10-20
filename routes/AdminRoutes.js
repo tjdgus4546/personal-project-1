@@ -177,6 +177,7 @@ router.get('/quizzes/search', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(searchQuery),
       Quiz.find(searchQuery)
+        .select('-questions -reports -modificationLogs -creationLog') // 🔥 큰 필드 전부 제외! (임시 해결책)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -231,6 +232,7 @@ router.get('/quizzes', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(filterQuery),
       Quiz.find(filterQuery)
+        .select('-questions -reports -modificationLogs -creationLog') // 🔥 큰 필드 전부 제외! (임시 해결책)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -415,6 +417,7 @@ router.get('/reported-quizzes', async (req, res) => {
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments({ 'reports.0': { $exists: true } }),
       Quiz.find({ 'reports.0': { $exists: true } })
+        .select('-questions -modificationLogs -creationLog') // 🔥 큰 필드 제외! (reports는 필요하므로 유지, 임시 해결책)
         .sort({ 'reports.0.reportedAt': -1 })
         .skip(skip)
         .limit(limit)

@@ -1,5 +1,6 @@
 const express = require('express');
 const { ObjectId } = require('mongoose').Types;
+const { uploadQuizImagesToS3 } = require('../utils/s3Uploader'); // 🔥 S3 업로드
 
 module.exports = (quizDb) => {
   const publicRouter = express.Router();
@@ -318,11 +319,13 @@ module.exports = (quizDb) => {
       if (!title) {
         return res.status(400).json({ message: '퀴즈 제목은 필수입니다.' });
       }
+
+      // 🔥 임시 퀴즈 생성 (ID 먼저 생성)
       const newQuiz = new Quiz({
         title,
         description,
         creatorId: req.user.id,
-        titleImageBase64,
+        titleImageBase64: titleImageBase64 || '', // 임시로 Base64 저장
         questions: [],
         isComplete: false,
         creationLog: {
@@ -331,6 +334,22 @@ module.exports = (quizDb) => {
         }
       });
       await newQuiz.save();
+
+      // 🔥 S3에 썸네일 업로드
+      if (titleImageBase64 && !titleImageBase64.startsWith('http')) {
+        try {
+          const updatedData = await uploadQuizImagesToS3(
+            { titleImageBase64 },
+            newQuiz._id.toString()
+          );
+          newQuiz.titleImageBase64 = updatedData.titleImageBase64;
+          await newQuiz.save();
+        } catch (s3Error) {
+          console.error('S3 업로드 실패 (퀴즈는 생성됨):', s3Error);
+          // S3 업로드 실패해도 Base64로 유지하고 계속 진행
+        }
+      }
+
       res.status(201).json({ message: '퀴즈 생성 시작됨', quizId: newQuiz._id });
     } catch (err) {
       console.error('퀴즈 init 오류:', err);
@@ -376,6 +395,18 @@ module.exports = (quizDb) => {
             order: index + 1,
             timeLimit: q.timeLimit || 90
         }));
+
+        // 🔥 S3에 이미지 업로드
+        try {
+          const updatedData = await uploadQuizImagesToS3(
+            { questions: quiz.questions },
+            quiz._id.toString()
+          );
+          quiz.questions = updatedData.questions;
+        } catch (s3Error) {
+          console.error('S3 업로드 실패 (Base64로 유지):', s3Error);
+          // S3 업로드 실패해도 Base64로 유지하고 계속 진행
+        }
 
         // IP 로그 추가
         quiz.modificationLogs.push({
@@ -483,8 +514,23 @@ module.exports = (quizDb) => {
         const updateFields = {};
         if (title !== undefined) updateFields.title = title;
         if (description !== undefined) updateFields.description = description;
-        if (titleImageBase64 !== undefined) updateFields.titleImageBase64 = titleImageBase64;
         if (isRandomOrder !== undefined) updateFields.isRandomOrder = isRandomOrder;
+
+        // 🔥 S3에 썸네일 이미지 업로드
+        if (titleImageBase64 !== undefined && !titleImageBase64.startsWith('http')) {
+          try {
+            const updatedData = await uploadQuizImagesToS3(
+              { titleImageBase64 },
+              req.params.id
+            );
+            updateFields.titleImageBase64 = updatedData.titleImageBase64;
+          } catch (s3Error) {
+            console.error('S3 업로드 실패 (Base64로 유지):', s3Error);
+            updateFields.titleImageBase64 = titleImageBase64; // 실패 시 Base64로 유지
+          }
+        } else if (titleImageBase64 !== undefined) {
+          updateFields.titleImageBase64 = titleImageBase64; // 이미 S3 URL인 경우
+        }
 
         // 작성자이거나 관리자인지 확인
         const isCreator = existingQuiz.creatorId.toString() === req.user.id;
@@ -561,6 +607,18 @@ module.exports = (quizDb) => {
             quiz.questions.push(questionToSave);
         } else {
             quiz.questions[index] = questionToSave;
+        }
+
+        // 🔥 S3에 이미지 업로드 (해당 문제만)
+        try {
+          const updatedData = await uploadQuizImagesToS3(
+            { questions: quiz.questions },
+            quiz._id.toString()
+          );
+          quiz.questions = updatedData.questions;
+        } catch (s3Error) {
+          console.error('S3 업로드 실패 (Base64로 유지):', s3Error);
+          // S3 업로드 실패해도 Base64로 유지하고 계속 진행
         }
 
         // IP 로그 추가
