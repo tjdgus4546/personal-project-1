@@ -60,7 +60,7 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('title description createdAt completedGameCount recommendationCount creatorId')
+        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit))
