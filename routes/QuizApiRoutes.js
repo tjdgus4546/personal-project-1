@@ -39,6 +39,7 @@ module.exports = (quizDb) => {
 
   // 공개된 퀴즈 목록만 반환 (메인페이지용)
   publicRouter.get('/quiz/list', async (req, res) => {
+    const startTime = Date.now();
     const { page = 1, limit = 20, sort = 'popular' } = req.query;
     const skip = (page - 1) * limit;
 
@@ -57,11 +58,14 @@ module.exports = (quizDb) => {
           break;
       }
 
+      const t1 = Date.now();
       const quizzes = await Quiz.find({ isComplete: true })
         .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit));
+      const t2 = Date.now();
+      console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
 
       // 제작자 정보 추가 (N+1 쿼리 방지 - 한 번에 조회)
       const userDb = req.app.get('userDb');
@@ -75,9 +79,12 @@ module.exports = (quizDb) => {
       )];
 
       // 2. 한 번에 모든 사용자 조회
+      const t3 = Date.now();
       const creators = await User.find({ _id: { $in: creatorIds } })
         .select('_id nickname')
         .lean();
+      const t4 = Date.now();
+      console.log(`⏱️ User DB 조회 시간: ${t4 - t3}ms (${creators.length}명)`);
 
       // 3. Map으로 변환 (O(1) 조회)
       const creatorMap = new Map(creators.map(c => [c._id.toString(), c.nickname]));
@@ -97,6 +104,9 @@ module.exports = (quizDb) => {
       });
 
       const hasMore = quizzes.length === parseInt(limit);
+
+      const totalTime = Date.now() - startTime;
+      console.log(`⏱️ 전체 API 응답 시간: ${totalTime}ms`);
 
       res.json({ quizzes: quizzesWithCreator, hasMore, page: parseInt(page), limit: parseInt(limit), sort: sort });
     } catch (err) {
