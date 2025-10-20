@@ -60,13 +60,25 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
 
-      // 🔧 필요한 필드만 명시적으로 선택 (questions 배열 제외!)
-      const quizzes = await Quiz.find({ isComplete: true })
-        .select('_id title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId isRandomOrder')
+      // 🔥 Native MongoDB Collection 사용 (Mongoose select가 안 먹혀서)
+      const QuizCollection = Quiz.collection;
+      const quizzes = await QuizCollection.find({ isComplete: true })
+        .project({
+          _id: 1,
+          title: 1,
+          description: 1,
+          titleImageBase64: 1,
+          createdAt: 1,
+          completedGameCount: 1,
+          recommendationCount: 1,
+          creatorId: 1,
+          isRandomOrder: 1,
+          // questions: 0 명시적으로 제외!
+        })
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit))
-        .lean();
+        .toArray();
 
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
@@ -82,7 +94,7 @@ module.exports = (quizDb) => {
       // 1. 모든 creatorId 수집 (seized 제외)
       const creatorIds = [...new Set(
         quizzes
-          .map(q => q.creatorId)
+          .map(q => q.creatorId?.toString ? q.creatorId.toString() : q.creatorId)
           .filter(id => id !== 'seized' && id != null)
       )];
 
@@ -99,12 +111,14 @@ module.exports = (quizDb) => {
 
       // 4. 퀴즈에 제작자 정보 추가 (DB 조회 없음!)
       const quizzesWithCreator = quizzes.map((quiz) => {
-        // lean()으로 이미 plain object이므로 toObject() 불필요
+        // Native collection이므로 이미 plain object
+        const creatorIdStr = quiz.creatorId?.toString ? quiz.creatorId.toString() : quiz.creatorId;
+
         // 압수된 퀴즈는 제작자를 "관리자"로 표시
-        if (quiz.creatorId === 'seized') {
+        if (creatorIdStr === 'seized') {
           quiz.creatorNickname = '관리자';
         } else {
-          quiz.creatorNickname = creatorMap.get(quiz.creatorId?.toString()) || '알 수 없음';
+          quiz.creatorNickname = creatorMap.get(creatorIdStr) || '알 수 없음';
         }
 
         return quiz;
