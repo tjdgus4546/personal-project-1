@@ -157,8 +157,6 @@ async function updateBlockedIPCache(BlockedIP) {
     blockedIPs.forEach(doc => blockedIPCache.add(doc.ip));
     lastCacheUpdate = Date.now();
     isCacheReady = true; // 🛡️ 초기 로드 완료
-
-    console.log(`✅ IP 차단 캐시 갱신 완료: ${blockedIPs.length}개`);
   } catch (err) {
     console.error('❌ IP 캐시 갱신 실패:', err);
     // 🛡️ 에러 발생 시에도 계속 작동 (fail-open)

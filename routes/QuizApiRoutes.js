@@ -58,8 +58,6 @@ module.exports = (quizDb) => {
           break;
       }
 
-      const t1 = Date.now();
-
       // 🔥 Native MongoDB Collection 사용 - 불필요한 배열 제외!
       const QuizCollection = Quiz.collection;
       const quizzes = await QuizCollection.find({ isComplete: true })

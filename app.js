@@ -130,9 +130,6 @@ connectDB().then(({ userDb, quizDb }) => {
   const botBlocker = require('./middlewares/BotBlocker');
   app.use(botBlocker(userDb));
 
-  // 📊 메모리 사용량 모니터링 (30분마다) - gameSocketMonitor 선언 후에 설정
-  let memoryMonitorInterval = null;
-
   // 접속 로그 수집 미들웨어 (실제 페이지 조회만 카운트)
   const AccessLog = require('./models/AccessLog')(userDb);
   app.use((req, res, next) => {
@@ -232,29 +229,6 @@ connectDB().then(({ userDb, quizDb }) => {
   });
   // 소켓 로직 파일 연결
   const gameSocketMonitor = require('./sockets/GameSocket')(io, app);
-
-  // 📊 메모리 모니터링 시작
-  memoryMonitorInterval = setInterval(() => {
-    const used = process.memoryUsage();
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📊 메모리 사용량 [${new Date().toLocaleString('ko-KR')}]`);
-    console.log(`RSS: ${Math.round(used.rss / 1024 / 1024)}MB (전체 메모리)`);
-    console.log(`Heap Used: ${Math.round(used.heapUsed / 1024 / 1024)}MB / ${Math.round(used.heapTotal / 1024 / 1024)}MB`);
-    console.log(`External: ${Math.round(used.external / 1024 / 1024)}MB`);
-
-    // GameSocket 캐시 크기
-    if (gameSocketMonitor) {
-      console.log(`sessionUserCache: ${gameSocketMonitor.getSessionUserCacheSize()}개`);
-      console.log(`disconnectTimers: ${gameSocketMonitor.getDisconnectTimersSize()}개`);
-    }
-
-    // firstCorrectUsers 크기
-    if (app.firstCorrectUsers) {
-      console.log(`firstCorrectUsers: ${Object.keys(app.firstCorrectUsers).length}개`);
-    }
-
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━');
-  }, 30 * 60 * 1000); // 30분마다
 
   // ===== 에러 핸들러 (모든 라우트 정의 후 마지막에 배치) =====
 
