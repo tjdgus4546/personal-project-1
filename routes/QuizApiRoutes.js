@@ -60,8 +60,9 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId -questions')
-        // -questions: 문제 배열 제외 (imageBase64, answerImageBase64 포함되어 있어 용량 큼!)
+        .select('-questions -reports')
+        // questions 배열 제외 (imageBase64, answerImageBase64 때문에 용량 큼!)
+        // reports 배열도 제외 (불필요한 데이터)
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit))
