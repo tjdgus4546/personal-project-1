@@ -75,6 +75,13 @@ module.exports = (quizDb) => {
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
 
+      // 🔍 디버깅: questions가 실제로 제외되었는지 확인
+      if (quizzes.length > 0) {
+        console.log(`🔍 첫 번째 퀴즈에 questions 있나?`, quizzes[0]?.questions ? 'YES (문제!)' : 'NO (정상)');
+        console.log(`🔍 questions 배열 길이:`, quizzes[0]?.questions?.length || 0);
+        console.log(`🔍 첫 번째 퀴즈 필드 목록:`, Object.keys(quizzes[0]).join(', '));
+      }
+
       // 🔍 디버깅: 실제 응답 크기 확인
       const totalSize = JSON.stringify(quizzes).length;
       console.log(`📦 응답 데이터 크기: ${(totalSize / 1024).toFixed(2)} KB`);
