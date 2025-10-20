@@ -40,7 +40,6 @@ module.exports = (quizDb) => {
 
   // 공개된 퀴즈 목록만 반환 (메인페이지용)
   publicRouter.get('/quiz/list', async (req, res) => {
-    const startTime = Date.now();
     const { page = 1, limit = 20, sort = 'popular' } = req.query;
     const skip = (page - 1) * limit;
 
@@ -75,30 +74,6 @@ module.exports = (quizDb) => {
         .limit(parseInt(limit))
         .toArray();
 
-      const t2 = Date.now();
-      console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
-
-      // 🔍 디버깅: titleImageBase64 크기 확인
-      if (quizzes.length > 0) {
-        const imageSizes = quizzes.map((q, i) => ({
-          index: i,
-          size: (q.titleImageBase64?.length || 0) / 1024
-        }));
-        const totalImageSize = imageSizes.reduce((sum, img) => sum + img.size, 0);
-        const avgImageSize = totalImageSize / quizzes.length;
-
-        console.log(`🖼️ 평균 이미지 크기: ${avgImageSize.toFixed(2)} KB`);
-        console.log(`🖼️ 전체 이미지 크기: ${totalImageSize.toFixed(2)} KB`);
-
-        // 가장 큰 이미지 3개 찾기
-        const top3 = imageSizes.sort((a, b) => b.size - a.size).slice(0, 3);
-        console.log(`🖼️ 가장 큰 이미지 TOP3:`, top3.map(img => `${img.size.toFixed(0)}KB`).join(', '));
-      }
-
-      // 🔍 디버깅: 실제 응답 크기 확인
-      const totalSize = JSON.stringify(quizzes).length;
-      console.log(`📦 응답 데이터 크기: ${(totalSize / 1024).toFixed(2)} KB`);
-
       // 제작자 정보 추가 (N+1 쿼리 방지 - 한 번에 조회)
       const userDb = req.app.get('userDb');
       const User = require('../models/User')(userDb);
@@ -111,12 +86,9 @@ module.exports = (quizDb) => {
       )];
 
       // 2. 한 번에 모든 사용자 조회
-      const t3 = Date.now();
       const creators = await User.find({ _id: { $in: creatorIds } })
         .select('_id nickname')
         .lean();
-      const t4 = Date.now();
-      console.log(`⏱️ User DB 조회 시간: ${t4 - t3}ms (${creators.length}명)`);
 
       // 3. Map으로 변환 (O(1) 조회)
       const creatorMap = new Map(creators.map(c => [c._id.toString(), c.nickname]));
@@ -137,9 +109,6 @@ module.exports = (quizDb) => {
       });
 
       const hasMore = quizzes.length === parseInt(limit);
-
-      const totalTime = Date.now() - startTime;
-      console.log(`⏱️ 전체 API 응답 시간: ${totalTime}ms`);
 
       res.json({ quizzes: quizzesWithCreator, hasMore, page: parseInt(page), limit: parseInt(limit), sort: sort });
     } catch (err) {

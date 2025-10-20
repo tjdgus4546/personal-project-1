@@ -80,7 +80,6 @@ async function uploadImageToS3(base64String, folder, fileName) {
 
     // S3 URL 생성
     const s3Url = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || 'ap-northeast-2'}.amazonaws.com/${s3Key}`;
-    console.log(`✅ S3 업로드 성공: ${s3Key} (${(buffer.length / 1024).toFixed(2)} KB)`);
     return s3Url;
   } catch (error) {
     console.error(`❌ S3 업로드 실패:`, error);
@@ -142,7 +141,6 @@ async function deleteImageFromS3(s3Url) {
 
     const command = new DeleteObjectCommand(params);
     await s3Client.send(command);
-    console.log(`✅ S3 삭제 성공: ${key}`);
     return true;
   } catch (error) {
     console.error(`❌ S3 삭제 실패:`, error);

@@ -167,39 +167,53 @@ async function migrateAllQuizzes() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   try {
-    // QuizDB 연결
+    // QuizDB 연결 (타임아웃 설정 추가)
     console.log('📡 QuizDB 연결 중...');
-    const quizDb = await mongoose.createConnection(QUIZ_DB_URI).asPromise();
+    const quizDb = await mongoose.createConnection(QUIZ_DB_URI, {
+      serverSelectionTimeoutMS: 30000, // 30초
+      socketTimeoutMS: 3600000, // 1시간 (충분히 길게)
+      maxPoolSize: 10
+    }).asPromise();
     console.log('✅ QuizDB 연결 성공\n');
 
     const Quiz = quizDb.model('Quiz', new mongoose.Schema({}, { strict: false }));
 
-    // 🔥 마이그레이션 대상 퀴즈 조회 (모든 퀴즈 가져오고 JavaScript에서 필터링)
-    console.log('🔍 모든 퀴즈 조회 중...');
-    const allQuizzes = await Quiz.find({}).lean();
+    // 🔥 2단계 조회: 먼저 ID와 썸네일만 가져오기 (빠름!)
+    console.log('🔍 1단계: 퀴즈 목록 조회 중 (썸네일만)...');
+    const allQuizzes = await Quiz.find({})
+      .select('_id title titleImageBase64')
+      .lean();
 
     console.log(`📊 총 ${allQuizzes.length}개 퀴즈 조회 완료`);
-    console.log('🔍 Base64 이미지가 있는 퀴즈 필터링 중...');
+    console.log('🔍 2단계: Base64 이미지가 있는 퀴즈 찾는 중...');
 
-    // JavaScript에서 Base64 필터링 (훨씬 빠름!)
-    const quizzesWithBase64 = allQuizzes.filter(quiz => {
-      // 썸네일이 Base64인지
-      if (quiz.titleImageBase64 && quiz.titleImageBase64.startsWith('data:image')) {
-        return true;
-      }
+    // 썸네일이 Base64인 퀴즈 ID 수집
+    const quizIdsWithBase64Thumbnail = allQuizzes
+      .filter(q => q.titleImageBase64 && q.titleImageBase64.startsWith('data:image'))
+      .map(q => q._id);
 
-      // 문제 이미지가 Base64인지
-      if (quiz.questions && Array.isArray(quiz.questions)) {
-        for (const q of quiz.questions) {
-          if ((q.imageBase64 && q.imageBase64.startsWith('data:image')) ||
-              (q.answerImageBase64 && q.answerImageBase64.startsWith('data:image'))) {
-            return true;
-          }
-        }
-      }
+    console.log(`  - 썸네일 Base64: ${quizIdsWithBase64Thumbnail.length}개 퀴즈`);
 
-      return false;
+    // questions 배열에 Base64가 있는지 확인 (count만)
+    console.log('🔍 3단계: 문제 이미지 Base64 확인 중...');
+    const quizzesWithBase64Questions = await Quiz.countDocuments({
+      $or: [
+        { 'questions.imageBase64': { $exists: true, $ne: null, $ne: '' } },
+        { 'questions.answerImageBase64': { $exists: true, $ne: null, $ne: '' } }
+      ]
     });
+
+    console.log(`  - 문제 이미지 포함: ${quizzesWithBase64Questions}개 퀴즈 (예상)`);
+
+    // 실제로 questions 가져오기 (필요한 퀴즈만)
+    console.log('🔍 4단계: 전체 데이터 조회 중...');
+    const quizzesWithBase64 = await Quiz.find({
+      $or: [
+        { _id: { $in: quizIdsWithBase64Thumbnail } },
+        { 'questions.imageBase64': { $exists: true, $ne: null, $ne: '' } },
+        { 'questions.answerImageBase64': { $exists: true, $ne: null, $ne: '' } }
+      ]
+    }).lean();
 
     console.log(`📊 총 ${quizzesWithBase64.length}개 퀴즈에서 Base64 이미지 발견\n`);
 
