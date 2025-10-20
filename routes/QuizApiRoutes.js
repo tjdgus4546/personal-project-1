@@ -60,20 +60,12 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
 
-      // 🔥 Native MongoDB Collection 사용 (Mongoose select가 안 먹혀서)
+      // 🔥 Native MongoDB Collection 사용 - questions 배열 제외!
       const QuizCollection = Quiz.collection;
       const quizzes = await QuizCollection.find({ isComplete: true })
         .project({
-          _id: 1,
-          title: 1,
-          description: 1,
-          titleImageBase64: 1,
-          createdAt: 1,
-          completedGameCount: 1,
-          recommendationCount: 1,
-          creatorId: 1,
-          isRandomOrder: 1,
-          // questions: 0 명시적으로 제외!
+          questions: 0,  // ← 용량 큰 questions 배열 제외!
+          reports: 0,    // ← 불필요한 reports 배열 제외
         })
         .sort(sortCondition)
         .skip(skip)
