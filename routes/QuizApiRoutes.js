@@ -60,12 +60,14 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
 
-      // 🔥 Native MongoDB Collection 사용 - questions 배열 제외!
+      // 🔥 Native MongoDB Collection 사용 - 불필요한 배열 제외!
       const QuizCollection = Quiz.collection;
       const quizzes = await QuizCollection.find({ isComplete: true })
         .project({
-          questions: 0,  // ← 용량 큰 questions 배열 제외!
-          reports: 0,    // ← 불필요한 reports 배열 제외
+          questions: 0,          // ← 용량 큰 questions 배열 제외!
+          reports: 0,            // ← 불필요한 reports 배열 제외
+          modificationLogs: 0,   // ← 수정 로그 제외! (이게 범인!)
+          creationLog: 0,        // ← 생성 로그도 제외
         })
         .sort(sortCondition)
         .skip(skip)
