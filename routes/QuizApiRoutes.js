@@ -59,16 +59,21 @@ module.exports = (quizDb) => {
       }
 
       const t1 = Date.now();
+
+      // 🔧 필요한 필드만 명시적으로 선택 (questions 배열 제외!)
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('-questions -reports')
-        // questions 배열 제외 (imageBase64, answerImageBase64 때문에 용량 큼!)
-        // reports 배열도 제외 (불필요한 데이터)
+        .select('_id title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId isRandomOrder')
         .sort(sortCondition)
         .skip(skip)
         .limit(parseInt(limit))
         .lean();
+
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
+
+      // 🔍 디버깅: 실제 응답 크기 확인
+      const totalSize = JSON.stringify(quizzes).length;
+      console.log(`📦 응답 데이터 크기: ${(totalSize / 1024).toFixed(2)} KB`);
 
       // 제작자 정보 추가 (N+1 쿼리 방지 - 한 번에 조회)
       const userDb = req.app.get('userDb');
