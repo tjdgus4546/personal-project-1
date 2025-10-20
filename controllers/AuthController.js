@@ -3,7 +3,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { sendVerificationEmail, generateVerificationCode } = require('../utils/emailService');
-const { uploadProfileImage } = require('../utils/s3Uploader');
+const { uploadProfileImage, deleteImageFromS3 } = require('../utils/s3Uploader');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -285,7 +285,12 @@ const updateProfile = async (req, res) => {
       }
 
       try {
-        // S3에 업로드
+        // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
+        if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
+          await deleteImageFromS3(user.profileImage);
+        }
+
+        // 새 이미지 S3에 업로드
         const s3Url = await uploadProfileImage(profileImage, req.user.id);
         updateData.profileImage = s3Url;
       } catch (s3Error) {
@@ -293,6 +298,11 @@ const updateProfile = async (req, res) => {
         return res.status(500).json({ message: '프로필 이미지 업로드에 실패했습니다.' });
       }
     } else if (removeProfileImage) {
+      // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
+      if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
+        await deleteImageFromS3(user.profileImage);
+      }
+
       // 현재 이미지 제거 (OAuth 연동 사용자는 기본 이미지로 복원)
       if (user.naverId) {
         updateData.profileImage = 'https://ssl.pstatic.net/static/pwe/address/img_profile.png';

@@ -1,6 +1,6 @@
 const express = require('express');
 const { ObjectId } = require('mongoose').Types;
-const { uploadQuizImagesToS3 } = require('../utils/s3Uploader'); // 🔥 S3 업로드
+const { uploadQuizImagesToS3, deleteImageFromS3 } = require('../utils/s3Uploader'); // 🔥 S3 업로드
 
 module.exports = (quizDb) => {
   const publicRouter = express.Router();
@@ -346,6 +346,20 @@ module.exports = (quizDb) => {
           return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
+        // 이전 문제들의 S3 이미지 URL 수집
+        const bucketName = process.env.S3_BUCKET_NAME || 'playcode-quiz-images';
+        const oldImageUrls = new Set();
+        if (quiz.questions && Array.isArray(quiz.questions)) {
+          quiz.questions.forEach(q => {
+            if (q.imageBase64 && q.imageBase64.includes(bucketName)) {
+              oldImageUrls.add(q.imageBase64);
+            }
+            if (q.answerImageBase64 && q.answerImageBase64.includes(bucketName)) {
+              oldImageUrls.add(q.answerImageBase64);
+            }
+          });
+        }
+
         quiz.questions = questions.map((q, index) => ({
             questionType: q.questionType || 'text',
             text: q.text,
@@ -373,6 +387,26 @@ module.exports = (quizDb) => {
         } catch (s3Error) {
           console.error('S3 업로드 실패 (Base64로 유지):', s3Error);
           // S3 업로드 실패해도 Base64로 유지하고 계속 진행
+        }
+
+        // 새 문제들의 S3 이미지 URL 수집
+        const newImageUrls = new Set();
+        quiz.questions.forEach(q => {
+          if (q.imageBase64 && q.imageBase64.includes(bucketName)) {
+            newImageUrls.add(q.imageBase64);
+          }
+          if (q.answerImageBase64 && q.answerImageBase64.includes(bucketName)) {
+            newImageUrls.add(q.answerImageBase64);
+          }
+        });
+
+        // 더 이상 사용하지 않는 S3 이미지 삭제
+        for (const oldUrl of oldImageUrls) {
+          if (!newImageUrls.has(oldUrl)) {
+            await deleteImageFromS3(oldUrl).catch(err =>
+              console.error('이전 문제 이미지 삭제 실패:', err)
+            );
+          }
         }
 
         // IP 로그 추가
@@ -457,6 +491,32 @@ module.exports = (quizDb) => {
           return res.status(403).json({ message: '삭제 권한이 없습니다.' });
         }
 
+        // S3 이미지 삭제 (실패해도 퀴즈 삭제는 계속 진행)
+        const bucketName = process.env.S3_BUCKET_NAME || 'playcode-quiz-images';
+
+        // 썸네일 이미지 삭제
+        if (quiz.titleImageBase64 && quiz.titleImageBase64.includes(bucketName)) {
+          await deleteImageFromS3(quiz.titleImageBase64).catch(err =>
+            console.error('썸네일 삭제 실패:', err)
+          );
+        }
+
+        // 문제 이미지 및 정답 이미지 삭제
+        if (quiz.questions && Array.isArray(quiz.questions)) {
+          for (const question of quiz.questions) {
+            if (question.imageBase64 && question.imageBase64.includes(bucketName)) {
+              await deleteImageFromS3(question.imageBase64).catch(err =>
+                console.error('문제 이미지 삭제 실패:', err)
+              );
+            }
+            if (question.answerImageBase64 && question.answerImageBase64.includes(bucketName)) {
+              await deleteImageFromS3(question.answerImageBase64).catch(err =>
+                console.error('정답 이미지 삭제 실패:', err)
+              );
+            }
+          }
+        }
+
         await Quiz.findByIdAndDelete(req.params.id);
         res.json({ message: '퀴즈 삭제 성공' });
     } catch (err) {
@@ -486,6 +546,14 @@ module.exports = (quizDb) => {
         // 🔥 S3에 썸네일 이미지 업로드
         if (titleImageBase64 !== undefined && !titleImageBase64.startsWith('http')) {
           try {
+            // 이전 S3 썸네일 삭제
+            const bucketName = process.env.S3_BUCKET_NAME || 'playcode-quiz-images';
+            if (existingQuiz.titleImageBase64 && existingQuiz.titleImageBase64.includes(bucketName)) {
+              await deleteImageFromS3(existingQuiz.titleImageBase64).catch(err =>
+                console.error('이전 썸네일 삭제 실패:', err)
+              );
+            }
+
             const updatedData = await uploadQuizImagesToS3(
               { titleImageBase64 },
               req.params.id
@@ -553,6 +621,20 @@ module.exports = (quizDb) => {
             return res.status(400).json({ message: '잘못된 문제 인덱스입니다.' });
         }
 
+        // 이전 문제의 S3 이미지 URL 저장 (수정 시에만)
+        const bucketName = process.env.S3_BUCKET_NAME || 'playcode-quiz-images';
+        let oldQuestionImageUrl = null;
+        let oldAnswerImageUrl = null;
+        if (index < quiz.questions.length) {
+          const oldQuestion = quiz.questions[index];
+          if (oldQuestion.imageBase64 && oldQuestion.imageBase64.includes(bucketName)) {
+            oldQuestionImageUrl = oldQuestion.imageBase64;
+          }
+          if (oldQuestion.answerImageBase64 && oldQuestion.answerImageBase64.includes(bucketName)) {
+            oldAnswerImageUrl = oldQuestion.answerImageBase64;
+          }
+        }
+
         const questionToSave = {
             questionType: questionData.questionType || 'text',
             text: questionData.text,
@@ -586,6 +668,19 @@ module.exports = (quizDb) => {
         } catch (s3Error) {
           console.error('S3 업로드 실패 (Base64로 유지):', s3Error);
           // S3 업로드 실패해도 Base64로 유지하고 계속 진행
+        }
+
+        // 이전 문제 이미지가 변경된 경우 S3에서 삭제
+        const newQuestion = quiz.questions[index];
+        if (oldQuestionImageUrl && newQuestion.imageBase64 !== oldQuestionImageUrl) {
+          await deleteImageFromS3(oldQuestionImageUrl).catch(err =>
+            console.error('이전 문제 이미지 삭제 실패:', err)
+          );
+        }
+        if (oldAnswerImageUrl && newQuestion.answerImageBase64 !== oldAnswerImageUrl) {
+          await deleteImageFromS3(oldAnswerImageUrl).catch(err =>
+            console.error('이전 정답 이미지 삭제 실패:', err)
+          );
         }
 
         // IP 로그 추가
