@@ -482,34 +482,7 @@ function renderSkipStatus(voted, total) {
     document.getElementById('skipStatus').querySelector('span').textContent = `스킵 투표: ${voted} / ${total}`;
 }
 
-// 채팅 기록 불러오기
-async function loadChatHistory() {
-    try {
-        const startTime = Date.now();
-        const res = await fetchWithAuth(`/game/chat/${sessionId}`);
-        const data = await res.json();
-        
-        const chatLog = document.getElementById('chatLog');
-        
-        // DocumentFragment 사용으로 DOM 조작 최적화
-        const fragment = document.createDocumentFragment();
-        
-        data.messages.forEach(msg => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'p-3 rounded-lg bg-gray-700/50 border-l-4 border-blue-400';
-            
-            const displayName = msg.nickname || 'Unknown';
-            
-            messageDiv.innerHTML = `<span class="text-blue-400 font-medium">${displayName}:</span> <span class="text-gray-200">${msg.message}</span>`;
-            fragment.appendChild(messageDiv);
-        });
-        
-        chatLog.appendChild(fragment);
-        chatLog.scrollTop = chatLog.scrollHeight;
-    } catch (err) {
-        console.error('채팅 기록 불러오기 실패:', err);
-    }
-}
+// 채팅 기록 불러오기 기능 제거됨 - 새로고침 시 채팅 초기화
 
 // 일반 메시지 전송
 function sendMessage() {
@@ -1670,8 +1643,7 @@ async function initializePage() {
         // 사용자 정보 초기화 (userId 설정 후 joinSession 전송)
         await initializeUser();
 
-        // 채팅 기록은 비동기로 로드 (페이지 로딩 속도에 영향 없음)
-        loadChatHistory().catch(err => console.error('채팅 기록 로딩 실패:', err));
+        // 채팅 기록 로딩 기능 제거됨 - 새로고침 시 채팅 초기화
         
         
     } catch (error) {

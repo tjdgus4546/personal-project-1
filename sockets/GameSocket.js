@@ -55,7 +55,6 @@ module.exports = (io, app) => {
   const userDb = app.get('userDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
-  const ChatLog = require('../models/ChatLog')(quizDb);
   const sessionUserCache = new Map();
   const disconnectTimers = new Map(); // 사용자별 disconnect 타이머 저장
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
@@ -655,24 +654,6 @@ module.exports = (io, app) => {
             nickname: null,
             profileImage: null
         };
-
-        try {
-            await ChatLog.findOneAndUpdate(
-              { sessionId },
-              {
-                $push: {
-                  messages: {
-                    nickname: displayName,
-                    message: `${displayName}님이 정답을 맞혔습니다! 🎉`,
-                    createdAt: new Date()
-                  }
-                }
-              },
-              { upsert: true, new: true }
-            );
-        } catch (err) {
-          console.error('⌧ 정답 채팅 로그 저장 실패:', err.message);
-        }
 
         io.to(sessionId).emit('correct', {
           success: true,

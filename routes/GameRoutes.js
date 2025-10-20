@@ -254,19 +254,4 @@ router.get('/invite/:code', async (req, res) => {
   }
 });
 
-// GET /game/chat/:sessionId
-router.get('/chat/:sessionId', async (req, res) => {
-  const quizDb = req.app.get('quizDb');
-  const ChatLog = require('../models/ChatLog')(quizDb);
-
-  try {
-    const chatLog = await ChatLog.findOne({ sessionId: req.params.sessionId }).lean();
-    if (!chatLog) return res.json({ messages: [] });
-
-    res.json({ messages: chatLog.messages || [] });
-  } catch (err) {
-    res.status(500).json({ message: '채팅 기록 조회 실패', error: err.message });
-  }
-});
-
 module.exports = router;
