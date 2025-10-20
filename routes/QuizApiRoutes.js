@@ -60,10 +60,11 @@ module.exports = (quizDb) => {
 
       const t1 = Date.now();
       const quizzes = await Quiz.find({ isComplete: true })
-        .select('title description titleImageBase64 createdAt completedGameCount recommendationCount creatorId')
+        .select('title description createdAt completedGameCount recommendationCount creatorId')
         .sort(sortCondition)
         .skip(skip)
-        .limit(parseInt(limit));
+        .limit(parseInt(limit))
+        .lean(); // ⚡ lean() 추가로 성능 향상 (mongoose 객체 변환 생략)
       const t2 = Date.now();
       console.log(`⏱️ Quiz DB 조회 시간: ${t2 - t1}ms (${quizzes.length}개)`);
 
@@ -91,16 +92,15 @@ module.exports = (quizDb) => {
 
       // 4. 퀴즈에 제작자 정보 추가 (DB 조회 없음!)
       const quizzesWithCreator = quizzes.map((quiz) => {
-        const quizObj = quiz.toObject();
-
+        // lean()으로 이미 plain object이므로 toObject() 불필요
         // 압수된 퀴즈는 제작자를 "관리자"로 표시
-        if (quizObj.creatorId === 'seized') {
-          quizObj.creatorNickname = '관리자';
+        if (quiz.creatorId === 'seized') {
+          quiz.creatorNickname = '관리자';
         } else {
-          quizObj.creatorNickname = creatorMap.get(quizObj.creatorId?.toString()) || '알 수 없음';
+          quiz.creatorNickname = creatorMap.get(quiz.creatorId?.toString()) || '알 수 없음';
         }
 
-        return quizObj;
+        return quiz;
       });
 
       const hasMore = quizzes.length === parseInt(limit);
