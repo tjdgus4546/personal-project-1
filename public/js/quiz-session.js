@@ -513,6 +513,24 @@ function choiceQuestionSendMessage() {
     input.value = '';
 
     if (!message) return;
+
+    // 1~5 숫자 입력 시 자동으로 해당 선택지 선택
+    const choiceNumber = parseInt(message);
+
+    if (choiceNumber >= 1 && choiceNumber <= 5 && message === String(choiceNumber)) {
+        // 현재 문제의 선택지 가져오기
+        const actualIndex = questionOrder[currentIndex];
+        const question = questions[actualIndex];
+
+        if (question && question.choices && question.choices.length >= choiceNumber) {
+            // 숫자에 해당하는 선택지 선택 (1-based index를 0-based로 변환)
+            const selectedChoice = question.choices[choiceNumber - 1];
+            selectChoice(selectedChoice);
+            return; // 채팅으로 전송하지 않음
+        }
+    }
+
+    // 숫자가 아니거나 유효하지 않은 번호면 일반 채팅으로 전송
     socket.emit('chatMessage', { sessionId, message });
 }
 
