@@ -2,23 +2,26 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-const QUIZ_DB_URI = process.env.MONGODB_QUIZ_URI;
+const QUIZ_DB_URI = process.env.QUIZ_DB_URI;
 
 async function createIndexes() {
   try {
     console.log('📊 QuizDB 연결 중...');
     const quizDb = await mongoose.createConnection(QUIZ_DB_URI).asPromise();
-    console.log('✅ QuizDB 연결 성공');
+    console.log('✅ QuizDB 연결 성공\n');
 
     const Quiz = quizDb.collection('quizzes');
 
-    console.log('\n🔧 기존 인덱스 확인...');
+    console.log('🔧 기존 인덱스 확인...');
     const existingIndexes = await Quiz.indexes();
-    console.log('기존 인덱스:', JSON.stringify(existingIndexes, null, 2));
+    console.log('기존 인덱스:');
+    existingIndexes.forEach((idx, i) => {
+      console.log(`  ${i + 1}. ${idx.name}: ${JSON.stringify(idx.key)}`);
+    });
 
-    console.log('\n🔨 새 인덱스 생성 중...');
+    console.log('\n🔨 새 인덱스 생성 중...\n');
 
-    // 1. 퀴즈 목록 조회용 복합 인덱스 (가장 중요!)
+    // 1. 퀴즈 목록 조회용 복합 인덱스 (가장 중요! - 인기순)
     await Quiz.createIndex(
       { isComplete: 1, completedGameCount: -1, createdAt: -1 },
       { name: 'quiz_list_popular', background: true }
@@ -46,10 +49,12 @@ async function createIndexes() {
     );
     console.log('✅ 인덱스 생성: { creatorId: 1, isComplete: 1, createdAt: -1 }');
 
-    console.log('\n🎉 모든 인덱스 생성 완료!');
-    console.log('\n📊 최종 인덱스 목록:');
+    console.log('\n🎉 모든 인덱스 생성 완료!\n');
+    console.log('📊 최종 인덱스 목록:');
     const finalIndexes = await Quiz.indexes();
-    console.log(JSON.stringify(finalIndexes, null, 2));
+    finalIndexes.forEach((idx, i) => {
+      console.log(`  ${i + 1}. ${idx.name}: ${JSON.stringify(idx.key)}`);
+    });
 
     await quizDb.close();
     console.log('\n✅ 연결 종료');
