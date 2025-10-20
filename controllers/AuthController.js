@@ -3,6 +3,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { sendVerificationEmail, generateVerificationCode } = require('../utils/emailService');
+const { uploadProfileImage } = require('../utils/s3Uploader');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -276,14 +277,21 @@ const updateProfile = async (req, res) => {
       if (!profileImage.startsWith('data:image/')) {
         return res.status(400).json({ message: '유효하지 않은 이미지 형식입니다.' });
       }
-      
+
       // 이미지 크기 확인 (Base64 디코딩 후 대략 200KB 이하)
       const imageSize = Math.round((profileImage.length * 3) / 4 / 1024); // KB
       if (imageSize > 200) {
         return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 200KB)' });
       }
-      
-      updateData.profileImage = profileImage;
+
+      try {
+        // S3에 업로드
+        const s3Url = await uploadProfileImage(profileImage, req.user.id);
+        updateData.profileImage = s3Url;
+      } catch (s3Error) {
+        console.error('프로필 이미지 S3 업로드 실패:', s3Error);
+        return res.status(500).json({ message: '프로필 이미지 업로드에 실패했습니다.' });
+      }
     } else if (removeProfileImage) {
       // 현재 이미지 제거 (OAuth 연동 사용자는 기본 이미지로 복원)
       if (user.naverId) {

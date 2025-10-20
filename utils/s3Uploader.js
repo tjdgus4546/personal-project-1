@@ -149,6 +149,16 @@ async function deleteImageFromS3(s3Url) {
 }
 
 /**
+ * 프로필 이미지 업로드
+ * @param {string} base64String - Base64 인코딩된 이미지
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<string>} S3 URL
+ */
+async function uploadProfileImage(base64String, userId) {
+  return uploadImageToS3(base64String, 'profiles', userId);
+}
+
+/**
  * 퀴즈의 모든 이미지를 S3로 업로드
  * @param {Object} quizData - 퀴즈 데이터 (titleImageBase64, questions 포함)
  * @param {string} quizId - 퀴즈 ID
@@ -198,6 +208,7 @@ module.exports = {
   uploadQuizThumbnail,
   uploadQuestionImage,
   uploadAnswerImage,
+  uploadProfileImage,
   deleteImageFromS3,
   uploadQuizImagesToS3
 };
