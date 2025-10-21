@@ -794,7 +794,7 @@ function renderSidebar() {
 
 // 문제 수 업데이트
 function updateQuestionCount() {
-    document.getElementById('questionCount').textContent = `${questions.length}개 문제`;
+    document.getElementById('questionCount').textContent = `${questions.length}개 문제( 최대 50문제 )`;
 }
 
 // 새 문제 만들기
