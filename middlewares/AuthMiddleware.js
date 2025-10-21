@@ -20,6 +20,56 @@ const verifyAndRefreshToken = async (req, res) => {
   if (accessToken) {
     try {
       const decoded = jwt.verify(accessToken, JWT_SECRET);
+
+      // DB에서 사용자 정보 조회 (정지/탈퇴 여부 확인)
+      const userDb = req.app.get('userDb');
+      const UserModel = require('../models/User')(userDb);
+      const user = await UserModel.findById(decoded.id);
+
+      if (!user) {
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
+        return { success: false, status: 403, message: '사용자를 찾을 수 없습니다. 다시 로그인해주세요.' };
+      }
+
+      // 탈퇴한 회원인지 확인
+      if (user.isDeleted) {
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
+        return { success: false, status: 403, message: '탈퇴한 계정입니다. 로그인할 수 없습니다.' };
+      }
+
+      // 정지된 회원인지 확인
+      if (user.isSuspended) {
+        // 기간 정지의 경우 기간이 만료되었는지 확인
+        if (user.suspendedUntil && new Date() >= new Date(user.suspendedUntil)) {
+          // 정지 기간이 만료됨 -> 자동으로 정지 해제
+          await UserModel.findByIdAndUpdate(user._id, {
+            isSuspended: false,
+            suspendedUntil: null,
+            suspendReason: null,
+            suspendedAt: null,
+            suspendedBy: null
+          });
+        } else {
+          // 여전히 정지 중
+          res.clearCookie('accessToken');
+          res.clearCookie('refreshToken');
+          const suspendMessage = user.suspendedUntil
+            ? `계정이 ${new Date(user.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
+            : '계정이 영구 정지되었습니다.';
+
+          return {
+            success: false,
+            status: 403,
+            message: `${suspendMessage}\n사유: ${user.suspendReason || '관리자 조치'}`,
+            isSuspended: true,
+            suspendedUntil: user.suspendedUntil,
+            suspendReason: user.suspendReason
+          };
+        }
+      }
+
       return { success: true, user: decoded };
     } catch (err) {
       if (err.name !== 'TokenExpiredError') {
