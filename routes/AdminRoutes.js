@@ -100,9 +100,9 @@ async function enrichQuizzesWithUserInfo(quizzes, User) {
     }
 
     // questions 필드가 있으면 문제 수만 포함 (이미지는 호버링 시 별도 API로 로드)
-    let questionCount = 0;
-    if (quiz.questions && Array.isArray(quiz.questions)) {
-      questionCount = quiz.questions.length;
+    let questionCount = quiz.questionCount || 0; // aggregate에서 계산된 값 사용
+    if (!quiz.questionCount && quiz.questions && Array.isArray(quiz.questions)) {
+      questionCount = quiz.questions.length; // 혹시 questions 배열이 있으면 길이 계산
     }
 
     return {
@@ -176,12 +176,27 @@ router.get('/quizzes/search', async (req, res) => {
     // 병렬로 카운트와 데이터 조회
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(searchQuery),
-      Quiz.find(searchQuery)
-        .select('-questions -reports -modificationLogs -creationLog') // 🔥 큰 필드 전부 제외! (임시 해결책)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean()
+      Quiz.aggregate([
+        { $match: searchQuery },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $project: {
+            title: 1,
+            description: 1,
+            titleImageBase64: 1,
+            isComplete: 1,
+            createdAt: 1,
+            creatorId: 1,
+            originalCreatorId: 1,
+            seizedById: 1,
+            seizedAt: 1,
+            seizedReason: 1,
+            questionCount: { $size: { $ifNull: ['$questions', []] } } // questions 배열의 길이만 계산
+          }
+        }
+      ])
     ]);
 
     // 한 번에 User 정보 추가
@@ -231,12 +246,27 @@ router.get('/quizzes', async (req, res) => {
     // 병렬로 카운트와 데이터 조회
     const [totalCount, quizzes] = await Promise.all([
       Quiz.countDocuments(filterQuery),
-      Quiz.find(filterQuery)
-        .select('-questions -reports -modificationLogs -creationLog') // 🔥 큰 필드 전부 제외! (임시 해결책)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean()
+      Quiz.aggregate([
+        { $match: filterQuery },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $project: {
+            title: 1,
+            description: 1,
+            titleImageBase64: 1,
+            isComplete: 1,
+            createdAt: 1,
+            creatorId: 1,
+            originalCreatorId: 1,
+            seizedById: 1,
+            seizedAt: 1,
+            seizedReason: 1,
+            questionCount: { $size: { $ifNull: ['$questions', []] } } // questions 배열의 길이만 계산
+          }
+        }
+      ])
     ]);
 
     // 한 번에 User 정보 추가
