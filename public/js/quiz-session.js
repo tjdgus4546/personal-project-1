@@ -2010,7 +2010,6 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     if (answerImageBase64) {
         html += `
             <div class="mb-4">
-                <h4 class="text-lg font-semibold text-gray-300 mb-2">정답 이미지</h4>
                 <img src="${answerImageBase64}" 
                      alt="정답 이미지" 
                      class="w-auto h-auto max-h-[300px] mx-auto rounded-lg shadow-lg">
