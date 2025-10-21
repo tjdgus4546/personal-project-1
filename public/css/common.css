@@ -179,3 +179,15 @@
     scrollbar-width: thin;
     scrollbar-color: rgb(107 114 128) transparent;
 }
+
+/* 모바일 전용 광고 (스마트폰만) */
+.mobile-only-ad {
+    display: none; /* 기본적으로 숨김 */
+}
+
+/* 스마트폰에서만 표시 (480px 이하) */
+@media (max-width: 480px) {
+    .mobile-only-ad {
+        display: block;
+    }
+}
