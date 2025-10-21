@@ -3,6 +3,7 @@ import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBlob, uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 import { fetchWithAuth } from './quiz-init-modal.js';
 import { renderFooter } from './footer.js';
+import { renderMobileAd } from './mobile-ad.js';
 
 // 개발 모드 플래그 (프로덕션 배포 시 false로 설정)
 const IS_DEV_MODE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -52,7 +53,10 @@ function detectQuestionType(question) {
 async function initNavbar() {
     const user = await renderNavbar();
     highlightCurrentPage();
-    
+
+    // 모바일 광고 렌더링
+    await renderMobileAd();
+
     if (!user) {
         window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');
         return false;

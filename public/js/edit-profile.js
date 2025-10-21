@@ -1,5 +1,6 @@
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { renderFooter } from './footer.js';
+import { renderMobileAd } from './mobile-ad.js';
 import { resizeImageToBlob, uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 
 let currentUserData = null;
@@ -548,6 +549,9 @@ async function initializePage() {
         // 상단바 렌더링
         const user = await renderNavbar();
         highlightCurrentPage();
+
+        // 모바일 광고 렌더링
+        await renderMobileAd();
 
         // 푸터 렌더링
         await renderFooter();

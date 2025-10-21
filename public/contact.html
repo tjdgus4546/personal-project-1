@@ -7,8 +7,18 @@
     <link rel="icon" href="/images/Logo.png" type="image/png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/common.css">
+
+    <!-- 광고 스크립트 -->
+    <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
+
+    <!-- 모바일 광고 렌더링 -->
+    <script type="module">
+        import { renderMobileAd } from './js/mobile-ad.js';
+        document.addEventListener('DOMContentLoaded', () => renderMobileAd());
+    </script>
 </head>
 <body class="bg-[#222230] text-white min-h-screen">
+
     <div class="max-w-3xl mx-auto pt-12 px-4 pb-12">
         <div class="bg-[#2d2d3d] rounded-2xl p-8 shadow-2xl border border-gray-600">
 

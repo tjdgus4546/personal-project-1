@@ -2,6 +2,7 @@
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { renderFooter } from './footer.js';
+import { renderMobileAd } from './mobile-ad.js';
 
 let allQuizzes = [];
 let currentPage = 1;
@@ -403,6 +404,9 @@ async function initializePage() {
     try {
         const user = await renderNavbar();
         highlightCurrentPage();
+
+        // 모바일 광고 렌더링
+        await renderMobileAd();
 
         // 푸터 렌더링
         await renderFooter();

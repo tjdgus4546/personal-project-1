@@ -2,6 +2,7 @@
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { renderFooter } from './footer.js';
+import { renderMobileAd } from './mobile-ad.js';
 
 // 사용자 정보 불러오기 및 표시
 async function loadUserProfile() {
@@ -128,6 +129,9 @@ async function initializePage() {
         // 상단바 렌더링
         const user = await renderNavbar();
         highlightCurrentPage();
+
+        // 모바일 광고 렌더링
+        await renderMobileAd();
 
         // 푸터 렌더링
         await renderFooter();
