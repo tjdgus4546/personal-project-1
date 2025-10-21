@@ -18,7 +18,6 @@ export async function getUserData() {
     if (response.status === 403) {
       try {
         const data = await response.json();
-        console.log('403 에러 데이터:', data); // 디버깅용
 
         // 정지된 계정
         if (data.isSuspended) {
@@ -26,7 +25,6 @@ export async function getUserData() {
             ? `계정이 ${new Date(data.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
             : '계정이 영구 정지되었습니다.';
 
-          // alert는 동기적으로 작동하므로 사용자가 확인을 누를 때까지 대기
           alert(`${suspendMessage}\n\n사유: ${data.suspendReason || '관리자 조치'}`);
 
           // 로그아웃 처리

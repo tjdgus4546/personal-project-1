@@ -103,7 +103,6 @@ function setupLoginForm() {
             });
             
             const result = await response.json();
-            console.log('[Login] 서버 응답:', { status: response.status, result }); // 디버깅용
 
             if (response.ok) {
                 // 로그인 성공
@@ -124,11 +123,8 @@ function setupLoginForm() {
 
             } else {
                 // 로그인 실패
-                console.log('[Login] 로그인 실패, isSuspended:', result.isSuspended); // 디버깅용
-
                 // 정지된 계정인 경우 alert로 명확하게 표시
                 if (result.isSuspended) {
-                    console.log('[Login] 정지된 계정 감지, alert 표시'); // 디버깅용
                     const suspendMessage = result.suspendedUntil
                         ? `계정이 ${new Date(result.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
                         : '계정이 영구 정지되었습니다.';
