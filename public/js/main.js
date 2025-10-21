@@ -1,6 +1,7 @@
 // js/main.js
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
+import { renderFooter } from './footer.js';
 
 let allQuizzes = [];
 let currentPage = 1;
@@ -402,6 +403,10 @@ async function initializePage() {
     try {
         const user = await renderNavbar();
         highlightCurrentPage();
+
+        // 푸터 렌더링
+        await renderFooter();
+
         updatePageUI(user);
         attachEventListeners();
     } catch (err) {

@@ -2,6 +2,7 @@
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBase64 } from './quiz-init-modal.js';
 import { fetchWithAuth } from './quiz-init-modal.js';
+import { renderFooter } from './footer.js';
 
 // 개발 모드 플래그 (프로덕션 배포 시 false로 설정)
 const IS_DEV_MODE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -1314,6 +1315,9 @@ export async function saveRandomOrderSetting() {
 (async function init() {
     const authenticated = await initNavbar();
     if (!authenticated) return;
+
+    // 푸터 렌더링
+    await renderFooter();
 
     if (quizId) {
         await loadQuestions();

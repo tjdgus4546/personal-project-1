@@ -1,5 +1,6 @@
 // admin-reports.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
+import { renderFooter } from './footer.js';
 
 let allReportedQuizzes = [];
 let currentPage = 1;
@@ -43,6 +44,9 @@ async function initializePage() {
     // 네비바 렌더링
     const user = await renderNavbar();
     highlightCurrentPage();
+
+    // 푸터 렌더링
+    await renderFooter();
 
     if (!user) {
       alert('로그인이 필요합니다.');

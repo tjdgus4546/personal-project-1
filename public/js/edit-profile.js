@@ -1,4 +1,5 @@
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
+import { renderFooter } from './footer.js';
 
 let currentUserData = null;
 let newProfileImageBase64 = null;
@@ -592,7 +593,10 @@ async function initializePage() {
         // 상단바 렌더링
         const user = await renderNavbar();
         highlightCurrentPage();
-        
+
+        // 푸터 렌더링
+        await renderFooter();
+
         // 로그인 체크
         if (!user) {
             window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');

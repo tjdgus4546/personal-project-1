@@ -1,6 +1,7 @@
 // admin-users.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { renderFooter } from './footer.js';
 
 let allUsers = [];
 let currentPage = 1;
@@ -42,6 +43,9 @@ async function initializePage() {
     // 네비바 렌더링
     const user = await renderNavbar();
     highlightCurrentPage();
+
+    // 푸터 렌더링
+    await renderFooter();
 
     if (!user) {
       alert('로그인이 필요합니다.');

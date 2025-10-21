@@ -1,6 +1,7 @@
 // quiz-my-list.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
 import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { renderFooter } from './footer.js';
 
 let currentEditQuizId = null;
 let editThumbnailBase64 = null; 
@@ -49,7 +50,10 @@ async function initializePage() {
         // 상단바 렌더링
         const user = await renderNavbar();
         highlightCurrentPage();
-        
+
+        // 푸터 렌더링
+        await renderFooter();
+
         // 로그인 체크
         if (!user) {
             window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');

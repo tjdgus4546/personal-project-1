@@ -1,6 +1,7 @@
 // js/my-page.js
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
+import { renderFooter } from './footer.js';
 
 // 사용자 정보 불러오기 및 표시
 async function loadUserProfile() {
@@ -127,16 +128,19 @@ async function initializePage() {
         // 상단바 렌더링
         const user = await renderNavbar();
         highlightCurrentPage();
-        
+
+        // 푸터 렌더링
+        await renderFooter();
+
         // 로그인 체크
         if (!user) {
             window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');
             return;
         }
-        
+
         // 이벤트 리스너 설정
         setupEventListeners();
-        
+
         // 사용자 정보 로드
         await loadUserProfile();
 
@@ -144,7 +148,7 @@ async function initializePage() {
 
     } catch (error) {
         console.error('페이지 초기화 실패:', error);
-        
+
         // 오류 섹션 표시
         document.getElementById('loadingSection').classList.add('hidden');
         document.getElementById('errorSection').classList.remove('hidden');
