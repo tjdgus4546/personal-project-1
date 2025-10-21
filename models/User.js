@@ -119,4 +119,7 @@ const userSchema = new Schema({
 // 기존 인덱스
 userSchema.index({ email: 1, provider: 1 }, { unique: true });
 
+// playedQuizzes 배열 인덱스 - 퀴즈 조회 성능 향상
+userSchema.index({ playedQuizzes: 1 });
+
 module.exports = (userDb) => userDb.model('User', userSchema);

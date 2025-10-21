@@ -952,21 +952,18 @@ module.exports = (io, app) => {
 
       const User = require('../models/User')(userDb);
 
-      // 1. ID를 사용해 사용자 문서를 데이터베이스에서 가져옵니다.
-      const user = await User.findById(userId);
-
-      if (!user) {
-        return;
-      }
-
-      if (user.playedQuizzes && user.playedQuizzes.includes(quizId)) {
-        return;
-      }
-
-      await User.findByIdAndUpdate(
+      // 최적화: $addToSet는 이미 중복을 방지하므로 별도 체크 불필요
+      // 인덱스가 있으면 MongoDB가 효율적으로 처리
+      const result = await User.findByIdAndUpdate(
         userId,
-        { $addToSet: { playedQuizzes: quizId } }
+        { $addToSet: { playedQuizzes: quizId } },
+        { new: false } // 업데이트 전 문서 반환 (변경 여부 확인용, 선택사항)
       );
+
+      if (!result) {
+        // 사용자가 존재하지 않는 경우
+        return;
+      }
 
     } catch (error) {
       // 데이터베이스의 playedQuizzes 필드가 문자열이면 여전히 이 오류가 발생할 수 있습니다.
