@@ -3,7 +3,7 @@ export async function renderMobileAd() {
     const adHTML = `
         <div class="mobile-only-ad">
             <div class="flex justify-center">
-                <ins class="kakao_ad_area" style="display:none;"
+                <ins class="kakao_ad_area"
                 data-ad-unit = "DAN-d5NeUbk8NbihkGZm"
                 data-ad-width = "320"
                 data-ad-height = "100"></ins>
