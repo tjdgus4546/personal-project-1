@@ -31,6 +31,11 @@ router.get('/contacts.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin-contacts.html'));
 });
 
+// 유저 관리 페이지
+router.get('/users.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/users.html'));
+});
+
 // ========== 최적화된 공통 함수 ==========
 
 /**
@@ -1668,6 +1673,201 @@ router.delete('/contacts/:contactId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '문의 삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// ========== 유저 관리 API ==========
+
+// 유저 목록 조회
+router.get('/users', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const role = req.query.role || 'all';
+
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    // 역할 필터링 조건
+    let roleFilter = {};
+    if (role !== 'all') {
+      roleFilter.role = role;
+    }
+
+    // 전체 개수 조회
+    const totalCount = await User.countDocuments(roleFilter);
+
+    // 유저 목록 조회
+    const users = await User.find(roleFilter)
+      .select('username nickname email profileImage googleId kakaoId role createdAt isSuspended suspendedUntil suspendReason')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        hasMore: skip + users.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Users list error:', err);
+    res.status(500).json({
+      success: false,
+      message: '유저 목록 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 유저 검색
+router.get('/users/search', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const searchTerm = req.query.q || '';
+    const role = req.query.role || 'all';
+
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    // 검색 조건 (이름, 닉네임, 이메일)
+    const searchQuery = {
+      $or: [
+        { username: { $regex: searchTerm, $options: 'i' } },
+        { nickname: { $regex: searchTerm, $options: 'i' } },
+        { email: { $regex: searchTerm, $options: 'i' } }
+      ]
+    };
+
+    // 역할 필터 추가
+    if (role !== 'all') {
+      searchQuery.role = role;
+    }
+
+    // 전체 개수 조회
+    const totalCount = await User.countDocuments(searchQuery);
+
+    // 유저 목록 조회
+    const users = await User.find(searchQuery)
+      .select('username nickname email profileImage googleId kakaoId role createdAt isSuspended suspendedUntil suspendReason')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+        hasMore: skip + users.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Users search error:', err);
+    res.status(500).json({
+      success: false,
+      message: '유저 검색 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 특정 유저 정보 조회
+router.get('/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    const user = await User.findById(userId)
+      .select('username nickname email profileImage googleId kakaoId role createdAt isSuspended suspendedUntil suspendReason')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error('User info error:', err);
+    res.status(500).json({
+      success: false,
+      message: '사용자 정보 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 유저 프로필 이미지 변경
+router.patch('/users/:userId/profile-image', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { profileImageBase64 } = req.body;
+
+    if (!profileImageBase64) {
+      return res.status(400).json({
+        success: false,
+        message: '프로필 이미지가 필요합니다.'
+      });
+    }
+
+    if (!profileImageBase64.startsWith('data:image/')) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 이미지 형식입니다.'
+      });
+    }
+
+    const User = require('../models/User')(req.app.get('userDb'));
+    const { uploadProfileImage, deleteImageFromS3 } = require('../utils/s3Uploader');
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    try {
+      // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
+      if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
+        await deleteImageFromS3(user.profileImage);
+      }
+
+      // 새 이미지 S3에 업로드
+      const s3Url = await uploadProfileImage(profileImageBase64, userId);
+
+      // 프로필 이미지 URL 업데이트
+      await User.findByIdAndUpdate(userId, {
+        profileImage: s3Url
+      });
+
+      res.json({
+        success: true,
+        message: '프로필 이미지가 변경되었습니다.'
+      });
+    } catch (s3Error) {
+      console.error('프로필 이미지 S3 업로드 실패:', s3Error);
+      return res.status(500).json({
+        success: false,
+        message: '프로필 이미지 업로드에 실패했습니다.'
+      });
+    }
+  } catch (err) {
+    console.error('Profile image update error:', err);
+    res.status(500).json({
+      success: false,
+      message: '프로필 이미지 변경 중 오류가 발생했습니다.'
     });
   }
 });
