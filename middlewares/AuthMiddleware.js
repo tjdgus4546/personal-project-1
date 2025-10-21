@@ -182,7 +182,16 @@ const authenticateToken = async (req, res, next) => {
   const result = await verifyAndRefreshToken(req, res);
 
   if (!result.success) {
-    return res.status(result.status).json({ message: result.message });
+    // 정지 정보가 있는 경우 모든 정보를 포함해서 반환
+    const response = { message: result.message };
+
+    if (result.isSuspended) {
+      response.isSuspended = result.isSuspended;
+      response.suspendedUntil = result.suspendedUntil;
+      response.suspendReason = result.suspendReason;
+    }
+
+    return res.status(result.status).json(response);
   }
 
   req.user = result.user;
