@@ -209,18 +209,13 @@ async function createQuizFromModal() {
         const data = await res.json();
 
         if (res.ok) {
-            
             closeQuizInitModal();
             window.location.href = `/quiz/edit?quizId=${data.quizId}`;
         } else {
-            console.error('퀴즈 생성 실패:', data.message);
             alert('퀴즈 생성 실패: ' + data.message);
         }
     } catch (error) {
-        console.error('퀴즈 생성 오류:', error);
-        console.error('오류 상세:', error.message);
-        console.error('오류 스택:', error.stack);
-        alert('퀴즈 생성 중 오류가 발생했습니다: ' + error.message);
+        alert('퀴즈 생성 중 오류가 발생했습니다.');
     } finally {
         createBtn.disabled = false;
         createBtn.innerHTML = originalText;
