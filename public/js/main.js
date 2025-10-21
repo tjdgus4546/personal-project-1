@@ -431,16 +431,18 @@ async function openQuizModal(quizId) {
                 window.location.href = '/login';
                 return;
             }
-            throw new Error('퀴즈 정보를 불러올 수 없습니다.');
+            const errorData = await response.json().catch(() => ({}));
+            console.error('서버 에러 응답:', errorData);
+            throw new Error(errorData.message || '퀴즈 정보를 불러올 수 없습니다.');
         }
-        
+
         const quiz = await response.json();
         updateModalContent(quiz);
         showModal();
-        
+
     } catch (error) {
         console.error('퀴즈 정보 로딩 실패:', error);
-        alert('퀴즈 정보를 불러오는 중 오류가 발생했습니다.');
+        alert('퀴즈 정보를 불러오는 중 오류가 발생했습니다: ' + error.message);
     }
 }
 

@@ -81,7 +81,7 @@ export async function fetchWithAuth(url, options = {}) {
     }
 }
 
-let quizInitTitleImageBase64 = null;
+let quizInitTitleImageFile = null; // File 객체 저장
 
 // 퀴즈 초기 설정 모달 열기
 function openQuizInitModal() {
@@ -89,14 +89,14 @@ function openQuizInitModal() {
     if (modal) {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        
+
         // 입력 필드 초기화
         document.getElementById('quizInitTitle').value = '';
         document.getElementById('quizInitDescription').value = '';
         document.getElementById('quizInitTitleImageInput').value = '';
         document.getElementById('quizInitTitleImagePreview').style.display = 'none';
         document.getElementById('quizInitImagePreviewContainer').classList.add('hidden');
-        quizInitTitleImageBase64 = null;
+        quizInitTitleImageFile = null;
     }
 }
 
@@ -117,11 +117,12 @@ function handleQuizInitModalClick(event) {
 }
 
 // 이미지 리사이즈 함수를 export로 변경
-export async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
+// Blob으로 리사이징 (Presigned URL용) - 1MB 제한
+export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
     return new Promise((resolve, reject) => {
         const sizeMB = file.size / (1024 * 1024);
-        if (sizeMB > 6) {
-            return reject(new Error('6MB를 초과한 이미지는 업로드할 수 없습니다.'));
+        if (sizeMB > 10) {
+            return reject(new Error('10MB를 초과한 이미지는 업로드할 수 없습니다.'));
         }
 
         const reader = new FileReader();
@@ -136,20 +137,26 @@ export async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
                 ctx.drawImage(img, 0, 0);
 
                 function tryCompress() {
-                    const base64 = canvas.toDataURL('image/jpeg', quality);
-                    const sizeKB = (base64.length * 3) / 4 / 1024;
-
-                    if (sizeKB <= maxKB || quality <= 0.1) {
-                        if (sizeKB < minKB && quality < 0.9) {
-                            quality = Math.min(0.9, quality + 0.1);
-                            tryCompress();
-                        } else {
-                            resolve(base64);
+                    canvas.toBlob((blob) => {
+                        if (!blob) {
+                            reject(new Error('이미지 변환 실패'));
+                            return;
                         }
-                    } else {
-                        quality -= 0.05;
-                        tryCompress();
-                    }
+
+                        const sizeKB = blob.size / 1024;
+
+                        if (sizeKB <= maxKB || quality <= 0.1) {
+                            if (sizeKB < minKB && quality < 0.9) {
+                                quality = Math.min(0.9, quality + 0.1);
+                                tryCompress();
+                            } else {
+                                resolve(blob);
+                            }
+                        } else {
+                            quality -= 0.05;
+                            tryCompress();
+                        }
+                    }, 'image/jpeg', quality);
                 }
                 tryCompress();
             };
@@ -159,16 +166,76 @@ export async function resizeImageToBase64(file, maxKB = 240, minKB = 40) {
     });
 }
 
+// 하위 호환성을 위한 Base64 함수 (기존 코드용, 더 이상 사용 안 함)
+export async function resizeImageToBase64(file, maxKB = 1024, minKB = 100) {
+    const blob = await resizeImageToBlob(file, maxKB, minKB);
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// Presigned URL로 S3에 직접 업로드
+export async function uploadToS3WithPresignedUrl(file, folder, fileName) {
+    try {
+        // 1. 이미지 리사이징 (1MB 이하)
+        const blob = await resizeImageToBlob(file, 1024, 100);
+
+        // 2. 서버에서 Presigned URL 요청
+        const presignedResponse = await fetch('/api/s3/presigned-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                folder,
+                fileName,
+                contentType: 'image/jpeg'
+            })
+        });
+
+        if (!presignedResponse.ok) {
+            throw new Error('Presigned URL 발급 실패');
+        }
+
+        const { uploadUrl, fileUrl } = await presignedResponse.json();
+
+        // 3. S3에 직접 업로드
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: blob,
+            headers: {
+                'Content-Type': 'image/jpeg'
+            }
+        });
+
+        if (!uploadResponse.ok) {
+            throw new Error('S3 업로드 실패');
+        }
+
+        // 4. 업로드된 파일의 URL 반환
+        return fileUrl;
+    } catch (error) {
+        console.error('❌ S3 업로드 실패:', error);
+        throw error;
+    }
+}
+
 // 이미지 선택 핸들러
 async function handleQuizInitImageSelect(event) {
     const file = event.target.files[0];
     if (file) {
         try {
-            quizInitTitleImageBase64 = await resizeImageToBase64(file);
+            // 파일 객체 저장 (나중에 Presigned URL로 업로드)
+            quizInitTitleImageFile = file;
+
+            // 미리보기용 Base64 생성
+            const previewBase64 = await resizeImageToBase64(file);
             const preview = document.getElementById('quizInitTitleImagePreview');
             const container = document.getElementById('quizInitImagePreviewContainer');
-            
-            preview.src = quizInitTitleImageBase64;
+
+            preview.src = previewBase64;
             preview.style.display = 'block';
             container.classList.remove('hidden');
         } catch (err) {
@@ -181,13 +248,13 @@ async function handleQuizInitImageSelect(event) {
 async function createQuizFromModal() {
     const title = document.getElementById('quizInitTitle').value.trim();
     const description = document.getElementById('quizInitDescription').value.trim();
-    
+
     if (!title) {
         alert('퀴즈 제목을 입력하세요.');
         return;
     }
 
-    if (!quizInitTitleImageBase64) {
+    if (!quizInitTitleImageFile) {
         alert('대표 이미지를 업로드하세요.');
         return;
     }
@@ -198,24 +265,53 @@ async function createQuizFromModal() {
     createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>생성 중...</div>';
 
     try {
+        // 1단계: 퀴즈 기본 정보만 전송 (이미지 없이)
         const res = await fetchWithAuth('/api/quiz/init', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ title, description, titleImageBase64: quizInitTitleImageBase64 })
+            body: JSON.stringify({ title, description })
         });
 
         const data = await res.json();
 
-        if (res.ok) {
-            closeQuizInitModal();
-            window.location.href = `/quiz/edit?quizId=${data.quizId}`;
-        } else {
+        if (!res.ok) {
             alert('퀴즈 생성 실패: ' + data.message);
+            return;
         }
+
+        const quizId = data.quizId;
+
+        // 2단계: Presigned URL로 썸네일 업로드
+        createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>이미지 업로드 중...</div>';
+
+        const thumbnailUrl = await uploadToS3WithPresignedUrl(
+            quizInitTitleImageFile,
+            'thumbnails',
+            quizId
+        );
+
+        // 3단계: 서버에 썸네일 URL 업데이트
+        const updateRes = await fetchWithAuth(`/api/quiz/${quizId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ titleImageBase64: thumbnailUrl })
+        });
+
+        if (!updateRes.ok) {
+            console.error('썸네일 URL 업데이트 실패');
+        }
+
+        // 성공 - 편집 페이지로 이동
+        closeQuizInitModal();
+        window.location.href = `/quiz/edit?quizId=${quizId}`;
+
     } catch (error) {
-        alert('퀴즈 생성 중 오류가 발생했습니다.');
+        console.error('퀴즈 생성 중 오류:', error);
+        alert('퀴즈 생성 중 오류가 발생했습니다: ' + error.message);
     } finally {
         createBtn.disabled = false;
         createBtn.innerHTML = originalText;

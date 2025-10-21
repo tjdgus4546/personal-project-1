@@ -87,7 +87,7 @@ const quizSchema = new Schema({
   },
   questions: {
     type: [questionSchema],
-    validate: [v => v.length <= 70, '퀴즈의 문제 개수는 최대 70개까지 등록할 수 있습니다.'],
+    validate: [v => v.length <= 50, '퀴즈의 문제 개수는 최대 50개까지 등록할 수 있습니다.'],
   },
   createdAt: {
     type: Date,

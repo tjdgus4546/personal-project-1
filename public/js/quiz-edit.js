@@ -1,6 +1,6 @@
 // quiz-edit.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
-import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { resizeImageToBlob, uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 import { fetchWithAuth } from './quiz-init-modal.js';
 import { renderFooter } from './footer.js';
 
@@ -28,8 +28,8 @@ let currentEditingIndex = null;
 let currentAnswers = [];
 let currentIncorrects = [];
 let currentQuestionType = 'text'; // 'text', 'image', 'video', 'audio'
-let questionImageBase64 = '';
-let answerImageBase64 = '';
+let questionImageFile = null; // File 객체 저장
+let answerImageFile = null; // File 객체 저장
 const quizId = new URLSearchParams(window.location.search).get('quizId');
 
 // 문제 타입 자동 감지 (기존 문제용)
@@ -69,8 +69,8 @@ export function selectQuestionType(type) {
     if (previousType !== type) {
         // 텍스트나 영상/소리로 변경 시 이미지 데이터 초기화
         if ((previousType === 'image') && (type === 'text' || type === 'video' || type === 'audio')) {
-            questionImageBase64 = '';
-            answerImageBase64 = '';
+            questionImageFile = null;
+            answerImageFile = null;
             document.getElementById('questionImagePreview')?.classList.add('hidden');
             document.getElementById('answerImagePreview')?.classList.add('hidden');
             document.getElementById('questionImage').value = '';
@@ -229,34 +229,36 @@ export function switchView(view) {
 export async function previewImage(input, previewId) {
     const preview = document.getElementById(previewId);
     const img = preview.querySelector('img');
-    
+
     if (input.files && input.files[0]) {
         const file = input.files[0];
-        
-        // 파일 크기 체크 (6MB)
-        const maxSizeInBytes = 6 * 1024 * 1024;
+
+        // 파일 크기 체크 (10MB)
+        const maxSizeInBytes = 10 * 1024 * 1024;
         if (file.size > maxSizeInBytes) {
-            alert('파일 크기가 너무 큽니다! (최대 6MB)');
+            alert('파일 크기가 너무 큽니다! (최대 10MB)');
             input.value = '';
             return;
         }
-        
+
         try {
-            // resizeImageToBase64 사용하여 이미지 압축
-            const resizedBase64 = await resizeImageToBase64(file, 240, 40);
-            
-            img.src = resizedBase64;
-            preview.classList.remove('hidden');
-            
+            // 파일 객체 저장 (나중에 Presigned URL로 업로드)
             if (previewId === 'questionImagePreview') {
-                questionImageBase64 = resizedBase64;
+                questionImageFile = file;
             } else if (previewId === 'answerImagePreview') {
-                answerImageBase64 = resizedBase64;
+                answerImageFile = file;
             }
-            
-            const sizeKB = Math.round((resizedBase64.length * 3) / 4 / 1024);
+
+            // 미리보기용 Blob 생성
+            const blob = await resizeImageToBlob(file, 1024, 100);
+            const blobUrl = URL.createObjectURL(blob);
+
+            img.src = blobUrl;
+            preview.classList.remove('hidden');
+
+            const sizeKB = Math.round(blob.size / 1024);
             devLog(`✔ 이미지 압축 완료: ${sizeKB}KB`);
-            
+
         } catch (error) {
             alert('이미지 처리 실패: ' + error.message);
             input.value = '';
@@ -271,11 +273,11 @@ export function removeImage(inputId, previewId) {
     preview.classList.add('hidden');
     preview.querySelector('img').src = '';
 
-    // Base64 초기화
+    // File 객체 초기화
     if (previewId === 'questionImagePreview') {
-        questionImageBase64 = '';
+        questionImageFile = null;
     } else if (previewId === 'answerImagePreview') {
-        answerImageBase64 = '';
+        answerImageFile = null;
     }
 }
 
@@ -961,23 +963,25 @@ export function editQuestion(index) {
 
     document.getElementById('isMultipleChoice').checked = question.isChoice || false;
     
-    // 이미지 데이터 로드
-    questionImageBase64 = question.imageBase64 || '';
-    if (questionImageBase64) {
-        document.getElementById('questionImagePreview').querySelector('img').src = questionImageBase64;
+    // 이미지 데이터 로드 (기존 이미지는 URL, 새 이미지는 File 객체)
+    questionImageFile = null; // 새 이미지가 아니므로 null
+    const existingQuestionImage = question.imageBase64 || '';
+    if (existingQuestionImage) {
+        document.getElementById('questionImagePreview').querySelector('img').src = existingQuestionImage;
         document.getElementById('questionImagePreview').classList.remove('hidden');
     } else {
         document.getElementById('questionImagePreview').classList.add('hidden');
     }
-    
-    answerImageBase64 = question.answerImageBase64 || '';
-    if (answerImageBase64) {
-        document.getElementById('answerImagePreview').querySelector('img').src = answerImageBase64;
+
+    answerImageFile = null; // 새 이미지가 아니므로 null
+    const existingAnswerImage = question.answerImageBase64 || '';
+    if (existingAnswerImage) {
+        document.getElementById('answerImagePreview').querySelector('img').src = existingAnswerImage;
         document.getElementById('answerImagePreview').classList.remove('hidden');
     } else {
         document.getElementById('answerImagePreview').classList.add('hidden');
     }
-    
+
     // 유튜브 설정 로드
     document.getElementById('youtubeUrl').value = question.youtubeUrl || '';
     document.getElementById('startTime').value = secondsToTimeFormat(question.youtubeStartTime || 0);
@@ -1032,7 +1036,7 @@ export async function saveQuestion() {
 
     // 유효성 검사 - 문제 텍스트, 이미지, 유튜브 중 하나는 있어야 함
     const youtubeUrl = document.getElementById('youtubeUrl')?.value?.trim();
-    if (!text && !questionImageBase64 && !youtubeUrl) {
+    if (!text && !questionImageFile && !youtubeUrl) {
         showToast('문제 텍스트, 이미지, 또는 유튜브 링크 중 하나는 입력해야 합니다.', 'error');
         return;
     }
@@ -1103,12 +1107,48 @@ export async function saveQuestion() {
 
     } else if (currentQuestionType === 'image') {
         // 이미지 문제: 유튜브 데이터는 null
-        if (!questionImageBase64) {
+        const existingQuestion = questions[currentEditingIndex];
+
+        // 새 이미지를 업로드했거나 기존 이미지가 있어야 함
+        if (!questionImageFile && !existingQuestion?.imageBase64) {
             showToast('문제 이미지를 업로드하세요.', 'error');
             return;
         }
-        finalQuestionData.imageBase64 = questionImageBase64;
-        finalQuestionData.answerImageBase64 = answerImageBase64 || null;
+
+        // Presigned URL로 이미지 업로드 (새 이미지가 있을 때만)
+        try {
+            if (questionImageFile) {
+                showToast('문제 이미지 업로드 중...', 'info');
+                const questionImageUrl = await uploadToS3WithPresignedUrl(
+                    questionImageFile,
+                    `questions/${quizId}`,
+                    `q${currentEditingIndex}_${Date.now()}`
+                );
+                finalQuestionData.imageBase64 = questionImageUrl;
+            } else {
+                // 기존 이미지 유지
+                finalQuestionData.imageBase64 = existingQuestion.imageBase64;
+            }
+
+            // 정답 이미지도 처리
+            if (answerImageFile) {
+                showToast('정답 이미지 업로드 중...', 'info');
+                const answerImageUrl = await uploadToS3WithPresignedUrl(
+                    answerImageFile,
+                    `answers/${quizId}`,
+                    `a${currentEditingIndex}_${Date.now()}`
+                );
+                finalQuestionData.answerImageBase64 = answerImageUrl;
+            } else if (existingQuestion?.answerImageBase64) {
+                // 기존 정답 이미지 유지
+                finalQuestionData.answerImageBase64 = existingQuestion.answerImageBase64;
+            } else {
+                finalQuestionData.answerImageBase64 = null;
+            }
+        } catch (error) {
+            showToast('이미지 업로드 실패: ' + error.message, 'error');
+            return;
+        }
         // youtubeUrl 관련 필드는 이미 null로 초기화됨
 
     } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
@@ -1269,8 +1309,8 @@ export async function deleteCurrentQuestion() {
         currentEditingIndex = null;
         currentAnswers = [];
         currentIncorrects = [];
-        questionImageBase64 = '';
-        answerImageBase64 = '';
+        questionImageFile = null;
+        answerImageFile = null;
         
         renderQuestions();
         renderSidebar();

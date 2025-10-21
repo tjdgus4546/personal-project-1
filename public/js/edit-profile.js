@@ -1,69 +1,12 @@
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { renderFooter } from './footer.js';
+import { resizeImageToBlob, uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 
 let currentUserData = null;
-let newProfileImageBase64 = null;
+let newProfileImageFile = null; // File 객체 저장
 let removeCurrentImage = false;
 
-// 이미지를 리사이즈하여 Base64로 변환
-async function resizeImageToBase64(file, maxKB = 1024, minKB = 100) {
-    return new Promise((resolve, reject) => {
-        const sizeMB = file.size / (1024 * 1024);
-        if (sizeMB > 10) {
-            return reject(new Error('10MB를 초과한 이미지는 업로드할 수 없습니다.'));
-        }
-
-        const reader = new FileReader();
-        reader.onload = function (event) {
-            const img = new Image();
-            img.onload = function () {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-
-                const tryResize = (scale = 1.0) => {
-                    canvas.width = img.width * scale;
-                    canvas.height = img.height * scale;
-
-                    // 더 높은 품질 우선 시도
-                    let qualities = sizeMB >= 5 ? [0.8, 0.7, 0.5, 0.3] : [0.95, 0.9, 0.85, 0.8, 0.7];
-
-                    for (let q of qualities) {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        const base64 = canvas.toDataURL('image/jpeg', q);
-                        const sizeInKB = Math.round((base64.length * 3) / 4 / 1024);
-
-                        if (sizeInKB <= maxKB && sizeInKB >= minKB) {
-                            resolve(base64);
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-
-                // 다양한 스케일로 시도 (더 큰 해상도부터)
-                const scales = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5];
-                for (let s of scales) {
-                    if (tryResize(s)) return;
-                }
-
-                // 폴백 (최소 품질)
-                canvas.width = img.width * 0.5;
-                canvas.height = img.height * 0.5;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const fallback = canvas.toDataURL('image/jpeg', 0.6);
-                resolve(fallback);
-            };
-            img.onerror = reject;
-            img.src = event.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
+// resizeImageToBlob는 quiz-init-modal.js에서 import
 
 // 파일 선택 처리
 async function handleImageSelection(file) {
@@ -87,21 +30,25 @@ async function handleImageSelection(file) {
         imageFileInfo.textContent = '이미지 처리 중...';
         previewSection.classList.remove('hidden');
 
-        // 이미지 리사이즈 및 Base64 변환
-        newProfileImageBase64 = await resizeImageToBase64(file);
-        
+        // 파일 객체 저장 (나중에 Presigned URL로 업로드)
+        newProfileImageFile = file;
+
+        // 미리보기용 Blob 생성
+        const blob = await resizeImageToBlob(file, 1024, 100);
+        const blobUrl = URL.createObjectURL(blob);
+
         // 미리보기 업데이트
         newImagePreview.innerHTML = `
-            <img 
-                src="${newProfileImageBase64}" 
-                alt="새 프로필 이미지" 
+            <img
+                src="${blobUrl}"
+                alt="새 프로필 이미지"
                 class="w-full h-full rounded-full object-cover"
             >
         `;
-        
-        const fileSizeKB = Math.round((newProfileImageBase64.length * 3) / 4 / 1024);
+
+        const fileSizeKB = Math.round(blob.size / 1024);
         imageFileInfo.textContent = `${file.name} (${fileSizeKB}KB)`;
-        
+
         // 현재 이미지 제거 상태 초기화
         removeCurrentImage = false;
         
@@ -111,13 +58,13 @@ async function handleImageSelection(file) {
         
         // 미리보기 섹션 숨기기
         document.getElementById('imagePreviewSection').classList.add('hidden');
-        newProfileImageBase64 = null;
+        newProfileImageFile = null;
     }
 }
 
 // 새 이미지 제거
 function removeNewImage() {
-    newProfileImageBase64 = null;
+    newProfileImageFile = null;
     document.getElementById('imagePreviewSection').classList.add('hidden');
     document.getElementById('profileImageInput').value = '';
 }
@@ -125,11 +72,11 @@ function removeNewImage() {
 // 현재 이미지 제거
 function removeCurrentImageHandler() {
     removeCurrentImage = true;
-    newProfileImageBase64 = null;
-    
+    newProfileImageFile = null;
+
     // 미리보기 업데이트
     updateProfileImagePreview();
-    
+
     // 새 이미지 미리보기 숨기기
     document.getElementById('imagePreviewSection').classList.add('hidden');
     document.getElementById('profileImageInput').value = '';
@@ -369,8 +316,16 @@ async function handleFormSubmit(e) {
         }
         
         // 프로필 이미지 변경사항
-        if (newProfileImageBase64) {
-            updateData.profileImage = newProfileImageBase64;
+        if (newProfileImageFile) {
+            // Presigned URL로 S3에 업로드
+            submitBtn.textContent = '이미지 업로드 중...';
+            const profileImageUrl = await uploadToS3WithPresignedUrl(
+                newProfileImageFile,
+                'profiles',
+                currentUserData._id || 'user'
+            );
+            updateData.profileImage = profileImageUrl;
+            submitBtn.textContent = '저장 중...';
         } else if (removeCurrentImage) {
             updateData.removeProfileImage = true;
         }
@@ -414,7 +369,7 @@ async function handleFormSubmit(e) {
             }
             
             // 상태 초기화
-            newProfileImageBase64 = null;
+            newProfileImageFile = null;
             removeCurrentImage = false;
             
             // 비밀번호 필드 초기화
