@@ -98,9 +98,9 @@ async function loadUsers(reset = false) {
     // 검색어가 있으면 검색 API, 없으면 일반 목록 API
     let url;
     if (currentSearchTerm) {
-      url = `/admin/users/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=20&role=${currentFilterRole}`;
+      url = `/admin/users/search?q=${encodeURIComponent(currentSearchTerm)}&page=${currentPage}&limit=10&role=${currentFilterRole}`;
     } else {
-      url = `/admin/users?page=${currentPage}&limit=20&role=${currentFilterRole}`;
+      url = `/admin/users?page=${currentPage}&limit=10&role=${currentFilterRole}`;
     }
 
     const response = await fetchWithAuth(url);
@@ -262,22 +262,15 @@ async function searchUsers() {
   currentSearchTerm = searchInput.value.trim();
   currentFilterRole = document.getElementById('filterRole').value;
 
-  currentPage = 1;
-  hasMore = true;
-  allUsers = [];
-
-  await loadUsers();
+  await loadUsers(true); // 리셋하고 다시 로드
 }
 
 // 검색 초기화 (역할 필터 변경 시)
 async function changeFilterRole() {
   currentFilterRole = document.getElementById('filterRole').value;
 
-  // 필터가 변경되면 항상 다시 로드
-  currentPage = 1;
-  hasMore = true;
-  allUsers = [];
-  await loadUsers();
+  // 필터가 변경되면 항상 다시 로드 (검색어 유무 관계없이)
+  await loadUsers(true); // 리셋하고 다시 로드
 }
 
 // 검색 이벤트 리스너 설정

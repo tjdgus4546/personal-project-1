@@ -1683,7 +1683,7 @@ router.delete('/contacts/:contactId', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const role = req.query.role || 'all';
 
@@ -1729,7 +1729,7 @@ router.get('/users', async (req, res) => {
 router.get('/users/search', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const searchTerm = req.query.q || '';
     const role = req.query.role || 'all';
