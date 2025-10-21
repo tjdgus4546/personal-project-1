@@ -93,8 +93,11 @@ const login = async (req, res) => {
 
     // 정지된 회원인지 확인
     if (user.isSuspended) {
+      console.log('[Login] 정지된 사용자 로그인 시도:', user.email, user.isSuspended); // 디버깅용
+
       // 기간 정지의 경우 기간이 만료되었는지 확인
       if (user.suspendedUntil && new Date() >= new Date(user.suspendedUntil)) {
+        console.log('[Login] 정지 기간 만료, 자동 해제'); // 디버깅용
         // 정지 기간이 만료됨 -> 자동으로 정지 해제
         await User.findByIdAndUpdate(user._id, {
           isSuspended: false,
@@ -109,12 +112,16 @@ const login = async (req, res) => {
           ? `계정이 ${new Date(user.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
           : '계정이 영구 정지되었습니다.';
 
-        return res.status(403).json({
+        const suspendData = {
           message: `${suspendMessage}\n사유: ${user.suspendReason || '관리자 조치'}`,
           isSuspended: true,
           suspendedUntil: user.suspendedUntil,
           suspendReason: user.suspendReason
-        });
+        };
+
+        console.log('[Login] 정지 중인 사용자, 403 반환:', suspendData); // 디버깅용
+
+        return res.status(403).json(suspendData);
       }
     }
 
