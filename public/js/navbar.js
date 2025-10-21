@@ -9,7 +9,57 @@ export async function getUserData() {
     const response = await fetch('/auth/me', {
       credentials: 'include'
     });
-    return response.ok ? await response.json() : null;
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    // 403 에러인 경우 정지/탈퇴 여부 확인
+    if (response.status === 403) {
+      try {
+        const data = await response.json();
+        console.log('403 에러 데이터:', data); // 디버깅용
+
+        // 정지된 계정
+        if (data.isSuspended) {
+          const suspendMessage = data.suspendedUntil
+            ? `계정이 ${new Date(data.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
+            : '계정이 영구 정지되었습니다.';
+
+          // alert는 동기적으로 작동하므로 사용자가 확인을 누를 때까지 대기
+          alert(`${suspendMessage}\n\n사유: ${data.suspendReason || '관리자 조치'}`);
+
+          // 로그아웃 처리
+          await fetch('/auth/logout', {
+            method: 'POST',
+            credentials: 'include'
+          });
+
+          // 메인 페이지로 리다이렉트
+          window.location.href = '/';
+          return null;
+        }
+
+        // 기타 403 에러 (탈퇴한 계정 등)
+        if (data.message) {
+          alert(data.message);
+
+          // 로그아웃 처리
+          await fetch('/auth/logout', {
+            method: 'POST',
+            credentials: 'include'
+          });
+
+          // 메인 페이지로 리다이렉트
+          window.location.href = '/';
+          return null;
+        }
+      } catch (jsonError) {
+        console.error('403 응답 파싱 에러:', jsonError);
+      }
+    }
+
+    return null;
   } catch (err) {
     console.error('사용자 정보 로드 실패:', err);
     return null;
