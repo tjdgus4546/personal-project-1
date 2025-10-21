@@ -179,7 +179,7 @@ async function loadSessionData() {
 
                 window.__isRevealingAnswer = true;
                 const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
-                const wait = Math.max(0, 5 - elapsed);
+                const wait = Math.max(0, Math.min(5, 5 - elapsed)); // 최대 5초, 최소 0초
                 setTimeout(() => {
                     window.__isRevealingAnswer = false;
                     if (isHost()) {
@@ -1019,16 +1019,13 @@ function showAnswer({ answers, answerImageBase64, revealedAt }) {
     // ✅ 정답 공개 상태 설정
     window.__isRevealingAnswer = true;
 
-    // ✅ 5초 후 다음 문제로 넘어가기
-    const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
-    const waitTime = Math.max(0, 5 - elapsed);
-
+    // ✅ 5초 후 다음 문제로 넘어가기 (서버 시간 차이를 고려하지 않고 정확히 5초)
     setTimeout(() => {
         window.__isRevealingAnswer = false;
         if (isHost()) {
             socket.emit('nextQuestion', { sessionId, userId });
         }
-    }, waitTime * 1000);
+    }, 5000);
 }
 
 // 퀴즈 추천 토글
@@ -2057,25 +2054,21 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
 
     window.__isRevealingAnswer = true;
 
-    const elapsed = (Date.now() - new Date(revealedAt).getTime()) / 1000;
-    const waitTime = Math.max(0, 5 - elapsed);
-
+    // 5초 후 다음 문제로 넘어가기 (서버 시간 차이를 고려하지 않고 정확히 5초)
     setTimeout(() => {
         window.__isRevealingAnswer = false;
         if (isHost()) {
             socket.emit('nextQuestion', { sessionId, userId });
         }
-    }, waitTime * 1000);
+    }, 5000);
 }
 
 function startCountdown(timeLimit) {
-    if (questionTimer) clearTimeout(questionTimer);
     if (countdownInterval) clearInterval(countdownInterval);
 
-    const elapsed = (Date.now() - questionStartAt.getTime()) / 1000;
-    let remaining = Math.max(0, Math.floor(timeLimit - elapsed));
-
     const timerDisplay = document.getElementById('timerDisplay');
+    let remaining = timeLimit;
+
     if (timerDisplay) {
         timerDisplay.textContent = `남은 시간: ${remaining}초`;
     }
@@ -2085,17 +2078,11 @@ function startCountdown(timeLimit) {
         if (timerDisplay) {
             timerDisplay.textContent = `남은 시간: ${remaining}초`;
         }
-        
+
         if (remaining <= 0) {
             clearInterval(countdownInterval);
         }
     }, 1000);
-
-    questionTimer = setTimeout(() => {
-        if (isHost()) {
-            socket.emit('revealAnswer', { sessionId });
-        }
-    }, remaining * 1000);
 }
 
 // YouTube API 준비 완료 콜백
