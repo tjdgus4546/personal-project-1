@@ -1,3 +1,6 @@
+// 정지 알림이 이미 표시되었는지 확인하는 플래그
+let suspendAlertShownInFetch = false;
+
 // fetchWithAuth를 export로 변경
 export async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
@@ -23,14 +26,22 @@ export async function fetchWithAuth(url, options = {}) {
 
         // 403 에러인 경우 정지/탈퇴 여부 확인
         if (response.status === 403) {
+            // 이미 alert를 표시했다면 중복 방지
+            if (suspendAlertShownInFetch) {
+                throw new Error('Already handled');
+            }
+
             const data = await response.json();
 
             // 정지된 계정
             if (data.isSuspended) {
+                suspendAlertShownInFetch = true; // 플래그 설정
+
                 const suspendMessage = data.suspendedUntil
                     ? `계정이 ${new Date(data.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
                     : '계정이 영구 정지되었습니다.';
 
+                // alert 표시 (동기적으로 사용자가 확인할 때까지 대기)
                 alert(`${suspendMessage}\n\n사유: ${data.suspendReason || '관리자 조치'}`);
 
                 // 로그아웃 처리
@@ -46,6 +57,9 @@ export async function fetchWithAuth(url, options = {}) {
 
             // 기타 403 에러 (탈퇴한 계정 등)
             if (data.message) {
+                suspendAlertShownInFetch = true; // 플래그 설정
+
+                // alert 표시
                 alert(data.message);
 
                 // 로그아웃 처리
