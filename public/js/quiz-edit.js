@@ -286,8 +286,46 @@ function setupDragAndDrop() {
         e.preventDefault();
     }, false);
 
-    window.addEventListener('drop', (e) => {
+    // 전역: 이미지 드롭 시 자동으로 이미지 타입으로 변경
+    window.addEventListener('drop', async (e) => {
         e.preventDefault();
+
+        // 드롭존 외부에서 드롭한 경우 체크
+        const dropZone = e.target.closest('#questionImageDropZone, #answerImageDropZone');
+        if (dropZone) {
+            // 드롭존 내부면 기존 로직이 처리하므로 여기서는 무시
+            return;
+        }
+
+        // 파일이 있는지 확인
+        const files = e.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+
+        const file = files[0];
+
+        // 이미지 파일인지 확인
+        if (file.type.startsWith('image/')) {
+            // 현재 타입이 이미지가 아니면 자동으로 변경
+            if (currentQuestionType !== 'image') {
+                selectQuestionType('image');
+
+                // 약간의 지연 후 (DOM 업데이트 대기) 이미지를 문제 이미지로 설정
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // 문제 이미지 input에 파일 설정
+            const questionImageInput = document.getElementById('questionImage');
+            if (questionImageInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                questionImageInput.files = dataTransfer.files;
+
+                await previewImage(questionImageInput, 'questionImagePreview');
+
+                // 성공 메시지 (선택사항)
+                devLog('이미지가 자동으로 문제 이미지로 추가되었습니다.');
+            }
+        }
     }, false);
 
     const dropZones = [
@@ -345,6 +383,50 @@ function setupDragAndDrop() {
                 await previewImage(input, previewId);
             }
         });
+    });
+}
+
+// 유튜브 링크 붙여넣기 감지 설정
+function setupPasteHandler() {
+    // 전역 붙여넣기 이벤트 리스너
+    document.addEventListener('paste', async (e) => {
+        // input이나 textarea에 붙여넣기 하는 경우는 무시 (기본 동작 허용)
+        const target = e.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+            // 단, youtubeUrl이나 answerYoutubeUrl input인 경우는 처리
+            if (target.id !== 'youtubeUrl' && target.id !== 'answerYoutubeUrl') {
+                return;
+            }
+        }
+
+        // 클립보드에서 텍스트 가져오기
+        const pastedText = e.clipboardData?.getData('text');
+        if (!pastedText) return;
+
+        // 유튜브 링크인지 확인
+        const videoId = extractYoutubeVideoId(pastedText);
+        if (videoId) {
+            // 현재 타입이 video나 audio가 아니면 자동으로 audio(소리)로 변경
+            if (currentQuestionType !== 'video' && currentQuestionType !== 'audio') {
+                e.preventDefault(); // 기본 붙여넣기 동작 막기
+
+                selectQuestionType('audio');
+
+                // 약간의 지연 후 (DOM 업데이트 대기) 유튜브 URL 설정
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // 유튜브 URL input에 링크 설정
+                const youtubeUrlInput = document.getElementById('youtubeUrl');
+                if (youtubeUrlInput) {
+                    youtubeUrlInput.value = pastedText;
+                    updateYoutubePreview();
+
+                    // 성공 메시지 (선택사항)
+                    devLog('유튜브 링크가 자동으로 소리 문제로 추가되었습니다.');
+                }
+            }
+            // 이미 video나 audio 타입이면 기본 동작 허용
+        }
     });
 }
 
@@ -1335,6 +1417,9 @@ export async function saveRandomOrderSetting() {
 
     // 드래그 앤 드롭 설정
     setupDragAndDrop();
+
+    // 유튜브 링크 붙여넣기 감지 설정
+    setupPasteHandler();
 
     // 초기 폼 상태 업데이트
     updateFormVisibility();
