@@ -9,51 +9,7 @@ export async function getUserData() {
     const response = await fetch('/auth/me', {
       credentials: 'include'
     });
-
-    if (response.ok) {
-      return await response.json();
-    }
-
-    // 403 에러인 경우 정지/탈퇴 여부 확인
-    if (response.status === 403) {
-      const data = await response.json();
-
-      // 정지된 계정
-      if (data.isSuspended) {
-        const suspendMessage = data.suspendedUntil
-          ? `계정이 ${new Date(data.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
-          : '계정이 영구 정지되었습니다.';
-
-        alert(`${suspendMessage}\n\n사유: ${data.suspendReason || '관리자 조치'}`);
-
-        // 로그아웃 처리
-        await fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include'
-        });
-
-        // 메인 페이지로 리다이렉트
-        window.location.href = '/';
-        return null;
-      }
-
-      // 기타 403 에러 (탈퇴한 계정 등)
-      if (data.message) {
-        alert(data.message);
-
-        // 로그아웃 처리
-        await fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include'
-        });
-
-        // 메인 페이지로 리다이렉트
-        window.location.href = '/';
-        return null;
-      }
-    }
-
-    return null;
+    return response.ok ? await response.json() : null;
   } catch (err) {
     console.error('사용자 정보 로드 실패:', err);
     return null;

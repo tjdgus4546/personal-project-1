@@ -123,8 +123,20 @@ function setupLoginForm() {
                 
             } else {
                 // 로그인 실패
-                showAlert('error', result.message || '로그인에 실패했습니다.');
-                setLoadingState(false);
+                // 정지된 계정인 경우 alert로 명확하게 표시
+                if (result.isSuspended) {
+                    const suspendMessage = result.suspendedUntil
+                        ? `계정이 ${new Date(result.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
+                        : '계정이 영구 정지되었습니다.';
+
+                    alert(`${suspendMessage}\n\n사유: ${result.suspendReason || '관리자 조치'}`);
+
+                    // alert 확인 후 메인 페이지로 리다이렉트
+                    window.location.href = '/';
+                } else {
+                    showAlert('error', result.message || '로그인에 실패했습니다.');
+                    setLoadingState(false);
+                }
             }
             
         } catch (err) {

@@ -1,12 +1,12 @@
 // fetchWithAuth를 export로 변경
 export async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
-    
+
     try {
         let response = await fetch(url, options);
 
         if (response.status === 401) {
-            
+
             const refreshResponse = await fetch('/auth/refresh', {
                 method: 'POST',
                 credentials: 'include'
@@ -20,7 +20,46 @@ export async function fetchWithAuth(url, options = {}) {
                 throw new Error('Token refresh failed');
             }
         }
-        
+
+        // 403 에러인 경우 정지/탈퇴 여부 확인
+        if (response.status === 403) {
+            const data = await response.json();
+
+            // 정지된 계정
+            if (data.isSuspended) {
+                const suspendMessage = data.suspendedUntil
+                    ? `계정이 ${new Date(data.suspendedUntil).toLocaleDateString('ko-KR')}까지 정지되었습니다.`
+                    : '계정이 영구 정지되었습니다.';
+
+                alert(`${suspendMessage}\n\n사유: ${data.suspendReason || '관리자 조치'}`);
+
+                // 로그아웃 처리
+                await fetch('/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                // 메인 페이지로 리다이렉트
+                window.location.href = '/';
+                throw new Error('Account suspended');
+            }
+
+            // 기타 403 에러 (탈퇴한 계정 등)
+            if (data.message) {
+                alert(data.message);
+
+                // 로그아웃 처리
+                await fetch('/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                // 메인 페이지로 리다이렉트
+                window.location.href = '/';
+                throw new Error('Access forbidden');
+            }
+        }
+
         return response;
     } catch (error) {
         console.error('fetchWithAuth 에러:', error);
