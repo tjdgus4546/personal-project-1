@@ -223,7 +223,7 @@ module.exports = (io, app) => {
         }
         if (!latestSession) return;
 
-        emitScoreboard(io, sessionId, session.players);
+        emitScoreboard(io, sessionId, latestSession.players);
 
         const connectedCount = session.players.filter(p => p.connected).length;
         // 스킵투표 인원수 공개
@@ -261,25 +261,32 @@ module.exports = (io, app) => {
 
         // 🔄 재접속 시 게임 진행 중이면 퀴즈 데이터 재전송
         if (session.isActive && session.cachedQuizData) {
+          // 재접속한 플레이어의 answered 정보 조회
+          const reconnectPlayer = session.players.find(p => p.userId.toString() === userId.toString());
+          const playerAnswered = reconnectPlayer?.answered || {};
+
           socket.emit('game-started', {
             success: true,
             data: {
               quiz: session.cachedQuizData, // 캐시된 해시화된 퀴즈
               host: session.host?.toString() || '__NONE__',
               questionOrder: session.questionOrder,
-              currentQuestionIndex: session.questionOrder[session.currentQuestionIndex]
+              currentQuestionIndex: session.questionOrder[session.currentQuestionIndex],
+              isReconnect: true, // 재접속 플래그
+              currentIndex: session.currentQuestionIndex, // questionOrder 배열의 인덱스
+              playerAnswered: playerAnswered // 플레이어의 answered 상태
             }
           });
 
-          // 현재 진행 중인 문제 정보도 전송
-          socket.emit('question-started', {
-            success: true,
-            data: {
-              questionIndex: session.currentQuestionIndex,
-              actualQuestionIndex: session.questionOrder[session.currentQuestionIndex],
-              readyPlayers: session.readyPlayers || []
-            }
-          });
+          // 타이머 시작 정보도 전송 (클라이언트가 타이머 복원할 수 있도록)
+          if (session.questionStartAt) {
+            socket.emit('question-start', {
+              success: true,
+              data: {
+                questionStartAt: session.questionStartAt
+              }
+            });
+          }
         }
       } catch (error) {
         handleSocketError(socket, error, 'joinSession');

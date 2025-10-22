@@ -1344,7 +1344,7 @@ function setupSocketListeners() {
             return;
         }
 
-        const { quiz, host: newHost, questionOrder: order } = data;
+        const { quiz, host: newHost, questionOrder: order, isReconnect, currentIndex: serverCurrentIndex, playerAnswered } = data;
 
         if (!quiz || !Array.isArray(quiz.questions)) {
             console.error('잘못된 퀴즈 구조:', quiz);
@@ -1394,7 +1394,8 @@ function setupSocketListeners() {
             };
         });
 
-        currentIndex = 0;
+        // 🔄 재접속인 경우 서버에서 받은 currentIndex 사용, 아니면 0
+        currentIndex = isReconnect ? (serverCurrentIndex || 0) : 0;
 
         showGameSection();
 
@@ -1402,8 +1403,16 @@ function setupSocketListeners() {
         showQuestion({ silent: true });
         updateQuestionNumber();
 
-        // 로딩 완료 알림
-        socket.emit('client-ready', { sessionId });
+        // 🔄 재접속 시 hasAnswered 상태 복원
+        if (isReconnect && playerAnswered) {
+            const actualQuestionIndex = questionOrder[currentIndex];
+            hasAnswered = playerAnswered[actualQuestionIndex] === true;
+        }
+
+        // 재접속이 아닐 때만 client-ready 전송
+        if (!isReconnect) {
+            socket.emit('client-ready', { sessionId });
+        }
     });
 
     socket.on('host-updated', ({ success, data, message }) => {
