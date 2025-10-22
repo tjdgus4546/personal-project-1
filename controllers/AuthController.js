@@ -312,29 +312,43 @@ const updateProfile = async (req, res) => {
 
     // 프로필 이미지 처리
     if (profileImage) {
-      // 새 이미지가 제공된 경우
-      if (!profileImage.startsWith('data:image/')) {
+      // S3 URL인지 Base64인지 확인
+      const isS3Url = profileImage.startsWith('http://') || profileImage.startsWith('https://');
+      const isBase64 = profileImage.startsWith('data:image/');
+
+      if (!isS3Url && !isBase64) {
         return res.status(400).json({ message: '유효하지 않은 이미지 형식입니다.' });
       }
 
-      // 이미지 크기 확인 (Base64 디코딩 후 대략 1MB 이하)
-      const imageSize = Math.round((profileImage.length * 3) / 4 / 1024); // KB
-      if (imageSize > 1024) {
-        return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 1MB)' });
-      }
-
-      try {
+      if (isS3Url) {
+        // 클라이언트에서 이미 S3에 업로드한 경우 - URL만 저장
         // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
         if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
           await deleteImageFromS3(user.profileImage);
         }
 
-        // 새 이미지 S3에 업로드
-        const s3Url = await uploadProfileImage(profileImage, req.user.id);
-        updateData.profileImage = s3Url;
-      } catch (s3Error) {
-        console.error('프로필 이미지 S3 업로드 실패:', s3Error);
-        return res.status(500).json({ message: '프로필 이미지 업로드에 실패했습니다.' });
+        updateData.profileImage = profileImage;
+      } else {
+        // Base64 이미지인 경우 - 서버에서 S3에 업로드
+        // 이미지 크기 확인 (Base64 디코딩 후 대략 1MB 이하)
+        const imageSize = Math.round((profileImage.length * 3) / 4 / 1024); // KB
+        if (imageSize > 1024) {
+          return res.status(400).json({ message: '이미지 크기가 너무 큽니다. (최대 1MB)' });
+        }
+
+        try {
+          // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
+          if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
+            await deleteImageFromS3(user.profileImage);
+          }
+
+          // 새 이미지 S3에 업로드
+          const s3Url = await uploadProfileImage(profileImage, req.user.id);
+          updateData.profileImage = s3Url;
+        } catch (s3Error) {
+          console.error('프로필 이미지 S3 업로드 실패:', s3Error);
+          return res.status(500).json({ message: '프로필 이미지 업로드에 실패했습니다.' });
+        }
       }
     } else if (removeProfileImage) {
       // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)

@@ -1820,7 +1820,11 @@ router.patch('/users/:userId/profile-image', async (req, res) => {
       });
     }
 
-    if (!profileImageBase64.startsWith('data:image/')) {
+    // S3 URL인지 Base64인지 확인
+    const isS3Url = profileImageBase64.startsWith('http://') || profileImageBase64.startsWith('https://');
+    const isBase64 = profileImageBase64.startsWith('data:image/');
+
+    if (!isS3Url && !isBase64) {
       return res.status(400).json({
         success: false,
         message: '유효하지 않은 이미지 형식입니다.'
@@ -1839,17 +1843,24 @@ router.patch('/users/:userId/profile-image', async (req, res) => {
     }
 
     try {
+      let finalImageUrl;
+
+      if (isS3Url) {
+        // 클라이언트에서 이미 S3에 업로드한 경우 - URL만 저장
+        finalImageUrl = profileImageBase64;
+      } else {
+        // Base64 이미지인 경우 - 서버에서 S3에 업로드
+        finalImageUrl = await uploadProfileImage(profileImageBase64, userId);
+      }
+
       // 이전 S3 이미지 삭제 (우리 버킷의 이미지인 경우만)
       if (user.profileImage && user.profileImage.includes(process.env.S3_BUCKET_NAME || 'playcode-quiz-images')) {
         await deleteImageFromS3(user.profileImage);
       }
 
-      // 새 이미지 S3에 업로드
-      const s3Url = await uploadProfileImage(profileImageBase64, userId);
-
       // 프로필 이미지 URL 업데이트
       await User.findByIdAndUpdate(userId, {
-        profileImage: s3Url
+        profileImage: finalImageUrl
       });
 
       res.json({
