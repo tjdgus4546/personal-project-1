@@ -63,6 +63,8 @@ module.exports = (io, app) => {
   const userDb = app.get('userDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
+  const QuizRecord = require('../models/QuizRecord')(quizDb);
+  const User = require('../models/User')(userDb);
   const sessionUserCache = new Map();
   const disconnectTimers = new Map(); // 사용자별 disconnect 타이머 저장
   const { safeFindSessionById, safeSaveSession } = require('../utils/sessionHelpers');
@@ -1201,6 +1203,113 @@ module.exports = (io, app) => {
     };
   }
 
+  // 퀴즈 기록 저장 및 상위 퍼센트 계산
+  async function saveQuizRecordsAndCalculatePercentile(quizId, players) {
+    try {
+      // 1. playedQuizzes에 해당 퀴즈가 없는 플레이어만 필터링
+      const userIds = players.map(p => p.userId);
+      const users = await User.find({ _id: { $in: userIds } }).select('_id playedQuizzes').lean();
+
+      const userPlayedQuizzesMap = new Map();
+      users.forEach(user => {
+        const playedQuizIds = user.playedQuizzes.map(id => id.toString());
+        userPlayedQuizzesMap.set(user._id.toString(), playedQuizIds);
+      });
+
+      // playedQuizzes에 없는 플레이어만 필터링
+      const newPlayers = players.filter(player => {
+        const playedQuizzes = userPlayedQuizzesMap.get(player.userId.toString()) || [];
+        return !playedQuizzes.includes(quizId.toString());
+      });
+
+      // 2. 새로운 플레이어들의 점수 추출
+      const newScores = newPlayers.map(p => ({
+        score: p.correctAnswersCount || 0,
+        userId: p.userId
+      }));
+
+      // 3. QuizRecord 업데이트 (upsert)
+      let quizRecord = await QuizRecord.findOne({ quizId });
+
+      if (!quizRecord) {
+        // 처음 플레이되는 퀴즈
+        quizRecord = await QuizRecord.create({
+          quizId,
+          records: newScores.map(s => ({ score: s.score })),
+          totalCount: newScores.length
+        });
+      } else if (newScores.length > 0) {
+        // 기존 기록에 추가 (신규 플레이어가 있을 때만)
+        await QuizRecord.findByIdAndUpdate(
+          quizRecord._id,
+          {
+            $push: { records: { $each: newScores.map(s => ({ score: s.score })) } },
+            $inc: { totalCount: newScores.length }
+          }
+        );
+        // 업데이트된 데이터 다시 조회
+        quizRecord = await QuizRecord.findById(quizRecord._id);
+      }
+
+      // 4. playedQuizzes에 퀴즈 추가 (한 번에 처리, 신규 플레이어가 있을 때만)
+      if (newScores.length > 0) {
+        await User.updateMany(
+          { _id: { $in: newScores.map(s => s.userId) } },
+          { $addToSet: { playedQuizzes: quizId } }
+        );
+      }
+
+      // 5. 상위 퍼센트 계산 (캐싱된 데이터 사용)
+      const allScores = quizRecord.records.map(r => r.score).sort((a, b) => b - a);
+      const totalPlayers = allScores.length;
+
+      // 각 플레이어의 퍼센트 계산
+      const playersWithPercentile = players.map(player => {
+        const playerScore = player.correctAnswersCount || 0;
+
+        // 10회 미만은 통계적으로 의미가 없으므로 표시하지 않음
+        let percentileLabel = null;
+        if (totalPlayers >= 10) {
+          // 순위 계산 (같은 점수는 같은 순위)
+          let rank = allScores.filter(s => s > playerScore).length + 1;
+          const percentile = (rank / totalPlayers) * 100;
+
+          // 퍼센트 라벨 결정
+          if (percentile <= 1) percentileLabel = '상위 1%';
+          else if (percentile <= 3) percentileLabel = '상위 3%';
+          else if (percentile <= 5) percentileLabel = '상위 5%';
+          else if (percentile <= 10) percentileLabel = '상위 10%';
+          else if (percentile <= 30) percentileLabel = '상위 30%';
+          else if (percentile <= 50) percentileLabel = '상위 50%';
+          else percentileLabel = '상위 50% 미만'; // 50% 초과는 "상위 50% 미만"으로 표시
+        }
+
+        return {
+          nickname: player.nickname,
+          profileImage: player.profileImage,
+          score: player.score,
+          correctAnswersCount: player.correctAnswersCount || 0,
+          connected: player.connected,
+          percentile: percentileLabel
+        };
+      });
+
+      return playersWithPercentile;
+
+    } catch (error) {
+      console.error('❌ 퀴즈 기록 저장 실패:', error);
+      // 에러 발생 시 퍼센트 없이 반환
+      return players.map(p => ({
+        nickname: p.nickname,
+        profileImage: p.profileImage,
+        score: p.score,
+        correctAnswersCount: p.correctAnswersCount || 0,
+        connected: p.connected,
+        percentile: null
+      }));
+    }
+  }
+
   //문제 타이머 함수
   async function goToNextQuestion(sessionId, io, app) {
     try {
@@ -1261,17 +1370,19 @@ module.exports = (io, app) => {
           console.log(`🧹 firstCorrectUsers 정리: ${sessionId}`);
         }
 
+        // 📊 점수 기록 저장 및 상위 퍼센트 계산
+        const playersWithPercentile = await saveQuizRecordsAndCalculatePercentile(
+          session.quizId,
+          session.players
+        );
+
+        console.log(' 게임 종료 - 퍼센트 계산 결과:', playersWithPercentile);
+
         io.to(sessionId).emit('end', {
           success: true,
           message: '퀴즈 종료!',
           data: {
-            players: session.players.map(p => ({
-              nickname: p.nickname,
-              profileImage: p.profileImage,
-              score: p.score,
-              correctAnswersCount: p.correctAnswersCount || 0,
-              connected: p.connected
-            }))
+            players: playersWithPercentile
           }
         });
         return;

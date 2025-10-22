@@ -1684,6 +1684,11 @@ function renderFinalRanking(players) {
                         <span class="text-blue-400 font-semibold">
                             <span class="text-gray-400">맞춘 문제:</span> ${player.correctAnswersCount || 0}개
                         </span>
+                        ${player.percentile ? `
+                        <span class="text-yellow-400 font-bold text-sm px-2 py-1 bg-yellow-400/20 rounded-full border border-yellow-400/40 animate-pulse">
+                            ${player.percentile}
+                        </span>
+                        ` : ''}
                     </div>
                 </div>
 
