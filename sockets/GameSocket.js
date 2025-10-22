@@ -1203,8 +1203,8 @@ module.exports = (io, app) => {
     };
   }
 
-  // 퀴즈 기록 저장 및 상위 퍼센트 계산
-  async function saveQuizRecordsAndCalculatePercentile(quizId, players) {
+  // 퀴즈 기록 저장 및 퍼센타일 임계값 계산
+  async function saveQuizRecordsAndCalculateThresholds(quizId, players) {
     try {
       // 1. playedQuizzes에 해당 퀴즈가 없는 플레이어만 필터링
       const userIds = players.map(p => p.userId);
@@ -1259,54 +1259,63 @@ module.exports = (io, app) => {
         );
       }
 
-      // 5. 상위 퍼센트 계산 (캐싱된 데이터 사용)
+      // 5. 퍼센타일 임계값 계산 (한 번만 계산!)
       const allScores = quizRecord.records.map(r => r.score).sort((a, b) => b - a);
       const totalPlayers = allScores.length;
 
-      // 각 플레이어의 퍼센트 계산
-      const playersWithPercentile = players.map(player => {
-        const playerScore = player.correctAnswersCount || 0;
+      let percentileThresholds = null;
 
-        // 10회 미만은 통계적으로 의미가 없으므로 표시하지 않음
-        let percentileLabel = null;
-        if (totalPlayers >= 10) {
-          // 순위 계산 (같은 점수는 같은 순위)
-          let rank = allScores.filter(s => s > playerScore).length + 1;
-          const percentile = (rank / totalPlayers) * 100;
+      // 10회 이상일 때만 임계값 계산
+      if (totalPlayers >= 10) {
+        // 각 퍼센타일의 인덱스 계산
+        const top1Index = Math.floor(totalPlayers * 0.01);
+        const top3Index = Math.floor(totalPlayers * 0.03);
+        const top5Index = Math.floor(totalPlayers * 0.05);
+        const top10Index = Math.floor(totalPlayers * 0.10);
+        const top30Index = Math.floor(totalPlayers * 0.30);
+        const top50Index = Math.floor(totalPlayers * 0.50);
 
-          // 퍼센트 라벨 결정
-          if (percentile <= 1) percentileLabel = '상위 1%';
-          else if (percentile <= 3) percentileLabel = '상위 3%';
-          else if (percentile <= 5) percentileLabel = '상위 5%';
-          else if (percentile <= 10) percentileLabel = '상위 10%';
-          else if (percentile <= 30) percentileLabel = '상위 30%';
-          else if (percentile <= 50) percentileLabel = '상위 50%';
-          else percentileLabel = '상위 50% 미만'; // 50% 초과는 "상위 50% 미만"으로 표시
-        }
-
-        return {
-          nickname: player.nickname,
-          profileImage: player.profileImage,
-          score: player.score,
-          correctAnswersCount: player.correctAnswersCount || 0,
-          connected: player.connected,
-          percentile: percentileLabel
+        percentileThresholds = {
+          top1: allScores[top1Index] || 0,
+          top3: allScores[top3Index] || 0,
+          top5: allScores[top5Index] || 0,
+          top10: allScores[top10Index] || 0,
+          top30: allScores[top30Index] || 0,
+          top50: allScores[top50Index] || 0
         };
-      });
 
-      return playersWithPercentile;
+        // DB에 임계값 저장
+        await QuizRecord.findByIdAndUpdate(
+          quizRecord._id,
+          { $set: { percentileThresholds } }
+        );
+      }
+
+      // 6. 플레이어 데이터와 임계값 반환 (퍼센트 계산은 클라이언트에서!)
+      return {
+        players: players.map(p => ({
+          nickname: p.nickname,
+          profileImage: p.profileImage,
+          score: p.score,
+          correctAnswersCount: p.correctAnswersCount || 0,
+          connected: p.connected
+        })),
+        percentileThresholds
+      };
 
     } catch (error) {
       console.error('❌ 퀴즈 기록 저장 실패:', error);
-      // 에러 발생 시 퍼센트 없이 반환
-      return players.map(p => ({
-        nickname: p.nickname,
-        profileImage: p.profileImage,
-        score: p.score,
-        correctAnswersCount: p.correctAnswersCount || 0,
-        connected: p.connected,
-        percentile: null
-      }));
+      // 에러 발생 시 임계값 없이 반환
+      return {
+        players: players.map(p => ({
+          nickname: p.nickname,
+          profileImage: p.profileImage,
+          score: p.score,
+          correctAnswersCount: p.correctAnswersCount || 0,
+          connected: p.connected
+        })),
+        percentileThresholds: null
+      };
     }
   }
 
@@ -1370,19 +1379,20 @@ module.exports = (io, app) => {
           console.log(`🧹 firstCorrectUsers 정리: ${sessionId}`);
         }
 
-        // 📊 점수 기록 저장 및 상위 퍼센트 계산
-        const playersWithPercentile = await saveQuizRecordsAndCalculatePercentile(
+        // 📊 점수 기록 저장 및 퍼센타일 임계값 계산
+        const { players: playersData, percentileThresholds } = await saveQuizRecordsAndCalculateThresholds(
           session.quizId,
           session.players
         );
 
-        console.log(' 게임 종료 - 퍼센트 계산 결과:', playersWithPercentile);
+        console.log('🎯 게임 종료 - 임계값:', percentileThresholds);
 
         io.to(sessionId).emit('end', {
           success: true,
           message: '퀴즈 종료!',
           data: {
-            players: playersWithPercentile
+            players: playersData,
+            percentileThresholds // 클라이언트에서 비교할 임계값 전송
           }
         });
         return;

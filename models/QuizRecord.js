@@ -25,6 +25,15 @@ const quizRecordSchema = new Schema({
     default: 0,
     index: true
   },
+  // 퍼센타일 임계값 (해당 퍼센트가 되기 위한 최소 점수)
+  percentileThresholds: {
+    top1: { type: Number, default: null },   // 상위 1%
+    top3: { type: Number, default: null },   // 상위 3%
+    top5: { type: Number, default: null },   // 상위 5%
+    top10: { type: Number, default: null },  // 상위 10%
+    top30: { type: Number, default: null },  // 상위 30%
+    top50: { type: Number, default: null }   // 상위 50%
+  },
   createdAt: {
     type: Date,
     default: Date.now
