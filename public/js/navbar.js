@@ -1,7 +1,7 @@
 // quiz-init-modal.js에서 필요한 함수들을 임포트
 import {
   fetchWithAuth,
-  resizeImageToBase64
+  uploadToS3WithPresignedUrl
 } from './quiz-init-modal.js';
 
 // 정지 알림이 이미 표시되었는지 확인하는 플래그
@@ -404,7 +404,7 @@ export async function updateNavbar() {
 // 퀴즈 만들기 모달 (quiz-init-modal.js 로직 사용)
 // ============================================
 
-let quizTitleImageBase64 = null;
+let quizTitleImageFile = null; // File 객체 저장
 
 // 퀴즈 만들기 모달 HTML을 body에 추가하는 함수
 export function initializeQuizModal() {
@@ -550,14 +550,20 @@ export async function openCreateQuizModal() {
   document.getElementById('createQuizDescription').value = '';
   document.getElementById('createQuizThumbnail').value = '';
   document.getElementById('thumbnailPreview').classList.add('hidden');
-  quizTitleImageBase64 = null;
-  
+  quizTitleImageFile = null;
+
   const modalElement = document.getElementById('createQuizModal');
   modalElement.classList.remove('hidden');
 }
 
 // 퀴즈 만들기 모달 닫기
 export function closeCreateQuizModal() {
+  // ObjectURL 메모리 해제
+  const previewImage = document.getElementById('thumbnailPreviewImage');
+  if (previewImage && previewImage.src && previewImage.src.startsWith('blob:')) {
+    URL.revokeObjectURL(previewImage.src);
+  }
+
   const modal = document.getElementById('createQuizModal');
   if (modal) {
     modal.classList.add('hidden');
@@ -568,65 +574,110 @@ export function closeCreateQuizModal() {
 async function handleThumbnailPreview(e) {
   const file = e.target.files[0];
   if (!file) return;
-  
-  const preview = document.getElementById('thumbnailPreview');
-  const previewImage = document.getElementById('thumbnailPreviewImage');
-  
+
   try {
-    // quiz-init-modal.js의 resizeImageToBase64 함수 사용
-    quizTitleImageBase64 = await resizeImageToBase64(file);
-    previewImage.src = quizTitleImageBase64;
+    // 파일 타입 검증
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('지원하지 않는 파일 형식입니다.\n\n지원 형식: JPEG, PNG, WebP, GIF');
+      e.target.value = '';
+      return;
+    }
+
+    // 파일 크기 검증 (10MB)
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > 10) {
+      alert(`파일 크기가 너무 큽니다.\n\n최대: 10MB\n현재: ${sizeMB.toFixed(2)}MB`);
+      e.target.value = '';
+      return;
+    }
+
+    // File 객체 저장
+    quizTitleImageFile = file;
+
+    // ObjectURL로 미리보기
+    const preview = document.getElementById('thumbnailPreview');
+    const previewImage = document.getElementById('thumbnailPreviewImage');
+
+    if (previewImage.src && previewImage.src.startsWith('blob:')) {
+      URL.revokeObjectURL(previewImage.src);
+    }
+
+    previewImage.src = URL.createObjectURL(file);
     preview.classList.remove('hidden');
+
   } catch (error) {
     console.error('미리보기 실패:', error);
     alert('이미지 처리 실패: ' + error.message);
+    e.target.value = '';
+    quizTitleImageFile = null;
   }
 }
 
-// 퀴즈 생성 제출 (quiz-init-modal.js의 로직 사용)
+// 퀴즈 생성 제출 (Presigned URL 방식)
 async function submitCreateQuiz() {
   const title = document.getElementById('createQuizTitle').value.trim();
   const description = document.getElementById('createQuizDescription').value.trim();
-  
+
   if (!title) {
     alert('퀴즈 제목을 입력해주세요.');
     return;
   }
-  
-  if (!quizTitleImageBase64) {
+
+  if (!quizTitleImageFile) {
     alert('썸네일 이미지를 선택해주세요.');
     return;
   }
-  
+
   const createBtn = document.getElementById('createQuizBtn');
   const originalText = createBtn.innerHTML;
   createBtn.disabled = true;
   createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>생성 중...</div>';
-  
+
   try {
-    
-    // quiz-init-modal.js의 fetchWithAuth 사용
+    // 1단계: 퀴즈 기본 정보만 전송 (이미지 없이)
     const response = await fetchWithAuth('/api/quiz/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        title, 
-        description, 
-        titleImageBase64: quizTitleImageBase64 
-      })
+      body: JSON.stringify({ title, description })
     });
-    
+
     const data = await response.json();
-    
-    if (response.ok) {
-      alert('퀴즈가 생성되었습니다!');
-      closeCreateQuizModal();
-      window.location.href = `/quiz/edit?quizId=${data.quizId}`;
-    } else {
-      alert('퀴즈 생성 실패: ' + data.message);
+
+    if (!response.ok) {
+      throw new Error(data.message || '퀴즈 정보 저장 실패');
     }
+
+    const quizId = data.quizId;
+
+    // 2단계: Presigned URL로 썸네일 업로드
+    createBtn.innerHTML = '<div class="inline-flex items-center"><svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>이미지 업로드 중...</div>';
+
+    const thumbnailUrl = await uploadToS3WithPresignedUrl(
+      quizTitleImageFile,
+      'thumbnails',
+      quizId
+    );
+
+    // 3단계: 서버에 썸네일 URL 업데이트
+    const updateRes = await fetchWithAuth(`/api/quiz/${quizId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titleImageBase64: thumbnailUrl })
+    });
+
+    if (!updateRes.ok) {
+      console.error('썸네일 URL 업데이트 실패');
+    }
+
+    // 성공 - 편집 페이지로 이동
+    alert('퀴즈가 생성되었습니다!');
+    closeCreateQuizModal();
+    window.location.href = `/quiz/edit?quizId=${quizId}`;
+
   } catch (error) {
-    alert('퀴즈 생성 중 오류가 발생했습니다.');
+    console.error('퀴즈 생성 중 오류:', error);
+    alert('퀴즈 생성 중 오류가 발생했습니다: ' + error.message);
   } finally {
     createBtn.disabled = false;
     createBtn.innerHTML = originalText;

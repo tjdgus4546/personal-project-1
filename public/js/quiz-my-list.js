@@ -1,11 +1,12 @@
 // quiz-my-list.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
-import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 import { renderFooter } from './footer.js';
 import { renderMobileAd } from './mobile-ad.js';
 
 let currentEditQuizId = null;
-let editThumbnailBase64 = null; 
+let editThumbnailFile = null; // File 객체 저장
+let editThumbnailUrl = null; // S3 URL 또는 기존 URL 저장 
 
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
@@ -35,13 +36,37 @@ async function handleEditThumbnailChange(event) {
     if (!file) return;
 
     try {
-        // imageResizer의 resizeImageToBase64 사용 (maxKB=240, minKB=40)
-        editThumbnailBase64 = await resizeImageToBase64(file, 240, 40);
+        // 파일 타입 검증
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('지원하지 않는 파일 형식입니다.\n\n지원 형식: JPEG, PNG, WebP, GIF');
+            event.target.value = '';
+            return;
+        }
+
+        // 파일 크기 검증 (10MB)
+        const sizeMB = file.size / (1024 * 1024);
+        if (sizeMB > 10) {
+            alert(`파일 크기가 너무 큽니다.\n\n최대: 10MB\n현재: ${sizeMB.toFixed(2)}MB`);
+            event.target.value = '';
+            return;
+        }
+
+        // File 객체 저장
+        editThumbnailFile = file;
+
+        // ObjectURL로 미리보기
         const preview = document.getElementById('editThumbnailImage');
-        preview.src = editThumbnailBase64;
+        if (preview.src && preview.src.startsWith('blob:')) {
+            URL.revokeObjectURL(preview.src);
+        }
+        preview.src = URL.createObjectURL(file);
+
     } catch (error) {
         console.error('이미지 처리 실패:', error);
         alert('이미지 처리 실패: ' + error.message);
+        event.target.value = '';
+        editThumbnailFile = null;
     }
 }
 
@@ -242,34 +267,35 @@ function escapeHtml(text) {
 async function openEditModal(quizId) {
     try {
         currentEditQuizId = quizId;
-        
+
         // 퀴즈 정보 가져오기
         const response = await fetchWithAuth(`/api/quiz/${quizId}`);
         if (!response.ok) {
             throw new Error('퀴즈 정보를 불러오는데 실패했습니다.');
         }
-        
+
         const quiz = await response.json();
-        
+
         // 폼에 데이터 설정
         document.getElementById('editTitle').value = quiz.title || '';
         document.getElementById('editDescription').value = quiz.description || '';
-        
+
         // 썸네일 이미지 설정
-        editThumbnailBase64 = quiz.titleImageBase64 || null;
+        editThumbnailFile = null; // 새 파일 없음
+        editThumbnailUrl = quiz.titleImageBase64 || null; // 기존 URL 저장
         const thumbnailImage = document.getElementById('editThumbnailImage');
-        
-        if (editThumbnailBase64) {
-            thumbnailImage.src = editThumbnailBase64;
+
+        if (editThumbnailUrl) {
+            thumbnailImage.src = editThumbnailUrl;
         } else {
             // 기본 이미지 설정
             thumbnailImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect width="400" height="300" fill="%234F46E5"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="white"%3E썸네일 없음%3C/text%3E%3C/svg%3E';
         }
-        
+
         // 모달 열기
         document.getElementById('editModal').classList.remove('hidden');
         document.getElementById('editModal').classList.add('flex');
-        
+
     } catch (error) {
         console.error('모달 열기 실패:', error);
         alert('퀴즈 정보를 불러오는데 실패했습니다.');
@@ -279,7 +305,15 @@ async function openEditModal(quizId) {
 // 수정 모달 닫기
 function closeEditModal() {
     currentEditQuizId = null;
-    editThumbnailBase64 = null;
+    editThumbnailFile = null;
+    editThumbnailUrl = null;
+
+    // ObjectURL 메모리 해제
+    const preview = document.getElementById('editThumbnailImage');
+    if (preview && preview.src && preview.src.startsWith('blob:')) {
+        URL.revokeObjectURL(preview.src);
+    }
+
     document.getElementById('editModal').classList.add('hidden');
     document.getElementById('editModal').classList.remove('flex');
     document.getElementById('editThumbnailInput').value = '';
@@ -289,30 +323,46 @@ function closeEditModal() {
 async function saveEdit() {
     const title = document.getElementById('editTitle').value.trim();
     const description = document.getElementById('editDescription').value.trim();
-    
+
     if (!title) {
         alert('제목은 필수입니다.');
         return;
     }
-    
-    if (!editThumbnailBase64) {
+
+    if (!editThumbnailFile && !editThumbnailUrl) {
         alert('썸네일 이미지는 필수입니다.');
         return;
     }
-    
+
     try {
+        let finalThumbnailUrl = editThumbnailUrl;
+
+        // 새 이미지를 선택한 경우 S3에 업로드
+        if (editThumbnailFile) {
+            try {
+                finalThumbnailUrl = await uploadToS3WithPresignedUrl(
+                    editThumbnailFile,
+                    'thumbnails',
+                    currentEditQuizId
+                );
+            } catch (uploadError) {
+                alert('이미지 업로드 실패: ' + uploadError.message);
+                return;
+            }
+        }
+
         const response = await fetchWithAuth(`/api/quiz/${currentEditQuizId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                title, 
+            body: JSON.stringify({
+                title,
                 description,
-                titleImageBase64: editThumbnailBase64
+                titleImageBase64: finalThumbnailUrl
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok) {
             alert('수정되었습니다.');
             closeEditModal();

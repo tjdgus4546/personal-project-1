@@ -51,9 +51,9 @@ const quizSchema = new Schema({
     required: true,
     maxlength: 40,
   },
-  titleImageBase64: { 
+  titleImageBase64: {
     type: String,
-    required: true,
+    required: true, // 썸네일은 필수값 (임시 placeholder 허용 후 실제 URL로 교체)
   },
   description: {
     type: String,

@@ -5,22 +5,6 @@ import { fetchWithAuth } from './quiz-init-modal.js';
 import { renderFooter } from './footer.js';
 import { renderMobileAd } from './mobile-ad.js';
 
-// 개발 모드 플래그 (프로덕션 배포 시 false로 설정)
-const IS_DEV_MODE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-// 개발 모드 전용 로그 함수
-function devLog(...args) {
-    if (IS_DEV_MODE) {
-        console.log(...args);
-    }
-}
-
-function devError(...args) {
-    if (IS_DEV_MODE) {
-        console.error(...args);
-    }
-}
-
 // 전역 변수
 let currentView = 'overview';
 let questions = [];
@@ -260,9 +244,6 @@ export async function previewImage(input, previewId) {
             img.src = blobUrl;
             preview.classList.remove('hidden');
 
-            const sizeKB = Math.round(blob.size / 1024);
-            devLog(`✔ 이미지 압축 완료: ${sizeKB}KB`);
-
         } catch (error) {
             alert('이미지 처리 실패: ' + error.message);
             input.value = '';
@@ -327,9 +308,6 @@ function setupDragAndDrop() {
                 questionImageInput.files = dataTransfer.files;
 
                 await previewImage(questionImageInput, 'questionImagePreview');
-
-                // 성공 메시지 (선택사항)
-                devLog('이미지가 자동으로 문제 이미지로 추가되었습니다.');
             }
         }
     }, false);
@@ -426,9 +404,6 @@ function setupPasteHandler() {
                 if (youtubeUrlInput) {
                     youtubeUrlInput.value = pastedText;
                     updateYoutubePreview();
-
-                    // 성공 메시지 (선택사항)
-                    devLog('유튜브 링크가 자동으로 소리 문제로 추가되었습니다.');
                 }
             }
             // 이미 video나 audio 타입이면 기본 동작 허용
@@ -694,7 +669,7 @@ function renderQuestions() {
     const emptyState = document.getElementById('emptyState');
 
     if (!container) {
-        devError('questionsList 요소를 찾을 수 없습니다');
+        console.error('questionsList 요소를 찾을 수 없습니다');
         return;
     }
     
@@ -1028,7 +1003,6 @@ export async function saveQuestion() {
 
     // 이미 저장 중이면 무시
     if (isSaving) {
-        devLog('⏳ 이미 저장 중입니다...');
         return;
     }
 
@@ -1060,7 +1034,6 @@ export async function saveQuestion() {
             currentAnswers.push(answerInputValue);
             answerInput.value = ''; // 입력란 초기화
             renderAnswers(); // 화면 업데이트
-            devLog('✅ 정답 입력란의 값을 자동으로 추가했습니다:', answerInputValue);
         } else {
             showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
             return;
@@ -1078,7 +1051,6 @@ export async function saveQuestion() {
                 currentIncorrects.push(incorrectInputValue);
                 incorrectInput.value = ''; // 입력란 초기화
                 renderIncorrects(); // 화면 업데이트
-                devLog('✅ 오답 입력란의 값을 자동으로 추가했습니다:', incorrectInputValue);
             } else {
                 showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
                 return;
@@ -1183,16 +1155,14 @@ export async function saveQuestion() {
     questions[currentEditingIndex] = finalQuestionData;
 
     isSaving = true;
-    devLog('💾 문제 저장 시작...');
 
     try {
         await saveCurrentQuestion();  // ✅ 개별 문제만 저장
-        devLog('✅ 문제 저장 성공');
         showToast('저장되었습니다!', 'success');
         renderQuestions();
         renderSidebar();
     } catch (error) {
-        devError('❌ 문제 저장 실패:', error);
+        console.error('문제 저장 실패:', error);
         showToast('저장 중 오류가 발생했습니다', 'error');
     } finally {
         isSaving = false;
@@ -1209,14 +1179,6 @@ async function saveCurrentQuestion(retryCount = 0) {
 
     const questionData = questions[currentEditingIndex];
 
-    devLog(`📤 API 요청 전송 (시도 ${retryCount + 1}/${MAX_RETRIES + 1}):`, {
-        quizId,
-        questionIndex: currentEditingIndex,
-        questionType: questionData.questionType,
-        hasImage: !!questionData.imageBase64,
-        imageSize: questionData.imageBase64 ? Math.round(questionData.imageBase64.length / 1024) + 'KB' : '없음'
-    });
-
     try {
         const response = await fetchWithAuth(
             `/api/quiz/${quizId}/question/${currentEditingIndex}`,
@@ -1229,15 +1191,9 @@ async function saveCurrentQuestion(retryCount = 0) {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            devError('❌ 서버 응답 오류:', {
-                status: response.status,
-                statusText: response.statusText,
-                errorData
-            });
 
             // 500번대 서버 오류이고 재시도 가능하면 재시도
             if (response.status >= 500 && retryCount < MAX_RETRIES) {
-                devLog(`🔄 ${retryCount + 1}초 후 재시도합니다...`);
                 await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
                 return saveCurrentQuestion(retryCount + 1);
             }
@@ -1246,16 +1202,12 @@ async function saveCurrentQuestion(retryCount = 0) {
         }
 
         const result = await response.json();
-        devLog('✅ 서버 응답 성공:', result);
         return result;
 
     } catch (error) {
         // 네트워크 오류 (TypeError: Failed to fetch 등)
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            devError('❌ 네트워크 오류:', error);
-
             if (retryCount < MAX_RETRIES) {
-                devLog(`🔄 네트워크 오류 - ${retryCount + 1}초 후 재시도합니다...`);
                 await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
                 return saveCurrentQuestion(retryCount + 1);
             }
@@ -1269,8 +1221,6 @@ async function saveCurrentQuestion(retryCount = 0) {
 
 // 전체 문제 목록 저장 (삭제 시 사용)
 async function saveAllQuestions() {
-    devLog('📤 전체 문제 저장:', questions.length + '개');
-
     const response = await fetchWithAuth(
         `/api/quiz/${quizId}/questions`,
         {
@@ -1282,12 +1232,10 @@ async function saveAllQuestions() {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        devError('❌ 서버 오류:', errorData);
         throw new Error(errorData.message || '서버 저장 실패');
     }
 
     const result = await response.json();
-    devLog('✅ 전체 저장 성공:', result);
     return result;
 }
 
@@ -1433,7 +1381,7 @@ export async function saveRandomOrderSetting() {
             feedbackEl.textContent = '오류 발생';
             feedbackEl.classList.remove('opacity-0');
         }
-        devError('❌ 저장 중 오류가 발생했습니다: ', error.message);
+        console.error('저장 중 오류가 발생했습니다:', error.message);
     }
 }
 

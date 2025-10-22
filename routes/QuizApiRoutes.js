@@ -287,12 +287,13 @@ module.exports = (quizDb) => {
         return res.status(400).json({ message: '퀴즈 제목은 필수입니다.' });
       }
 
-      // 🔥 임시 퀴즈 생성 (ID 먼저 생성)
+      // 🔥 임시 퀴즈 생성 (quizId 먼저 발급 → S3 업로드 → URL 업데이트)
       const newQuiz = new Quiz({
         title,
         description,
         creatorId: req.user.id,
-        titleImageBase64: titleImageBase64 || '', // 임시로 Base64 저장
+        // S3 업로드를 위해 quizId가 필요하므로, 임시 placeholder 사용 후 나중에 실제 URL로 교체
+        titleImageBase64: titleImageBase64 || 'https://playcode.gg/images/Logo.png',
         questions: [],
         isComplete: false,
         creationLog: {

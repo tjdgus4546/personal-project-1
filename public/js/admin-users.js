@@ -1,6 +1,6 @@
 // admin-users.js
 import { renderNavbar, highlightCurrentPage } from './navbar.js';
-import { resizeImageToBase64 } from './quiz-init-modal.js';
+import { uploadToS3WithPresignedUrl } from './quiz-init-modal.js';
 import { renderFooter } from './footer.js';
 
 let allUsers = [];
@@ -13,7 +13,8 @@ let currentFilterRole = 'all'; // 현재 필터 역할
 
 // 프로필 이미지 변경 관련 변수
 let currentEditUserId = null;
-let newProfileImageBase64 = null;
+let newProfileImageFile = null; // File 객체 저장
+let newProfileImageUrl = null; // S3 URL 또는 기존 URL 저장
 
 // 토큰 인증이 포함된 fetch 함수
 async function fetchWithAuth(url, options = {}) {
@@ -433,7 +434,8 @@ async function suspendUser(userId, nickname) {
 async function openProfileImageModal(userId) {
   try {
     currentEditUserId = userId;
-    newProfileImageBase64 = null;
+    newProfileImageFile = null;
+    newProfileImageUrl = null;
 
     // 사용자 정보 가져오기
     const response = await fetchWithAuth(`/admin/users/${userId}`);
@@ -470,7 +472,15 @@ async function openProfileImageModal(userId) {
 // 프로필 이미지 변경 모달 닫기
 function closeProfileImageModal() {
   currentEditUserId = null;
-  newProfileImageBase64 = null;
+  newProfileImageFile = null;
+  newProfileImageUrl = null;
+
+  // ObjectURL 메모리 해제
+  const preview = document.getElementById('newProfilePreview');
+  if (preview && preview.src && preview.src.startsWith('blob:')) {
+    URL.revokeObjectURL(preview.src);
+  }
+
   document.getElementById('profileImageModal').classList.add('hidden');
   document.getElementById('profileImageModal').classList.remove('flex');
   document.getElementById('newProfileImageInput').value = '';
@@ -483,32 +493,62 @@ async function handleProfileImageChange(event) {
   if (!file) return;
 
   try {
-    // 이미지 리사이징 (최대 1MB)
-    newProfileImageBase64 = await resizeImageToBase64(file, 1024, 100);
+    // 파일 타입 검증
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('지원하지 않는 파일 형식입니다.\n\n지원 형식: JPEG, PNG, WebP, GIF');
+      event.target.value = '';
+      return;
+    }
 
-    // 미리보기 표시
+    // 파일 크기 검증 (10MB)
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > 10) {
+      alert(`파일 크기가 너무 큽니다.\n\n최대: 10MB\n현재: ${sizeMB.toFixed(2)}MB`);
+      event.target.value = '';
+      return;
+    }
+
+    // File 객체 저장
+    newProfileImageFile = file;
+
+    // ObjectURL로 미리보기
     const preview = document.getElementById('newProfilePreview');
-    preview.src = newProfileImageBase64;
+    if (preview.src && preview.src.startsWith('blob:')) {
+      URL.revokeObjectURL(preview.src);
+    }
+
+    preview.src = URL.createObjectURL(file);
     document.getElementById('newProfilePreviewSection').classList.remove('hidden');
+
   } catch (error) {
     console.error('이미지 처리 실패:', error);
     alert('이미지 처리 실패: ' + error.message);
+    event.target.value = '';
+    newProfileImageFile = null;
   }
 }
 
 // 프로필 이미지 저장
 async function saveProfileImage() {
-  if (!newProfileImageBase64) {
+  if (!newProfileImageFile) {
     alert('새 프로필 이미지를 선택해주세요.');
     return;
   }
 
   try {
+    // S3에 업로드
+    const profileImageUrl = await uploadToS3WithPresignedUrl(
+      newProfileImageFile,
+      'profiles',
+      currentEditUserId
+    );
+
     const response = await fetchWithAuth(`/admin/users/${currentEditUserId}/profile-image`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        profileImageBase64: newProfileImageBase64
+        profileImageBase64: profileImageUrl
       })
     });
 
