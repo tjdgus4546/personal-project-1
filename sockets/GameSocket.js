@@ -477,19 +477,7 @@ module.exports = (io, app) => {
         session.currentQuestionIndex = 0; // currentQuestionIndex는 questionOrder 배열의 위치(0부터 시작)
         session.readyPlayers = []; // 준비 상태 초기화
 
-        // 🚀 Quiz 데이터 캐싱 (성능 최적화: 정답 검증 시 DB 조회 없이 캐시 사용)
-        session.cachedQuizData = quiz.toObject();
-        session.markModified('cachedQuizData');
-
-        const success = await safeSaveSession(session);
-        if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - startGame');
-            return;
-        }
-
-        await addPlayedQuizzes(quiz._id, socket.userId, app);
-
-        // 🛡️ 정답 해시화: 클라이언트에게 해시된 정답만 전송
+        // 🛡️ 정답 해시화: 캐시 + 클라이언트 전송용
         const quizData = quiz.toObject();
         const hashedQuiz = {
           ...quizData,
@@ -520,6 +508,18 @@ module.exports = (io, app) => {
             };
           })
         };
+
+        // 🚀 Quiz 데이터 캐싱 (해시된 데이터 저장 - 정답 검증용)
+        session.cachedQuizData = hashedQuiz;
+        session.markModified('cachedQuizData');
+
+        const success = await safeSaveSession(session);
+        if (!success) {
+            console.error('❌ 세션 저장 중 에러 발생 - startGame');
+            return;
+        }
+
+        await addPlayedQuizzes(quiz._id, socket.userId, app);
 
         // 문제 데이터만 전송 (타이머는 아직 시작하지 않음)
         io.to(sessionId).emit('game-started', {
