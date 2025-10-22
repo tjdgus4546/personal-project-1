@@ -683,7 +683,7 @@ module.exports = (io, app) => {
 
         const question = quizData.questions[actualQuestionIndex];
         const userAnswerHash = hashAnswer(answer);
-        const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+        const correctAnswerHashes = question.answers; // 이미 해시된 값이므로 그대로 사용
         const isCorrect = correctAnswerHashes.includes(userAnswerHash);
 
         // 정답이 아니면 처리 중단
@@ -807,7 +807,7 @@ module.exports = (io, app) => {
 
         const question = quizData.questions[actualQuestionIndex];
         const userAnswerHash = hashAnswer(answer);
-        const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+        const correctAnswerHashes = question.answers; // 이미 해시된 값이므로 그대로 사용
         const isCorrect = correctAnswerHashes.includes(userAnswerHash);
 
         // 정답이 아니면 처리 중단
@@ -891,7 +891,7 @@ module.exports = (io, app) => {
           if (quizData && quizData.questions && quizData.questions[actualQuestionIndex]) {
             const question = quizData.questions[actualQuestionIndex];
             const userAnswerHash = hashAnswer(answer);
-            const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+            const correctAnswerHashes = question.answers; // 이미 해시된 값이므로 그대로 사용
             const isActuallyCorrect = correctAnswerHashes.includes(userAnswerHash);
 
             // 만약 실제로는 정답인데 오답으로 속이려 하면 차단
