@@ -13,10 +13,6 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// 임시 사용자 정보 저장용 (실제로는 Redis나 DB 사용 권장)
-const tempUserData = new Map();
-const MAX_TEMP_USER_DATA_SIZE = 100; // 🛡️ 최대 100개로 제한 (메모리 누수 방지)
-
 // OAuth 닉네임 설정 제한
 const oauthSignupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
@@ -50,11 +46,12 @@ router.get('/google/setup-nickname', (req, res) => {
 router.get('/google/temp-info', (req, res) => {
   const tempToken = req.headers.authorization?.replace('Bearer ', '');
 
-  if (!tempToken || !tempUserData.has(tempToken)) {
+  // session에서 OAuth 데이터 조회
+  if (!tempToken || !req.session.oauthData || !req.session.oauthData[tempToken]) {
     return res.status(401).json({ message: '유효하지 않은 토큰입니다.' });
   }
 
-  const userInfo = tempUserData.get(tempToken);
+  const userInfo = req.session.oauthData[tempToken];
   res.json({
     name: userInfo.name,
     email: userInfo.email,
@@ -67,7 +64,8 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
   const tempToken = req.headers.authorization?.replace('Bearer ', '');
   const { nickname } = req.body;
 
-  if (!tempToken || !tempUserData.has(tempToken)) {
+  // session에서 OAuth 데이터 조회
+  if (!tempToken || !req.session.oauthData || !req.session.oauthData[tempToken]) {
     return res.status(401).json({ message: '유효하지 않은 토큰입니다.' });
   }
 
@@ -78,7 +76,7 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
   try {
     const userDb = req.app.get('userDb');
     const User = require('../models/User')(userDb);
-    const googleUserInfo = tempUserData.get(tempToken);
+    const googleUserInfo = req.session.oauthData[tempToken];
 
     // 닉네임 중복 체크
     const existingNickname = await User.findOne({ nickname: nickname.trim() });
@@ -148,8 +146,10 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 임시 데이터 정리
-    tempUserData.delete(tempToken);
+    // 임시 데이터 정리 (session에서 제거)
+    if (req.session.oauthData) {
+      delete req.session.oauthData[tempToken];
+    }
 
     res.json({
       message: '닉네임 설정 완료',
@@ -255,24 +255,23 @@ router.get('/google/callback', async (req, res) => {
     // 새 사용자 - 닉네임 설정 페이지로
     const tempToken = uuidv4();
 
-    // 🛡️ 최대 크기 초과 시 가장 오래된 항목 삭제 (LRU 방식)
-    if (tempUserData.size >= MAX_TEMP_USER_DATA_SIZE) {
-      const firstKey = tempUserData.keys().next().value;
-      tempUserData.delete(firstKey);
-      console.warn(`⚠️ tempUserData 크기 제한 초과: 가장 오래된 항목 삭제됨`);
+    // session에 OAuth 데이터 저장 (cluster mode에서도 공유됨)
+    if (!req.session.oauthData) {
+      req.session.oauthData = {};
     }
-
     // 구글 사용자 정보 저장 (sub는 구글의 고유 사용자 ID)
-    tempUserData.set(tempToken, {
+    req.session.oauthData[tempToken] = {
       sub: googleUser.id,  // 구글의 고유 ID
       name: googleUser.name,
       email: googleUser.email,
       picture: googleUser.picture
-    });
+    };
 
-    // 10분 후 자동 삭제
+    // 10분 후 자동 삭제 (session timeout으로 자동 처리됨)
     setTimeout(() => {
-      tempUserData.delete(tempToken);
+      if (req.session.oauthData) {
+        delete req.session.oauthData[tempToken];
+      }
     }, 10 * 60 * 1000);
 
     delete req.session.googleState;
