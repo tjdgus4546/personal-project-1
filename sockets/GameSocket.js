@@ -208,22 +208,14 @@ module.exports = (io, app) => {
           if (!session.host) return false;
           return p.userId.toString() === session.host.toString();
         });
-        
+
         socket.join(sessionId);
         socket.sessionId = sessionId;
         socket.userId = userId;
         socket.firstCorrectUser = null;
 
-        // 점수판 전송 (최신 session 상태 기준)
-        let latestSession;
-        try {
-          latestSession = await GameSession.findById(sessionId);
-        } catch (err) {
-          console.error('❌ joinSession DB 조회 실패2:', err.message)
-        }
-        if (!latestSession) return;
-
-        emitScoreboard(io, sessionId, latestSession.players);
+        // 점수판 전송 (메모리의 session 상태 사용 - DB 저장 완료 후이므로 최신 데이터)
+        emitScoreboard(io, sessionId, session.players);
 
         const connectedCount = session.players.filter(p => p.connected).length;
         // 스킵투표 인원수 공개
@@ -259,31 +251,31 @@ module.exports = (io, app) => {
           }
         });
 
-        // 🔄 재접속 시 게임 진행 중이면 퀴즈 데이터 재전송 (최신 세션 데이터 사용)
-        if (latestSession && latestSession.isStarted && latestSession.isActive && latestSession.cachedQuizData) {
+        // 🔄 재접속 시 게임 진행 중이면 퀴즈 데이터 재전송
+        if (session.isStarted && session.isActive && session.cachedQuizData) {
           // 재접속한 플레이어의 answered 정보 조회
-          const reconnectPlayer = latestSession.players.find(p => p.userId.toString() === userId.toString());
+          const reconnectPlayer = session.players.find(p => p.userId.toString() === userId.toString());
           const playerAnswered = reconnectPlayer?.answered || {};
 
           socket.emit('game-started', {
             success: true,
             data: {
-              quiz: latestSession.cachedQuizData, // 캐시된 해시화된 퀴즈
-              host: latestSession.host?.toString() || '__NONE__',
-              questionOrder: latestSession.questionOrder,
-              currentQuestionIndex: latestSession.questionOrder[latestSession.currentQuestionIndex],
+              quiz: session.cachedQuizData, // 캐시된 해시화된 퀴즈
+              host: session.host?.toString() || '__NONE__',
+              questionOrder: session.questionOrder,
+              currentQuestionIndex: session.questionOrder[session.currentQuestionIndex],
               isReconnect: true, // 재접속 플래그
-              currentIndex: latestSession.currentQuestionIndex, // questionOrder 배열의 인덱스
+              currentIndex: session.currentQuestionIndex, // questionOrder 배열의 인덱스
               playerAnswered: playerAnswered // 플레이어의 answered 상태
             }
           });
 
           // 타이머 시작 정보도 전송 (클라이언트가 타이머 복원할 수 있도록)
-          if (latestSession.questionStartAt) {
+          if (session.questionStartAt) {
             socket.emit('question-start', {
               success: true,
               data: {
-                questionStartAt: latestSession.questionStartAt
+                questionStartAt: session.questionStartAt
               }
             });
           }

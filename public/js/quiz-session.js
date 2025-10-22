@@ -386,8 +386,8 @@ function renderScoreboard(players) {
     const board = document.getElementById('scoreboard');
     board.innerHTML = '';
 
+    // 게임 중에는 점수가 있는 모든 플레이어 표시 (connected 상태 무관)
     const sortedPlayers = players
-        .filter(p => p.connected)
         .slice()
         .sort((a, b) => b.score - a.score);
 
@@ -397,7 +397,11 @@ function renderScoreboard(players) {
 
         // 현재 문제에서 정답 맞춘 사용자는 초록색 테두리, 아니면 파란색
         const borderColor = correctUsersThisQuestion.has(displayName) ? 'border-green-500' : 'border-blue-400';
-        li.className = `flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 ${borderColor}`;
+
+        // 접속 해제된 플레이어는 투명도 적용
+        const opacityClass = p.connected === false ? 'opacity-50' : '';
+
+        li.className = `flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 ${borderColor} ${opacityClass}`;
         li.setAttribute('data-nickname', displayName); // 닉네임 저장
 
         const avatarHTML = createPlayerAvatar(p);
@@ -408,7 +412,7 @@ function renderScoreboard(players) {
                 ${avatarHTML}
             </div>
             <div class="text-center">
-                <div class="text-white font-medium text-sm truncate mb-1">${displayName}</div>
+                <div class="text-white font-medium text-sm truncate mb-1">${displayName}${p.connected === false ? ' (접속 끊김)' : ''}</div>
                 <div class="text-green-400 font-bold text-lg">${p.score}점</div>
                 <div class="text-gray-400 text-xs">${p.correctAnswersCount || 0}문제</div>
             </div>
