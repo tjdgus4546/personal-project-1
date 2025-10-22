@@ -226,8 +226,90 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
   app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)
 
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  app.get('/', async (req, res) => {
+    const quizId = req.query.quiz;
+
+    // 퀴즈 ID가 없으면 기본 HTML 제공
+    if (!quizId) {
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+
+    // 퀴즈 정보 조회하여 동적 메타 태그 생성
+    try {
+      const Quiz = require('./models/Quiz')(quizDb);
+      const quiz = await Quiz.findById(quizId).select('title description titleImageBase64 completedGameCount');
+
+      // 퀴즈를 찾지 못한 경우 기본 HTML 제공
+      if (!quiz) {
+        return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+      }
+
+      // index.html 읽기
+      const fs = require('fs').promises;
+      const htmlPath = path.join(__dirname, 'public', 'index.html');
+      let html = await fs.readFile(htmlPath, 'utf-8');
+
+      // 동적 메타 태그 생성
+      const quizUrl = `https://playcode.gg/?quiz=${quizId}`;
+      const quizTitle = `${quiz.title} - PLAYCODE.GG`;
+      const quizDescription = quiz.description || '이 퀴즈에 도전해보세요!';
+      const quizImage = quiz.titleImageBase64 || 'https://playcode.gg/images/Logo.png';
+
+      // 메타 태그 교체
+      html = html.replace(
+        /<meta property="og:title" content="[^"]*">/,
+        `<meta property="og:title" content="${quizTitle}">`
+      );
+      html = html.replace(
+        /<meta property="og:description" content="[^"]*">/,
+        `<meta property="og:description" content="${quizDescription}">`
+      );
+      html = html.replace(
+        /<meta property="og:image" content="[^"]*">/,
+        `<meta property="og:image" content="${quizImage}">`
+      );
+      html = html.replace(
+        /<meta property="og:url" content="[^"]*">/,
+        `<meta property="og:url" content="${quizUrl}">`
+      );
+
+      // Twitter 카드 메타 태그도 교체
+      html = html.replace(
+        /<meta property="twitter:title" content="[^"]*">/,
+        `<meta property="twitter:title" content="${quizTitle}">`
+      );
+      html = html.replace(
+        /<meta property="twitter:description" content="[^"]*">/,
+        `<meta property="twitter:description" content="${quizDescription}">`
+      );
+      html = html.replace(
+        /<meta property="twitter:image" content="[^"]*">/,
+        `<meta property="twitter:image" content="${quizImage}">`
+      );
+      html = html.replace(
+        /<meta property="twitter:url" content="[^"]*">/,
+        `<meta property="twitter:url" content="${quizUrl}">`
+      );
+
+      // 페이지 타이틀도 교체
+      html = html.replace(
+        /<title>[^<]*<\/title>/,
+        `<title>${quizTitle}</title>`
+      );
+
+      // description 메타 태그 교체
+      html = html.replace(
+        /<meta name="description" content="[^"]*">/,
+        `<meta name="description" content="${quizDescription}">`
+      );
+
+      res.send(html);
+
+    } catch (error) {
+      console.error('퀴즈 메타 태그 생성 실패:', error);
+      // 에러 발생 시 기본 HTML 제공
+      res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
   });
   // 소켓 로직 파일 연결
   const gameSocketMonitor = require('./sockets/GameSocket')(io, app);

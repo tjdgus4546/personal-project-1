@@ -413,6 +413,31 @@ async function initializePage() {
 
         updatePageUI(user);
         attachEventListeners();
+
+        // URL 파라미터로 퀴즈 ID가 있으면 자동으로 모달 열기
+        const urlParams = new URLSearchParams(window.location.search);
+        const quizId = urlParams.get('quiz');
+        if (quizId) {
+            // updateURL = false (이미 URL에 있으므로 다시 추가하지 않음)
+            openQuizModal(quizId, false);
+        }
+
+        // 브라우저 뒤로가기/앞으로가기 처리
+        window.addEventListener('popstate', (event) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const quizId = urlParams.get('quiz');
+
+            if (quizId) {
+                // URL에 퀴즈 ID 있음 → 모달 열기
+                openQuizModal(quizId, false);
+            } else {
+                // URL에 퀴즈 ID 없음 → 모달 닫기
+                const modal = document.getElementById('quizModal');
+                if (!modal.classList.contains('hidden')) {
+                    closeQuizModal(false);
+                }
+            }
+        });
     } catch (err) {
         console.error('페이지 초기화 실패:', err);
         updatePageUI(null);
@@ -421,14 +446,14 @@ async function initializePage() {
 }
 
 // 퀴즈 카드 클릭 시 모달 열기
-async function openQuizModal(quizId) {
+async function openQuizModal(quizId, updateURL = true) {
     currentQuizId = quizId;
-    
+
     try {
         const response = await fetch(`/api/quiz/${quizId}`, {
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             if (response.status === 401) {
                 alert('로그인이 필요합니다.');
@@ -443,6 +468,13 @@ async function openQuizModal(quizId) {
         const quiz = await response.json();
         updateModalContent(quiz);
         showModal();
+
+        // URL에 퀴즈 ID 추가 (History API)
+        if (updateURL) {
+            const url = new URL(window.location);
+            url.searchParams.set('quiz', quizId);
+            window.history.pushState({ quizId }, '', url);
+        }
 
     } catch (error) {
         console.error('퀴즈 정보 로딩 실패:', error);
@@ -506,7 +538,7 @@ function showModal() {
 }
 
 // 모달 닫기
-function closeQuizModal() {
+function closeQuizModal(updateURL = true) {
     const modal = document.getElementById('quizModal');
     const modalContent = document.getElementById('quizModalContent');
 
@@ -522,6 +554,13 @@ function closeQuizModal() {
 
     // ESC 키 리스너 제거
     document.removeEventListener('keydown', handleEscapeKey);
+
+    // URL에서 퀴즈 ID 제거
+    if (updateURL) {
+        const url = new URL(window.location);
+        url.searchParams.delete('quiz');
+        window.history.pushState({}, '', url);
+    }
 }
 
 // 게임 세션 생성
@@ -571,6 +610,51 @@ async function createGameSession() {
     } finally {
         createBtn.innerHTML = originalText;
         createBtn.disabled = false;
+    }
+}
+
+// 퀴즈 공유하기 (링크 복사)
+async function shareQuiz() {
+    if (!currentQuizId) {
+        alert('퀴즈 정보를 찾을 수 없습니다.');
+        return;
+    }
+
+    try {
+        // 공유 URL 생성
+        const shareUrl = `${window.location.origin}/?quiz=${currentQuizId}`;
+
+        // 클립보드에 복사
+        await navigator.clipboard.writeText(shareUrl);
+
+        // 버튼 피드백
+        const shareBtn = document.getElementById('shareQuizBtn');
+        const originalHTML = shareBtn.innerHTML;
+        const originalBg = shareBtn.className;
+
+        // 성공 표시
+        shareBtn.innerHTML = `
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+        `;
+        shareBtn.className = shareBtn.className.replace('hover:bg-green-500', 'bg-green-500');
+
+        // 2초 후 원래대로
+        setTimeout(() => {
+            shareBtn.innerHTML = originalHTML;
+            shareBtn.className = originalBg;
+        }, 2000);
+
+        // 간단한 토스트 메시지
+        alert('퀴즈 링크가 클립보드에 복사되었습니다!');
+
+    } catch (error) {
+        console.error('링크 복사 실패:', error);
+
+        // 클립보드 API 지원 안되는 경우 대체 방법
+        const shareUrl = `${window.location.origin}/?quiz=${currentQuizId}`;
+        prompt('아래 링크를 복사하세요:', shareUrl);
     }
 }
 
@@ -639,6 +723,7 @@ async function reportQuiz() {
 window.openQuizModal = openQuizModal;
 window.closeQuizModal = closeQuizModal;
 window.createGameSession = createGameSession;
+window.shareQuiz = shareQuiz;
 window.reportQuiz = reportQuiz;
 window.loadQuizList = loadQuizList;
 window.joinByInvite = joinByInvite;
