@@ -752,12 +752,12 @@ function renderQuestions() {
             } else {
                 previewContent = `
                     <div class="w-full h-48 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center p-6">
-                        <p class="text-white text-center text-lg font-medium line-clamp-4">${q.text || '제목 없음'}</p>
+                        <p class="text-white text-center text-lg font-medium line-clamp-4">${q.text || '텍스트 없음'}</p>
                     </div>
                 `;
             }
         } else {
-            const previewText = q.text || '제목 없음';
+            const previewText = q.text || '텍스트 없음';
             previewContent = `
                 <div class="w-full h-48 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center p-6">
                     <p class="text-white text-center text-lg font-medium line-clamp-4">${previewText}</p>
@@ -774,7 +774,7 @@ function renderQuestions() {
                         <span class="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">${typeName}</span>
                     </div>
                 </div>
-                <h3 class="text-white font-medium mb-2 line-clamp-2">${q.text || '제목 없음'}</h3>
+                <h3 class="text-white font-medium mb-2 line-clamp-2">${q.text || '텍스트 없음'}</h3>
                 <div class="flex items-center justify-between text-sm text-gray-400">
                     <span>${q.timeLimit || 30}초</span>
                     <span>${q.answers?.length || 0}개 정답</span>
@@ -852,7 +852,7 @@ function renderSidebar() {
                 // 비디오 ID 추출 실패 시
                 thumbnailContent = `
                     <div class="w-full h-[158px] bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center px-2">
-                        <p class="text-white text-xs text-center line-clamp-3">${q.text || '제목 없음'}</p>
+                        <p class="text-white text-xs text-center line-clamp-3">${q.text || '텍스트 없음'}</p>
                     </div>
                 `;
             }
@@ -860,7 +860,7 @@ function renderSidebar() {
             // 텍스트 문제
             thumbnailContent = `
                 <div class="w-full h-[158px] bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center px-2">
-                    <p class="text-white text-xs text-center line-clamp-3">${q.text || '제목 없음'}</p>
+                    <p class="text-white text-xs text-center line-clamp-3">${q.text || '텍스트 없음'}</p>
                 </div>
             `;
         }
@@ -871,7 +871,7 @@ function renderSidebar() {
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-xs font-medium ${isActive ? 'text-blue-100' : 'text-gray-400'}">문제 ${index + 1}</span>
                 </div>
-                <p class="text-xs font-medium truncate ${isActive ? 'text-white' : 'text-gray-300'}">${q.text || '제목 없음'}</p>
+                <p class="text-xs font-medium truncate ${isActive ? 'text-white' : 'text-gray-300'}">${q.text || '텍스트 없음'}</p>
                 <p class="text-xs ${isActive ? 'text-blue-100' : 'text-gray-500'} mt-1">${q.timeLimit || 30}초 • ${q.answers?.length || 0}개 정답</p>
             </div>
         `;
