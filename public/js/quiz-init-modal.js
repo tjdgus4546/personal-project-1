@@ -120,48 +120,97 @@ function handleQuizInitModalClick(event) {
 // Blob으로 리사이징 (Presigned URL용) - 1MB 제한
 export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
     return new Promise((resolve, reject) => {
+        // 파일 크기 체크
         const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > 10) {
             return reject(new Error('10MB를 초과한 이미지는 업로드할 수 없습니다.'));
         }
 
+        // 30초 타임아웃 설정 (큰 이미지 처리 시간 제한)
+        const timeout = setTimeout(() => {
+            reject(new Error('이미지 처리 시간 초과 (30초). 더 작은 이미지를 사용해주세요.'));
+        }, 30000);
+
         const reader = new FileReader();
+
+        // FileReader 에러 핸들러
+        reader.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('파일 읽기 실패. 다른 이미지를 선택해주세요.'));
+        };
+
         reader.onload = (e) => {
             const img = new Image();
-            img.onload = () => {
-                let quality = 0.9;
-                let canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                let ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
 
-                function tryCompress() {
-                    canvas.toBlob((blob) => {
-                        if (!blob) {
-                            reject(new Error('이미지 변환 실패'));
-                            return;
-                        }
-
-                        const sizeKB = blob.size / 1024;
-
-                        if (sizeKB <= maxKB || quality <= 0.1) {
-                            if (sizeKB < minKB && quality < 0.9) {
-                                quality = Math.min(0.9, quality + 0.1);
-                                tryCompress();
-                            } else {
-                                resolve(blob);
-                            }
-                        } else {
-                            quality -= 0.05;
-                            tryCompress();
-                        }
-                    }, 'image/jpeg', quality);
-                }
-                tryCompress();
+            // Image 로드 에러 핸들러
+            img.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error('이미지 로드 실패. 올바른 이미지 파일인지 확인해주세요.'));
             };
+
+            img.onload = () => {
+                try {
+                    // 해상도 체크 및 리사이징 (최대 4096x4096)
+                    const MAX_DIMENSION = 4096;
+                    let width = img.width;
+                    let height = img.height;
+
+                    // 해상도가 너무 크면 자동으로 줄이기
+                    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+                        width = Math.floor(width * ratio);
+                        height = Math.floor(height * ratio);
+                    }
+
+                    let quality = 0.9;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+
+                    if (!ctx) {
+                        clearTimeout(timeout);
+                        reject(new Error('Canvas 생성 실패. 브라우저를 다시 시작해주세요.'));
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    function tryCompress() {
+                        canvas.toBlob((blob) => {
+                            if (!blob) {
+                                clearTimeout(timeout);
+                                reject(new Error('이미지 변환 실패'));
+                                return;
+                            }
+
+                            const sizeKB = blob.size / 1024;
+
+                            if (sizeKB <= maxKB || quality <= 0.1) {
+                                if (sizeKB < minKB && quality < 0.9) {
+                                    quality = Math.min(0.9, quality + 0.1);
+                                    tryCompress();
+                                } else {
+                                    clearTimeout(timeout);
+                                    resolve(blob);
+                                }
+                            } else {
+                                quality -= 0.05;
+                                tryCompress();
+                            }
+                        }, 'image/jpeg', quality);
+                    }
+
+                    tryCompress();
+                } catch (error) {
+                    clearTimeout(timeout);
+                    reject(new Error(`이미지 처리 중 오류: ${error.message}`));
+                }
+            };
+
             img.src = e.target.result;
         };
+
         reader.readAsDataURL(file);
     });
 }
