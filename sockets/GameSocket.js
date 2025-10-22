@@ -665,23 +665,6 @@ module.exports = (io, app) => {
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
-        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
-        if (timestamp) {
-          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
-          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
-          if (timeSinceStart < 100) {
-            console.warn(`⚠️ 의심스러운 정답 시도: 너무 빠름 (${timeSinceStart}ms)`);
-            return;
-          }
-
-          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
-          const timeDiff = Math.abs(Date.now() - timestamp);
-          if (timeDiff > 5000) {
-            console.warn(`⚠️ 의심스러운 정답 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
-            return;
-          }
-        }
-
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
         if (playerIndex === -1) return;
@@ -792,23 +775,6 @@ module.exports = (io, app) => {
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
 
-        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
-        if (timestamp) {
-          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
-          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
-          if (timeSinceStart < 100) {
-            console.warn(`⚠️ 의심스러운 정답 시도: 너무 빠름 (${timeSinceStart}ms)`);
-            return;
-          }
-
-          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
-          const timeDiff = Math.abs(Date.now() - timestamp);
-          if (timeDiff > 5000) {
-            console.warn(`⚠️ 의심스러운 정답 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
-            return;
-          }
-        }
-
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
         if (playerIndex === -1) return;
@@ -884,23 +850,6 @@ module.exports = (io, app) => {
         if (!ObjectId.isValid(sessionId)) return;
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
-
-        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
-        if (timestamp) {
-          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
-          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
-          if (timeSinceStart < 100) {
-            console.warn(`⚠️ 의심스러운 답변 시도: 너무 빠름 (${timeSinceStart}ms)`);
-            return;
-          }
-
-          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
-          const timeDiff = Math.abs(Date.now() - timestamp);
-          if (timeDiff > 5000) {
-            console.warn(`⚠️ 의심스러운 답변 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
-            return;
-          }
-        }
 
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
