@@ -127,6 +127,11 @@ router.post('/start', authenticateToken, async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
+    // 🔒 비공개 퀴즈는 세션 생성 불가
+    if (!quiz.isComplete) {
+      return res.status(403).json({ message: '비공개 상태의 퀴즈는 플레이할 수 없습니다.' });
+    }
+
     let session;
     let inviteCode;
     const maxRetries = 10; // 최대 10번 재시도

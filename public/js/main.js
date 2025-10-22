@@ -466,7 +466,7 @@ async function openQuizModal(quizId, updateURL = true) {
         }
 
         const quiz = await response.json();
-        updateModalContent(quiz);
+        updateModalContent(quiz); // quiz 객체 전달 (isComplete 포함)
         showModal();
 
         // URL에 퀴즈 ID 추가 (History API)
@@ -486,7 +486,7 @@ async function openQuizModal(quizId, updateURL = true) {
 function updateModalContent(quiz) {
     const modalThumbnail = document.getElementById('modalThumbnail');
     const thumbnailContainer = modalThumbnail.parentElement;
-    
+
     if (quiz.titleImageBase64) {
         modalThumbnail.src = quiz.titleImageBase64;
         modalThumbnail.alt = quiz.title;
@@ -502,14 +502,28 @@ function updateModalContent(quiz) {
         modalPlayBadge.textContent = 'NEW';
         modalPlayBadge.className = 'absolute top-4 left-4 bg-gray-500 text-white px-3 py-1 rounded-full text-sm font-bold';
     }
-    
+
     document.getElementById('modalTitle').textContent = quiz.title;
-    
+
     const createdDate = new Date(quiz.createdAt).toLocaleDateString('ko-KR').replace(/\.$/, '');
     document.getElementById('modalCreatedDate').textContent = `${createdDate}`;
-    
+
     const description = quiz.description || '이 퀴즈에 도전해보세요!';
     document.getElementById('modalDescription').textContent = description;
+
+    // 비공개 퀴즈 처리
+    const createBtn = document.getElementById('createSessionBtn');
+    if (!quiz.isComplete) {
+        // 비공개 퀴즈: 버튼 비활성화 및 메시지 변경
+        createBtn.disabled = true;
+        createBtn.className = 'w-full bg-gray-400 text-white font-bold py-4 px-6 rounded-xl cursor-not-allowed shadow-lg';
+        createBtn.innerHTML = '비공개 퀴즈 (플레이 불가)';
+    } else {
+        // 공개 퀴즈: 정상 활성화
+        createBtn.disabled = false;
+        createBtn.className = 'w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl';
+        createBtn.innerHTML = '게임 세션 만들기';
+    }
 }
 
 // ESC 키 핸들러
