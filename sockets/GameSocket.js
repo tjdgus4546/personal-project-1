@@ -330,11 +330,9 @@ module.exports = (io, app) => {
             if (connectedCount === 0) {
               if (sessionUserCache.has(sessionId)) {
                 sessionUserCache.delete(sessionId);
-                console.log(`🧹 모든 플레이어 퇴장 - 세션 캐시 즉시 정리: ${sessionId}`);
               }
               if (app.firstCorrectUsers && app.firstCorrectUsers[sessionId]) {
                 delete app.firstCorrectUsers[sessionId];
-                console.log(`🧹 모든 플레이어 퇴장 - firstCorrectUsers 즉시 정리: ${sessionId}`);
               }
               return;
             }
