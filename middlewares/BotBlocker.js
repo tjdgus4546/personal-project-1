@@ -250,6 +250,16 @@ function botBlocker(userDb) {
     const userAgent = req.headers['user-agent'] || '';
     const path = req.path;
 
+    // 🛡️ 로컬호스트는 차단하지 않음 (개발 환경)
+    const isLocalhost = ip === '127.0.0.1' ||
+                        ip === '::1' ||
+                        ip === '::ffff:127.0.0.1' ||
+                        ip === 'localhost';
+
+    if (isLocalhost) {
+      return next();
+    }
+
     try {
       // 🛡️ 초기 캐시 로드 대기 (서버 재시작 직후 보호)
       if (!isCacheReady) {
