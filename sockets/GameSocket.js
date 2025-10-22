@@ -258,6 +258,29 @@ module.exports = (io, app) => {
           host: hostUser?.userId?.toString() || '__NONE__'
           }
         });
+
+        // 🔄 재접속 시 게임 진행 중이면 퀴즈 데이터 재전송
+        if (session.isActive && session.cachedQuizData) {
+          socket.emit('game-started', {
+            success: true,
+            data: {
+              quiz: session.cachedQuizData, // 캐시된 해시화된 퀴즈
+              host: session.host?.toString() || '__NONE__',
+              questionOrder: session.questionOrder,
+              currentQuestionIndex: session.questionOrder[session.currentQuestionIndex]
+            }
+          });
+
+          // 현재 진행 중인 문제 정보도 전송
+          socket.emit('question-started', {
+            success: true,
+            data: {
+              questionIndex: session.currentQuestionIndex,
+              actualQuestionIndex: session.questionOrder[session.currentQuestionIndex],
+              readyPlayers: session.readyPlayers || []
+            }
+          });
+        }
       } catch (error) {
         handleSocketError(socket, error, 'joinSession');
       }
