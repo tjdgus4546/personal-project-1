@@ -33,6 +33,7 @@ const gameSessionSchema = new Schema({
   endedAt: { type: Date, default: null, },
   questionOrder: { type: [Number], default: [] },
   readyPlayers: { type: [String], default: [] }, // 문제 로딩 완료한 플레이어 userId 배열
+  cachedQuizData: { type: Schema.Types.Mixed, default: null }, // Quiz 데이터 캐싱 (성능 최적화)
 });
 
 module.exports = (quizDb) => {

@@ -34,6 +34,40 @@ const socket = io({
 const sessionId = window.location.pathname.split('/').pop();
 let userId = null;
 
+// ========== 🛡️ 소켓 이벤트 보호 (콘솔 직접 호출 차단) ==========
+(function() {
+  const protectedEvents = ['correct', 'choiceQuestionCorrect', 'choiceQuestionIncorrect'];
+  const originalEmit = socket.emit.bind(socket);
+  const internalToken = Symbol('internal'); // 외부에서 접근 불가
+
+  // socket.emit 오버라이드
+  socket.emit = function(event, ...args) {
+    // 보호된 이벤트를 직접 호출하려고 시도하는 경우
+    if (protectedEvents.includes(event)) {
+      // 내부 토큰이 없으면 차단
+      if (args[args.length - 1] !== internalToken) {
+        console.warn('⚠️ 보안: 이 이벤트는 직접 호출할 수 없습니다.');
+        return;
+      }
+      // 내부 토큰 제거 후 실제 emit
+      args.pop();
+    }
+    return originalEmit(event, ...args);
+  };
+
+  // 내부 전용 emit 함수 (클로저로 internalToken 보호)
+  window.__protectedEmit = function(event, data) {
+    return originalEmit(event, data, internalToken);
+  };
+})();
+
+// 🛡️ 정답 해시화 함수 (서버와 동일한 방식)
+function hashAnswer(answer) {
+  // 정답을 정규화: 공백 제거 + 소문자 변환
+  const normalized = answer.replace(/\s+/g, '').toLowerCase();
+  return CryptoJS.SHA256(normalized).toString();
+}
+
 // 인증 확인 함수
 async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
@@ -115,8 +149,17 @@ async function loadSessionData() {
         // questionOrder 설정 (서버에서 온 순서 또는 기본 순서)
         questionOrder = data.questionOrder || Array.from({ length: data.quiz.questions.length }, (_, i) => i);
 
-        // 객관식 문제의 선택지 섞기 (game-started와 동일한 로직)
+        // 🛡️ 서버에서 이미 choices를 만들어서 보낸 경우 그대로 사용
         questions = data.quiz.questions.map(question => {
+            // 이미 choices가 있으면 (서버에서 만든 경우) 그대로 사용
+            if (question.choices && question.choices.length > 0) {
+                return {
+                    ...question,
+                    isChoice: true
+                };
+            }
+
+            // 하위 호환성: 기존 방식 (incorrectAnswers로 choices 생성)
             if (question.incorrectAnswers && question.incorrectAnswers.length > 0) {
                 // 정답 + 오답 섞기
                 const allChoices = [...question.answers, ...question.incorrectAnswers];
@@ -493,15 +536,25 @@ function sendMessage() {
     if (!message) return;
 
     const actualIndex = questionOrder[currentIndex];
-    const rawAnswers = questions[actualIndex].answers || [];
-    const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
-    const userInput = message.replace(/\s+/g, '').toLowerCase();
 
-    const isCorrect = answers.includes(userInput);
+    // 🛡️ 클라이언트에서 먼저 정답 여부 확인 (해시 비교)
+    const isCorrect = (function() {
+        const hashedAnswers = questions[actualIndex].answers || []; // 서버에서 해시된 정답
+        const userInputHash = hashAnswer(message); // 사용자 입력을 해시화
+        return hashedAnswers.includes(userInputHash);
+    })();
 
     if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('correct', { sessionId, questionIndex: actualIndex, currentIndex });
+        // ✅ 정답: 서버로 평문 전송하여 재검증
+        window.__protectedEmit('correct', {
+            sessionId,
+            questionIndex: actualIndex,
+            currentIndex,
+            timestamp: Date.now(),
+            answer: message // 정답 평문 전송 (서버에서 재검증)
+        });
     } else {
+        // ❌ 오답: 채팅으로 전송 (다른 사람들이 볼 수 있음)
         socket.emit('chatMessage', { sessionId, message });
     }
 }
@@ -864,18 +917,34 @@ function selectChoice(choice) {
             }
         });
     }
-    
-    const actualIndex = questionOrder[currentIndex];
-    const rawAnswers = questions[actualIndex].answers || [];
-    const answers = rawAnswers.map(a => a.replace(/\s+/g, '').toLowerCase());
-    const userInput = choice.replace(/\s+/g, '').toLowerCase();
 
-    const isCorrect = answers.includes(userInput);
+    const actualIndex = questionOrder[currentIndex];
+
+    // 🛡️ 클라이언트에서 먼저 정답 여부 확인 (해시 비교)
+    const isCorrect = (function() {
+        const hashedAnswers = questions[actualIndex].answers || []; // 서버에서 해시된 정답
+        const userInputHash = hashAnswer(choice); // 사용자 선택을 해시화
+        return hashedAnswers.includes(userInputHash);
+    })();
 
     if (!window.__isRevealingAnswer && isCorrect) {
-        socket.emit('choiceQuestionCorrect', { sessionId, questionIndex: actualIndex, currentIndex });
-    } else {
-        socket.emit('choiceQuestionIncorrect', { sessionId, questionIndex: actualIndex, currentIndex });
+        // ✅ 정답: 서버로 평문 전송하여 재검증
+        window.__protectedEmit('choiceQuestionCorrect', {
+            sessionId,
+            questionIndex: actualIndex,
+            currentIndex,
+            timestamp: Date.now(),
+            answer: choice // 선택한 답 평문 전송 (서버에서 재검증)
+        });
+    } else if (!window.__isRevealingAnswer) {
+        // ❌ 오답: 서버로 오답 전송 (서버에서도 검증)
+        window.__protectedEmit('choiceQuestionIncorrect', {
+            sessionId,
+            questionIndex: actualIndex,
+            currentIndex,
+            timestamp: Date.now(),
+            answer: choice // 오답도 평문 전송 (서버에서 검증)
+        });
     }
 }
 
@@ -1291,8 +1360,17 @@ function setupSocketListeners() {
         // 문제 순서 배열 저장 (서버에서 전송받은 순서 또는 기본 순서)
         questionOrder = order || Array.from({ length: quiz.questions.length }, (_, i) => i);
 
-        // 객관식 문제의 선택지 섞기
+        // 🛡️ 서버에서 이미 choices를 만들어서 보낸 경우 그대로 사용
         questions = quiz.questions.map(question => {
+            // 이미 choices가 있으면 (서버에서 만든 경우) 그대로 사용
+            if (question.choices && question.choices.length > 0) {
+                return {
+                    ...question,
+                    isChoice: true
+                };
+            }
+
+            // 하위 호환성: 기존 방식 (incorrectAnswers로 choices 생성)
             if (question.incorrectAnswers && question.incorrectAnswers.length > 0) {
                 // 정답 + 오답 섞기
                 const allChoices = [...question.answers, ...question.incorrectAnswers];

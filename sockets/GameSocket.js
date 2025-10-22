@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const cookieParser = require('socket.io-cookie-parser');
+const crypto = require('crypto'); // 정답 해시화용
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const handleSocketError = (socket, error, eventName) => {
@@ -10,6 +11,13 @@ const handleSocketError = (socket, error, eventName) => {
     error: error.message,
   });
 };
+
+// 🛡️ 정답 해시화 함수 (SHA-256)
+function hashAnswer(answer) {
+  // 정답을 정규화: 공백 제거 + 소문자 변환
+  const normalized = answer.replace(/\s+/g, '').toLowerCase();
+  return crypto.createHash('sha256').update(normalized).digest('hex');
+}
 
 module.exports = (io, app) => {
     /**
@@ -469,6 +477,10 @@ module.exports = (io, app) => {
         session.currentQuestionIndex = 0; // currentQuestionIndex는 questionOrder 배열의 위치(0부터 시작)
         session.readyPlayers = []; // 준비 상태 초기화
 
+        // 🚀 Quiz 데이터 캐싱 (성능 최적화: 정답 검증 시 DB 조회 없이 캐시 사용)
+        session.cachedQuizData = quiz.toObject();
+        session.markModified('cachedQuizData');
+
         const success = await safeSaveSession(session);
         if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - startGame');
@@ -477,11 +489,43 @@ module.exports = (io, app) => {
 
         await addPlayedQuizzes(quiz._id, socket.userId, app);
 
+        // 🛡️ 정답 해시화: 클라이언트에게 해시된 정답만 전송
+        const quizData = quiz.toObject();
+        const hashedQuiz = {
+          ...quizData,
+          questions: quizData.questions.map(q => {
+            // 객관식 문제인 경우
+            if (q.incorrectAnswers && q.incorrectAnswers.length > 0) {
+              // 선택지 생성: 정답 + 오답 섞기 (원본 텍스트)
+              const allChoices = [...q.answers, ...q.incorrectAnswers];
+
+              // Fisher-Yates 셔플 (클라이언트에서 같은 순서 보장)
+              for (let i = allChoices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allChoices[i], allChoices[j]] = [allChoices[j], allChoices[i]];
+              }
+
+              return {
+                ...q,
+                choices: allChoices, // 원본 선택지 (화면 표시용)
+                answers: q.answers.map(a => hashAnswer(a)), // 해시화된 정답 (검증용)
+                incorrectAnswers: undefined // 불필요한 데이터 제거
+              };
+            }
+
+            // 주관식 문제인 경우
+            return {
+              ...q,
+              answers: q.answers ? q.answers.map(a => hashAnswer(a)) : [] // 해시화된 정답만
+            };
+          })
+        };
+
         // 문제 데이터만 전송 (타이머는 아직 시작하지 않음)
         io.to(sessionId).emit('game-started', {
           success: true,
           data: {
-            quiz: quiz.toObject(),
+            quiz: hashedQuiz, // 해시화된 퀴즈 전송
             host: session.host?.toString() || '__NONE__',
             questionOrder: session.questionOrder,
             currentQuestionIndex: session.questionOrder[0]
@@ -584,12 +628,29 @@ module.exports = (io, app) => {
         });
     });
 
-    // 클라이언트에서 정답 판별 후 전송하는 이벤트
-    socket.on('correct', async ({ sessionId, questionIndex, currentIndex }) => {
+    // 클라이언트에서 정답을 전송하면 서버에서 검증하는 이벤트
+    socket.on('correct', async ({ sessionId, questionIndex, currentIndex, timestamp, answer }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
+
+        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
+        if (timestamp) {
+          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
+          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
+          if (timeSinceStart < 100) {
+            console.warn(`⚠️ 의심스러운 정답 시도: 너무 빠름 (${timeSinceStart}ms)`);
+            return;
+          }
+
+          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
+          const timeDiff = Math.abs(Date.now() - timestamp);
+          if (timeDiff > 5000) {
+            console.warn(`⚠️ 의심스러운 정답 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
+            return;
+          }
+        }
 
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
@@ -604,6 +665,30 @@ module.exports = (io, app) => {
 
         // 중복 정답 방지 (DB에서 확인)
         if (player.answered?.[qIndex]) {
+          return;
+        }
+
+        // 🛡️ 서버에서 정답 검증
+        if (!answer) {
+          console.warn(`⚠️ 정답 값이 없음: ${userId}`);
+          return;
+        }
+
+        // 🚀 캐시된 Quiz 데이터 사용 (DB 조회 없음!)
+        const quizData = session.cachedQuizData;
+        if (!quizData || !quizData.questions || !quizData.questions[actualQuestionIndex]) {
+          console.error(`❌ 캐시된 퀴즈 데이터 없음: 문제 ${actualQuestionIndex}`);
+          return;
+        }
+
+        const question = quizData.questions[actualQuestionIndex];
+        const userAnswerHash = hashAnswer(answer);
+        const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+        const isCorrect = correctAnswerHashes.includes(userAnswerHash);
+
+        // 정답이 아니면 처리 중단
+        if (!isCorrect) {
+          console.log(`❌ 오답: ${player.nickname || 'Unknown'} - "${answer}"`);
           return;
         }
 
@@ -671,11 +756,28 @@ module.exports = (io, app) => {
     });
 
     //객관식 문제 정답처리
-    socket.on('choiceQuestionCorrect', async ({ sessionId, questionIndex, currentIndex }) => {
+    socket.on('choiceQuestionCorrect', async ({ sessionId, questionIndex, currentIndex, timestamp, answer }) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
+
+        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
+        if (timestamp) {
+          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
+          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
+          if (timeSinceStart < 100) {
+            console.warn(`⚠️ 의심스러운 정답 시도: 너무 빠름 (${timeSinceStart}ms)`);
+            return;
+          }
+
+          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
+          const timeDiff = Math.abs(Date.now() - timestamp);
+          if (timeDiff > 5000) {
+            console.warn(`⚠️ 의심스러운 정답 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
+            return;
+          }
+        }
 
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
@@ -689,6 +791,30 @@ module.exports = (io, app) => {
         const qIndex = String(actualQuestionIndex);
 
         if (player.answered?.[qIndex]) return;
+
+        // 🛡️ 서버에서 정답 검증
+        if (!answer) {
+          console.warn(`⚠️ 정답 값이 없음: ${userId}`);
+          return;
+        }
+
+        // 🚀 캐시된 Quiz 데이터 사용 (DB 조회 없음!)
+        const quizData = session.cachedQuizData;
+        if (!quizData || !quizData.questions || !quizData.questions[actualQuestionIndex]) {
+          console.error(`❌ 캐시된 퀴즈 데이터 없음: 문제 ${actualQuestionIndex}`);
+          return;
+        }
+
+        const question = quizData.questions[actualQuestionIndex];
+        const userAnswerHash = hashAnswer(answer);
+        const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+        const isCorrect = correctAnswerHashes.includes(userAnswerHash);
+
+        // 정답이 아니면 처리 중단
+        if (!isCorrect) {
+          console.log(`❌ 객관식 오답: ${player.nickname || 'Unknown'} - "${answer}"`);
+          return;
+        }
 
         const displayName = player.nickname || 'Unknown';
 
@@ -723,11 +849,28 @@ module.exports = (io, app) => {
       }
     });
 
-    socket.on('choiceQuestionIncorrect', async ({sessionId, questionIndex, currentIndex}) => {
+    socket.on('choiceQuestionIncorrect', async ({sessionId, questionIndex, currentIndex, timestamp, answer}) => {
       try {
         if (!ObjectId.isValid(sessionId)) return;
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
+
+        // 🛡️ 타임스탬프 검증 (서버 부담 거의 없음)
+        if (timestamp) {
+          // 1. 문제 시작 후 너무 빨리 답하면 차단 (0.1초 이내)
+          const timeSinceStart = Date.now() - session.questionStartAt?.getTime();
+          if (timeSinceStart < 100) {
+            console.warn(`⚠️ 의심스러운 답변 시도: 너무 빠름 (${timeSinceStart}ms)`);
+            return;
+          }
+
+          // 2. 클라이언트 타임스탬프와 서버 시간 차이 확인 (5초 이상 차이나면 차단)
+          const timeDiff = Math.abs(Date.now() - timestamp);
+          if (timeDiff > 5000) {
+            console.warn(`⚠️ 의심스러운 답변 시도: 타임스탬프 불일치 (${timeDiff}ms)`);
+            return;
+          }
+        }
 
         const userId = socket.userId;
         const playerIndex = session.players.findIndex(p => p.userId.toString() === userId.toString());
@@ -741,6 +884,23 @@ module.exports = (io, app) => {
         const qIndex = String(actualQuestionIndex);
 
         if (player.answered?.[qIndex]) return;
+
+        // 🛡️ 서버에서 정답 검증 (클라이언트가 정답을 오답으로 속이는 것 방지)
+        if (answer) {
+          const quizData = session.cachedQuizData;
+          if (quizData && quizData.questions && quizData.questions[actualQuestionIndex]) {
+            const question = quizData.questions[actualQuestionIndex];
+            const userAnswerHash = hashAnswer(answer);
+            const correctAnswerHashes = question.answers.map(a => hashAnswer(a));
+            const isActuallyCorrect = correctAnswerHashes.includes(userAnswerHash);
+
+            // 만약 실제로는 정답인데 오답으로 속이려 하면 차단
+            if (isActuallyCorrect) {
+              console.warn(`⚠️ 부정 시도: 정답을 오답으로 제출 - ${player.nickname || 'Unknown'}`);
+              return;
+            }
+          }
+        }
 
         // 원자적 업데이트로 중복 방지
         const updateResult = await GameSession.findOneAndUpdate(
