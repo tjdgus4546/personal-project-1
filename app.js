@@ -23,6 +23,8 @@ const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 const app = express();
 const http = require('http');
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
 const server = http.createServer(app);
 
 // Socket.IO 서버 설정 (CORS 포함)
@@ -39,6 +41,21 @@ const io = new Server(server, {
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000
+});
+
+// 🔥 Redis Adapter 설정 (클러스터 모드용)
+const pubClient = createClient({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: process.env.REDIS_PORT || 6379
+});
+const subClient = pubClient.duplicate();
+
+Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log('✅ Redis adapter connected');
+}).catch((err) => {
+  console.error('❌ Redis connection failed:', err);
+  console.log('⚠️ Running without Redis adapter (single process mode)');
 });
 
 const PORT = process.env.PORT || 3000;
