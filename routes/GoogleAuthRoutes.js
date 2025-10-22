@@ -107,6 +107,8 @@ router.post('/google/complete-signup', oauthSignupLimiter, async (req, res) => {
         email: googleUserInfo.email,
         googleId: googleUserInfo.sub,
         profileImage: googleUserInfo.picture || null,
+        provider: 'google',  // OAuth provider 설정
+        providerId: googleUserInfo.sub,  // provider ID 설정
         isEmailVerified: true  // OAuth 사용자는 이메일 자동 인증
       });
     }
