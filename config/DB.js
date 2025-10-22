@@ -4,17 +4,22 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
+    // 🚀 Flex 티어 최적화 설정
     const connectionOptions = {
-      autoIndex: true, // 🔧 인덱스 자동 생성 활성화
-      maxPoolSize: 50, // 🔧 연결 풀 크기 증가 (기본값: 10)
-      minPoolSize: 5,  // 🔧 최소 연결 유지
-      serverSelectionTimeoutMS: 30000, // 🔧 서버 선택 타임아웃 (5초 → 30초)
-      socketTimeoutMS: 60000, // 🔧 소켓 타임아웃 (45초 → 60초)
-      connectTimeoutMS: 30000, // 🔧 초기 연결 타임아웃
-      heartbeatFrequencyMS: 10000, // 🔧 하트비트 주기 (10초마다 연결 체크)
+      autoIndex: true, // 🔧 인덱스 자동 생성
+      maxPoolSize: 100, // 🔧 연결 풀 크기 대폭 증가 (Flex는 더 많은 연결 지원)
+      minPoolSize: 20,  // 🔧 최소 연결 유지 (빠른 응답을 위해)
+      serverSelectionTimeoutMS: 5000, // 🔧 서버 선택 타임아웃 (Flex는 빠름)
+      socketTimeoutMS: 30000, // 🔧 소켓 타임아웃
+      connectTimeoutMS: 5000, // 🔧 초기 연결 타임아웃 (Flex는 빠른 연결)
+      heartbeatFrequencyMS: 3000, // 🔧 하트비트 주기 (더 자주 체크)
       retryWrites: true, // 🔧 쓰기 작업 재시도
       retryReads: true, // 🔧 읽기 작업 재시도
-      bufferCommands: false, // 🔧 버퍼링 비활성화 (연결 끊기면 즉시 에러)
+      bufferCommands: false, // 🔧 버퍼링 비활성화 (Flex는 안정적이므로 즉시 에러 처리)
+      maxIdleTimeMS: 30000, // 🔧 유휴 연결 타임아웃
+      waitQueueTimeoutMS: 2000, // 🔧 연결 대기 큐 타임아웃
+      compressors: ['zlib'], // 🔧 네트워크 압축
+      maxConnecting: 10, // 🔧 동시 연결 시도 수
     };
 
     // 사용자 DB 연결
