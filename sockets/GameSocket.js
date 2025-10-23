@@ -252,7 +252,64 @@ module.exports = (io, app) => {
         });
 
         // 🔄 재접속 시 게임 진행 중이면 퀴즈 데이터 재전송
-        if (session.isStarted && session.isActive && session.cachedQuizData) {
+        if (session.isStarted && session.isActive) {
+          let quizDataToSend = session.cachedQuizData;
+
+          // ✅ cachedQuizData 검증: 없거나 answers가 비어있거나 평문이면 재생성
+          const needsRegeneration = !quizDataToSend ||
+            !quizDataToSend.questions ||
+            quizDataToSend.questions.length === 0 ||
+            !quizDataToSend.questions[0]?.answers ||
+            quizDataToSend.questions[0].answers.length === 0 ||
+            // ✅ 평문 체크: 해시는 64자여야 함 (SHA256)
+            (typeof quizDataToSend.questions[0].answers[0] === 'string' &&
+             quizDataToSend.questions[0].answers[0].length !== 64);
+
+          if (needsRegeneration) {
+            console.warn('⚠️ cachedQuizData 없음/손상 - 퀴즈 재생성:', {
+              sessionId,
+              hasCached: !!quizDataToSend,
+              hasQuestions: !!quizDataToSend?.questions,
+              questionCount: quizDataToSend?.questions?.length || 0,
+              hasAnswers: !!quizDataToSend?.questions?.[0]?.answers,
+              answerCount: quizDataToSend?.questions?.[0]?.answers?.length || 0
+            });
+            const quizDb = app.get('quizDb');
+            const Quiz = require('../models/Quiz')(quizDb);
+            const quiz = await Quiz.findById(session.quizId);
+
+            if (quiz) {
+              const quizObj = quiz.toObject();
+
+              quizDataToSend = {
+                ...quizObj,
+                questions: quizObj.questions.map(q => {
+                  // ✅ Mongoose document를 plain object로 변환
+                  const questionObj = q.toObject ? q.toObject() : q;
+
+                  return {
+                    ...questionObj,
+                    answers: questionObj.answers ? questionObj.answers.map(a => hashAnswer(a)) : []
+                  };
+                })
+              };
+
+              console.log('✅ 퀴즈 재생성 완료:', {
+                quizId: session.quizId,
+                questionCount: quizDataToSend.questions.length,
+                firstQuestionAnswers: quizDataToSend.questions[0]?.answers?.length || 0
+              });
+
+              // 캐시 복원
+              session.cachedQuizData = quizDataToSend;
+              session.markModified('cachedQuizData');
+              await safeSaveSession(session);
+            } else {
+              console.error('❌ 퀴즈를 찾을 수 없음:', session.quizId);
+              return;
+            }
+          }
+
           // 재접속한 플레이어의 answered 정보 조회
           const reconnectPlayer = session.players.find(p => p.userId.toString() === userId.toString());
           const playerAnswered = reconnectPlayer?.answered || {};
@@ -260,7 +317,7 @@ module.exports = (io, app) => {
           socket.emit('game-started', {
             success: true,
             data: {
-              quiz: session.cachedQuizData, // 캐시된 해시화된 퀴즈
+              quiz: quizDataToSend, // 해시화된 퀴즈
               host: session.host?.toString() || '__NONE__',
               questionOrder: session.questionOrder,
               currentQuestionIndex: session.questionOrder[session.currentQuestionIndex],

@@ -149,8 +149,12 @@ async function loadSessionData() {
         // questionOrder 설정 (서버에서 온 순서 또는 기본 순서)
         questionOrder = data.questionOrder || Array.from({ length: data.quiz.questions.length }, (_, i) => i);
 
-        // 🛡️ 서버에서 이미 choices를 만들어서 보낸 경우 그대로 사용
-        questions = data.quiz.questions.map(question => {
+        // ⚠️ questions 배열이 이미 존재하면 덮어쓰지 않음 (game-started 이벤트에서 해시된 데이터 사용 중)
+        if (questions && questions.length > 0) {
+            // questions 배열이 이미 존재하면 덮어쓰지 않음 (해시 데이터 보존)
+        } else {
+            // 🛡️ 서버에서 이미 choices를 만들어서 보낸 경우 그대로 사용
+            questions = data.quiz.questions.map(question => {
             // 이미 choices가 있으면 (서버에서 만든 경우) 그대로 사용
             if (question.choices && question.choices.length > 0) {
                 return {
@@ -182,6 +186,7 @@ async function loadSessionData() {
                 isChoice: false
             };
         });
+        }
 
         // 퀴즈 정보 표시
         displayQuizInfo(data.quiz);
@@ -537,14 +542,23 @@ function sendMessage() {
     const message = input.value.trim();
     input.value = '';
 
-    if (!message) return;
+    if (!message) {
+        return;
+    }
 
     const actualIndex = questionOrder[currentIndex];
+
+    // ✅ questions 배열 유효성 체크 (재접속 시 타이밍 이슈 방지)
+    if (!questions || !questions[actualIndex]) {
+        console.warn('⚠️ 문제 데이터 로딩 중... 잠시 후 다시 시도해주세요.');
+        return;
+    }
 
     // 🛡️ 클라이언트에서 먼저 정답 여부 확인 (해시 비교)
     const isCorrect = (function() {
         const hashedAnswers = questions[actualIndex].answers || []; // 서버에서 해시된 정답
         const userInputHash = hashAnswer(message); // 사용자 입력을 해시화
+
         return hashedAnswers.includes(userInputHash);
     })();
 
@@ -577,6 +591,13 @@ function choiceQuestionSendMessage() {
     if (choiceNumber >= 1 && choiceNumber <= 5 && message === String(choiceNumber)) {
         // 현재 문제의 선택지 가져오기
         const actualIndex = questionOrder[currentIndex];
+
+        // ✅ questions 배열 유효성 체크 (재접속 시 타이밍 이슈 방지)
+        if (!questions || !questions[actualIndex]) {
+            console.warn('⚠️ 문제 데이터 로딩 중... 잠시 후 다시 시도해주세요.');
+            return;
+        }
+
         const question = questions[actualIndex];
 
         if (question && question.choices && question.choices.length >= choiceNumber) {
@@ -1202,12 +1223,8 @@ function setupEventListeners() {
         socket.emit('forceSkip', { sessionId });
     });
 
-    // 채팅 입력 엔터 키
-    document.getElementById('chatInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            currentSendFunction();
-        }
-    });
+    // ❌ 제거: HTML form onsubmit과 중복되어 두 번 호출되는 문제 발생
+    // 채팅 입력은 form submit으로 처리됨 (quiz-session.html 373번 줄)
 
     // ESC 키: 포커스 해제 핸들러
     function handleEscapeKey(e) {
@@ -1306,7 +1323,14 @@ function setupSocketListeners() {
     });
 
     socket.on('session-ready', () => {
-        loadSessionData();
+        // ⚠️ 게임이 이미 시작된 경우 loadSessionData() 호출하지 않음
+        // game-started 이벤트에서 해시된 데이터를 받으므로 평문 데이터를 덮어쓰면 안 됨
+        const gameSection = document.getElementById('gameSection');
+        const isGameStarted = gameSection && !gameSection.classList.contains('hidden');
+
+        if (!isGameStarted) {
+            loadSessionData();
+        }
     });
 
     socket.on('join-error', ({ success, message }) => {
@@ -1342,19 +1366,20 @@ function setupSocketListeners() {
     });
 
     socket.on('game-started', ({ success, data, message }) => {
-        if (!success) {
-            console.error('게임 시작 실패:', message);
-            alert(message || '게임을 시작할 수 없습니다.');
-            return;
-        }
+        try {
+            if (!success) {
+                console.error('게임 시작 실패:', message);
+                alert(message || '게임을 시작할 수 없습니다.');
+                return;
+            }
 
-        const { quiz, host: newHost, questionOrder: order, isReconnect, currentIndex: serverCurrentIndex, playerAnswered } = data;
+            const { quiz, host: newHost, questionOrder: order, isReconnect, currentIndex: serverCurrentIndex, playerAnswered } = data;
 
-        if (!quiz || !Array.isArray(quiz.questions)) {
-            console.error('잘못된 퀴즈 구조:', quiz);
-            alert('퀴즈 데이터가 손상되었습니다.');
-            return;
-        }
+            if (!quiz || !Array.isArray(quiz.questions)) {
+                console.error('잘못된 퀴즈 구조:', quiz);
+                alert('퀴즈 데이터가 손상되었습니다.');
+                return;
+            }
 
         host = newHost;
 
@@ -1363,6 +1388,10 @@ function setupSocketListeners() {
 
         // 문제 순서 배열 저장 (서버에서 전송받은 순서 또는 기본 순서)
         questionOrder = order || Array.from({ length: quiz.questions.length }, (_, i) => i);
+
+        // ✅ 실제 플레이 중인 문제의 정답 정보 확인 (questionOrder 적용)
+        const actualCurrentIndex = questionOrder[serverCurrentIndex || 0];
+
 
         // 🛡️ 서버에서 이미 choices를 만들어서 보낸 경우 그대로 사용
         questions = quiz.questions.map(question => {
@@ -1398,6 +1427,7 @@ function setupSocketListeners() {
             };
         });
 
+
         // 🔄 재접속인 경우 서버에서 받은 currentIndex 사용, 아니면 0
         currentIndex = isReconnect ? (serverCurrentIndex || 0) : 0;
 
@@ -1416,6 +1446,10 @@ function setupSocketListeners() {
         // 재접속이 아닐 때만 client-ready 전송
         if (!isReconnect) {
             socket.emit('client-ready', { sessionId });
+        }
+        } catch (error) {
+            console.error('❌ game-started 처리 중 에러:', error);
+            alert('게임 데이터 처리 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.');
         }
     });
 
