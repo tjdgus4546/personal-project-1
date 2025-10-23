@@ -3,9 +3,10 @@ const router = express.Router();
 const authenticateToken = require('../middlewares/AuthMiddleware');
 const { ObjectId } = require('mongoose').Types;
 
-// GET /api/quiz/:quizId/comments - 퀴즈의 모든 댓글 조회
+// GET /api/quiz/:quizId/comments - 퀴즈의 댓글 조회 (페이지네이션)
 router.get('/quiz/:quizId/comments', async (req, res) => {
   const { quizId } = req.params;
+  const { page = 1, limit = 20 } = req.query;
 
   if (!ObjectId.isValid(quizId)) {
     return res.status(400).json({ message: '유효하지 않은 퀴즈 ID입니다.' });
@@ -15,12 +16,24 @@ router.get('/quiz/:quizId/comments', async (req, res) => {
     const mainDb = req.app.get('userDb'); // Comment는 userDb에 저장
     const Comment = require('../models/Comment')(mainDb);
 
-    // 퀴즈별 댓글 조회 (최신순) - 숨김 처리된 댓글 제외
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // 전체 댓글 수 조회
+    const totalCount = await Comment.countDocuments({
+      quizId,
+      isCommentHidden: { $ne: true }
+    });
+
+    // 퀴즈별 댓글 조회 (최신순) - 페이지네이션 적용
     const comments = await Comment.find({
       quizId,
       isCommentHidden: { $ne: true }
     })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
       .lean();
 
     // 프로필 이미지가 숨겨진 경우 null로 처리
@@ -29,7 +42,16 @@ router.get('/quiz/:quizId/comments', async (req, res) => {
       profileImage: comment.isProfileHidden ? null : comment.profileImage,
     }));
 
-    res.json({ success: true, comments: sanitizedComments });
+    res.json({
+      success: true,
+      comments: sanitizedComments,
+      pagination: {
+        currentPage: pageNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+        totalCount,
+        hasMore: skip + comments.length < totalCount
+      }
+    });
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ message: '댓글 조회 중 오류가 발생했습니다.', error: error.message });

@@ -208,7 +208,25 @@
 
         <!-- 왼쪽: 퀴즈 댓글 섹션 -->
         <div class="flex flex-col bg-black/30 md:flex-1 rounded-2xl p-6 shadow-xl border border-gray-600">
-          <h3 class="text-[18px] font-semibold text-white mb-4">퀴즈 댓글</h3>
+          <!-- 헤더: 제목 + 페이지네이션 -->
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-[18px] font-semibold text-white">퀴즈 댓글</h3>
+
+            <!-- 페이지네이션 버튼 -->
+            <div id="commentsPagination" class="flex items-center gap-2">
+              <button id="prevCommentsBtn" class="p-1 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+              </button>
+              <span id="commentsPageInfo" class="text-sm text-gray-400 min-w-[60px] text-center">1 / 1</span>
+              <button id="nextCommentsBtn" class="p-1 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
 
           <!-- 댓글 로딩 상태 -->
           <div id="commentsLoading" class="text-center py-4 text-gray-400 hidden">

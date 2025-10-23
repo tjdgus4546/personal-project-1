@@ -2,6 +2,9 @@
 
 let currentQuizId = null;
 let currentUser = null;
+let currentPage = 1;
+let totalPages = 1;
+let isLoading = false;
 
 /**
  * 댓글 모듈 초기화
@@ -28,6 +31,28 @@ export function initializeComments(quizId, user) {
     commentInput.addEventListener('input', () => {
       const content = commentInput.value.trim();
       submitCommentBtn.disabled = content.length === 0;
+    });
+  }
+
+  // 페이지네이션 버튼 이벤트 리스너
+  const prevBtn = document.getElementById('prevCommentsBtn');
+  const nextBtn = document.getElementById('nextCommentsBtn');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        loadComments();
+      }
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (currentPage < totalPages) {
+        currentPage++;
+        loadComments();
+      }
     });
   }
 
@@ -90,12 +115,16 @@ export async function loadComments() {
     return;
   }
 
+  if (isLoading) return;
+  isLoading = true;
+
   const commentsContainer = document.getElementById('commentsContainer');
   const commentsLoading = document.getElementById('commentsLoading');
   const commentsError = document.getElementById('commentsError');
 
   if (!commentsContainer) {
     console.error('댓글 컨테이너를 찾을 수 없습니다.');
+    isLoading = false;
     return;
   }
 
@@ -105,7 +134,7 @@ export async function loadComments() {
   commentsContainer.innerHTML = '';
 
   try {
-    const response = await fetch(`/api/quiz/${currentQuizId}/comments`, {
+    const response = await fetch(`/api/quiz/${currentQuizId}/comments?page=${currentPage}&limit=20`, {
       credentials: 'include',
     });
 
@@ -115,12 +144,16 @@ export async function loadComments() {
 
     const data = await response.json();
     const comments = data.comments || [];
+    const pagination = data.pagination || {};
+
+    // 페이지 정보 업데이트
+    totalPages = pagination.totalPages || 1;
 
     // 로딩 상태 숨김
     if (commentsLoading) commentsLoading.classList.add('hidden');
 
     // 댓글 렌더링
-    if (comments.length === 0) {
+    if (comments.length === 0 && currentPage === 1) {
       commentsContainer.innerHTML = `
         <div class="text-center py-8 text-gray-400">
           <p>아직 댓글이 없습니다.</p>
@@ -130,6 +163,10 @@ export async function loadComments() {
     } else {
       commentsContainer.innerHTML = comments.map(comment => createCommentHTML(comment)).join('');
     }
+
+    // 페이지네이션 UI 업데이트
+    updatePaginationUI();
+
   } catch (error) {
     console.error('댓글 로드 오류:', error);
     if (commentsLoading) commentsLoading.classList.add('hidden');
@@ -137,6 +174,29 @@ export async function loadComments() {
       commentsError.classList.remove('hidden');
       commentsError.textContent = error.message;
     }
+  } finally {
+    isLoading = false;
+  }
+}
+
+/**
+ * 페이지네이션 UI 업데이트
+ */
+function updatePaginationUI() {
+  const prevBtn = document.getElementById('prevCommentsBtn');
+  const nextBtn = document.getElementById('nextCommentsBtn');
+  const pageInfo = document.getElementById('commentsPageInfo');
+
+  if (pageInfo) {
+    pageInfo.textContent = `${currentPage} / ${totalPages}`;
+  }
+
+  if (prevBtn) {
+    prevBtn.disabled = currentPage <= 1;
+  }
+
+  if (nextBtn) {
+    nextBtn.disabled = currentPage >= totalPages;
   }
 }
 
@@ -264,7 +324,8 @@ async function submitComment() {
       // 입력 필드 초기화
       commentInput.value = '';
 
-      // 댓글 목록 새로고침
+      // 첫 페이지로 돌아가서 댓글 목록 새로고침
+      currentPage = 1;
       await loadComments();
 
       // 성공 메시지 (선택사항)
@@ -351,7 +412,8 @@ async function saveEditComment(commentId, commentItem) {
     const data = await response.json();
 
     if (data.success) {
-      // 댓글 목록 새로고침
+      // 첫 페이지로 돌아가서 댓글 목록 새로고침
+      currentPage = 1;
       await loadComments();
     }
   } catch (error) {
@@ -383,7 +445,8 @@ async function deleteComment(commentId) {
     const data = await response.json();
 
     if (data.success) {
-      // 댓글 목록 새로고침
+      // 첫 페이지로 돌아가서 댓글 목록 새로고침
+      currentPage = 1;
       await loadComments();
     }
   } catch (error) {
