@@ -1014,7 +1014,10 @@ export async function saveQuestion() {
 
     // 유효성 검사 - 문제 텍스트, 이미지, 유튜브 중 하나는 있어야 함
     const youtubeUrl = document.getElementById('youtubeUrl')?.value?.trim();
-    if (!text && !questionImageFile && !youtubeUrl) {
+    const existingQuestion = questions[currentEditingIndex];
+    const hasExistingImage = existingQuestion?.imageBase64; // 기존 저장된 이미지 확인
+
+    if (!text && !questionImageFile && !hasExistingImage && !youtubeUrl) {
         showToast('문제 텍스트, 이미지, 또는 유튜브 링크 중 하나는 입력해야 합니다.', 'error');
         return;
     }
