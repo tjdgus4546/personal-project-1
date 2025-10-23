@@ -401,20 +401,20 @@ function renderScoreboard(players) {
         // 접속 해제된 플레이어는 투명도 적용
         const opacityClass = p.connected === false ? 'opacity-50' : '';
 
-        li.className = `flex-shrink-0 w-[140px] p-3 bg-gray-700/50 rounded-lg border-l-4 ${borderColor} ${opacityClass}`;
+        li.className = `flex-shrink-0 w-[85px] sm:w-[140px] h-full sm:h-auto p-2 sm:p-3 bg-gray-700/50 rounded-lg border-l-4 ${borderColor} ${opacityClass} flex flex-col justify-center sm:block`;
         li.setAttribute('data-nickname', displayName); // 닉네임 저장
 
         const avatarHTML = createPlayerAvatar(p);
 
         li.innerHTML = `
-            <div class="flex items-center justify-center gap-3 mb-2">
-                <span class="text-yellow-400 font-bold text-sm">#${index + 1}</span>
-                ${avatarHTML}
+            <div class="flex items-center justify-center gap-1.5 sm:gap-3 mb-1.5 sm:mb-2">
+                <span class="text-yellow-400 font-bold text-[10px] sm:text-sm">#${index + 1}</span>
+                <div class="hidden sm:block">${avatarHTML}</div>
             </div>
             <div class="text-center">
-                <div class="text-white font-medium text-sm truncate mb-1">${displayName}${p.connected === false ? ' (접속 끊김)' : ''}</div>
-                <div class="text-green-400 font-bold text-lg">${p.score}점</div>
-                <div class="text-gray-400 text-xs">${p.correctAnswersCount || 0}문제</div>
+                <div class="text-white font-medium text-[10px] sm:text-sm truncate mb-0.5 sm:mb-1">${displayName}${p.connected === false ? ' (접속 끊김)' : ''}</div>
+                <div class="text-green-400 font-bold text-[10px] sm:text-lg">${p.score}점</div>
+                <div class="text-gray-400 text-[10px] sm:text-xs">${p.correctAnswersCount || 0}문제</div>
             </div>
         `;
         board.appendChild(li);
@@ -495,17 +495,17 @@ function renderPlayerList(players) {
 function createPlayerAvatar(player) {
     const displayName = player.nickname || 'Unknown';
     const initial = displayName.charAt(0).toUpperCase();
-    
+
     // 프로필 이미지가 있고 네이버 기본 이미지가 아닌 경우
-    if (player.profileImage && 
-        player.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png' && 
+    if (player.profileImage &&
+        player.profileImage !== 'https://ssl.pstatic.net/static/pwe/address/img_profile.png' &&
         player.profileImage.trim() !== '') {
-        
+
         return `
             <div class="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0">
-                <img 
-                    src="${player.profileImage}" 
-                    alt="${displayName}님의 프로필" 
+                <img
+                    src="${player.profileImage}"
+                    alt="${displayName}님의 프로필"
                     class="w-full h-full object-cover"
                     onerror="console.log('⌧ 이미지 로딩 실패:', '${player.profileImage.substring(0, 30)}...'); this.style.display='none'; this.nextElementSibling.style.display='flex';"
                 >
@@ -722,29 +722,29 @@ function showQuestion({ silent = false } = {}) {
                             
                             <!-- 영상 가리는 검은색 오버레이 -->
                             <div class="absolute inset-0 bg-black rounded-lg flex flex-col items-center justify-center z-10">
-                                <div class="text-center mb-8">
-                                    <svg class="w-24 h-24 text-white mx-auto mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div class="text-center mb-4 sm:mb-8">
+                                    <svg class="w-16 h-16 sm:w-24 sm:h-24 text-white mx-auto mb-3 sm:mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
                                     </svg>
-                                    <p class="text-2xl font-bold text-white">소리를 듣고 맞춰보세요!</p>
+                                    <p class="text-lg sm:text-2xl font-bold text-white">소리를 듣고 맞춰보세요!</p>
                                 </div>
-                                
+
                                 <!-- 볼륨 컨트롤 -->
-                                <div class="flex items-center gap-3 bg-gray-800/80 px-6 py-3 rounded-full border-2 border-gray-600">
-                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <div class="flex items-center gap-2 sm:gap-3 bg-gray-800/80 px-4 py-2 sm:px-6 sm:py-3 rounded-full border-2 border-gray-600">
+                                    <svg class="w-3.5 h-3.5 sm:w-6 sm:h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
                                     </svg>
-                                    <input 
-                                        type="range" 
+                                    <input
+                                        type="range"
                                         id="youtubeVolumeSlider"
-                                        class="w-32 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-white" 
-                                        min="0" 
-                                        max="100" 
+                                        class="w-20 sm:w-32 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-white"
+                                        min="0"
+                                        max="100"
                                         value="${globalYoutubeVolume}"
                                         oninput="setYoutubeVolume(this.value)"
                                         style="pointer-events: auto;"
                                     >
-                                    <span id="volumePercent" class="text-white font-bold text-lg min-w-[50px]">${globalYoutubeVolume}%</span>
+                                    <span id="volumePercent" class="text-white font-bold text-sm sm:text-lg min-w-[35px] sm:min-w-[50px]">${globalYoutubeVolume}%</span>
                                 </div>
                             </div>
                         </div>

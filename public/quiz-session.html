@@ -38,10 +38,7 @@
         .youtube-player-wrapper {
             max-width: 100% !important;
         }
-        
-        .youtube-title-overlay {
-            height: 40px;
-        }
+
     }
   </style>
 </head>
@@ -281,10 +278,10 @@
     <div id="gameSection" class="hidden space-y-4">
 
       <!-- 스코어보드 박스 스크롤바 css common.css 로 제어중 -->
-      <div class="bg-black/30 h-auto rounded-2xl p-6 shadow-xl border border-gray-600">
+      <div class="bg-black/30 h-[110px] sm:h-auto rounded-2xl p-3 sm:p-6 shadow-xl border border-gray-600">
         <!-- 스코어보드 컨테이너 -->
-        <div id="scoreboardWrapper" class="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
-          <ul id="scoreboard" class="flex gap-3">
+        <div id="scoreboardWrapper" class="h-full sm:h-auto overflow-x-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+          <ul id="scoreboard" class="flex gap-2 sm:gap-3 h-full sm:h-auto">
             <!-- 스코어보드가 여기에 표시됩니다 -->
           </ul>
         </div>
@@ -350,7 +347,7 @@
           </div>
           
           <!-- 채팅 로그 -->
-          <div id="chatLog" class="h-[180px] sm:h-[460px] break-words overflow-y-auto space-y-2 mb-4 p-2 bg-black/30 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
+          <div id="chatLog" class="h-[90px] sm:h-[460px] break-words overflow-y-auto space-y-2 mb-4 p-2 bg-black/30 rounded-lg scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700">
             <!-- 채팅 메시지들이 여기에 표시됩니다 -->
           </div>
           
