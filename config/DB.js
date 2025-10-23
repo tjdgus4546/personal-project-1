@@ -7,19 +7,19 @@ const connectDB = async () => {
     // 🚀 Flex 티어 최적화 설정
     const connectionOptions = {
       autoIndex: true, // 🔧 인덱스 자동 생성
-      maxPoolSize: 100, // 🔧 연결 풀 크기 대폭 증가 (Flex는 더 많은 연결 지원)
-      minPoolSize: 20,  // 🔧 최소 연결 유지 (빠른 응답을 위해)
-      serverSelectionTimeoutMS: 5000, // 🔧 서버 선택 타임아웃 (Flex는 빠름)
-      socketTimeoutMS: 30000, // 🔧 소켓 타임아웃
-      connectTimeoutMS: 5000, // 🔧 초기 연결 타임아웃 (Flex는 빠른 연결)
-      heartbeatFrequencyMS: 3000, // 🔧 하트비트 주기 (더 자주 체크)
+      maxPoolSize: 20, // 🔧 연결 풀 크기 (100→20으로 감소, 안정성 향상)
+      minPoolSize: 5,  // 🔧 최소 연결 유지 (20→5로 감소)
+      serverSelectionTimeoutMS: 10000, // 🔧 서버 선택 타임아웃 (5초→10초로 증가)
+      socketTimeoutMS: 60000, // 🔧 소켓 타임아웃 (30초→60초로 증가)
+      connectTimeoutMS: 10000, // 🔧 초기 연결 타임아웃 (5초→10초로 증가)
+      heartbeatFrequencyMS: 5000, // 🔧 하트비트 주기 (3초→5초로 조정)
       retryWrites: true, // 🔧 쓰기 작업 재시도
       retryReads: true, // 🔧 읽기 작업 재시도
-      bufferCommands: false, // 🔧 버퍼링 비활성화 (Flex는 안정적이므로 즉시 에러 처리)
-      maxIdleTimeMS: 30000, // 🔧 유휴 연결 타임아웃
-      waitQueueTimeoutMS: 2000, // 🔧 연결 대기 큐 타임아웃
+      bufferCommands: true, // 🔧 버퍼링 활성화 (false→true로 변경, 연결 완료까지 쿼리 대기)
+      maxIdleTimeMS: 60000, // 🔧 유휴 연결 타임아웃 (30초→60초로 증가)
+      waitQueueTimeoutMS: 10000, // 🔧 연결 대기 큐 타임아웃 (2초→10초로 증가)
       compressors: ['zlib'], // 🔧 네트워크 압축
-      maxConnecting: 10, // 🔧 동시 연결 시도 수
+      maxConnecting: 5, // 🔧 동시 연결 시도 수 (10→5로 감소)
     };
 
     // 사용자 DB 연결
