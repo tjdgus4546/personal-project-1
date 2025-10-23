@@ -64,8 +64,6 @@ module.exports = (quizDb) => {
         .project({
           questions: 0,          // ← 용량 큰 questions 배열 제외!
           reports: 0,            // ← 불필요한 reports 배열 제외
-          modificationLogs: 0,   // ← 수정 로그 제외! (이게 범인!)
-          creationLog: 0,        // ← 생성 로그도 제외
         })
         .sort(sortCondition)
         .skip(skip)
@@ -295,11 +293,7 @@ module.exports = (quizDb) => {
         // S3 업로드를 위해 quizId가 필요하므로, 임시 placeholder 사용 후 나중에 실제 URL로 교체
         titleImageBase64: titleImageBase64 || 'https://playcode.gg/images/Logo.png',
         questions: [],
-        isComplete: false,
-        creationLog: {
-          ip: getClientIp(req),
-          timestamp: new Date()
-        }
+        isComplete: false
       });
       await newQuiz.save();
 
@@ -409,12 +403,6 @@ module.exports = (quizDb) => {
             );
           }
         }
-
-        // IP 로그 추가
-        quiz.modificationLogs.push({
-          ip: getClientIp(req),
-          timestamp: new Date()
-        });
 
         await quiz.save();
         res.json({ message: '문제 목록이 업데이트되었습니다.', questionCount: quiz.questions.length });
@@ -575,14 +563,6 @@ module.exports = (quizDb) => {
           return res.status(403).json({ message: '권한이 없습니다.' });
         }
 
-        // IP 로그 추가
-        updateFields.$push = {
-          modificationLogs: {
-            ip: getClientIp(req),
-            timestamp: new Date()
-          }
-        };
-
         const quiz = await Quiz.findByIdAndUpdate(
             req.params.id,
             updateFields,
@@ -683,12 +663,6 @@ module.exports = (quizDb) => {
             console.error('이전 정답 이미지 삭제 실패:', err)
           );
         }
-
-        // IP 로그 추가
-        quiz.modificationLogs.push({
-          ip: getClientIp(req),
-          timestamp: new Date()
-        });
 
         quiz.markModified('questions');
         await quiz.save();

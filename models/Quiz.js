@@ -93,14 +93,6 @@ const quizSchema = new Schema({
     type: Date,
     default: Date.now,
   },
-  creationLog: {
-    ip: { type: String },
-    timestamp: { type: Date, default: Date.now }
-  },
-  modificationLogs: [{
-    ip: { type: String },
-    timestamp: { type: Date, default: Date.now }
-  }],
   isComplete: {
   type: Boolean,
   default: false,
