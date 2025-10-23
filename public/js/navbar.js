@@ -442,12 +442,12 @@ export function initializeQuizModal() {
             <label for="createQuizDescription" class="block text-sm font-semibold text-white mb-2">
               퀴즈 설명
             </label>
-            <textarea 
-              id="createQuizDescription" 
+            <textarea
+              id="createQuizDescription"
               placeholder="퀴즈에 대한 간단한 설명을 입력하세요 (선택사항)"
               rows="4"
               class="w-full px-4 py-3 text-white bg-black/30 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-              maxlength="500"
+              maxlength="100"
             ></textarea>
           </div>
 

@@ -57,7 +57,7 @@ const quizSchema = new Schema({
   },
   description: {
     type: String,
-    maxlength: 40,
+    maxlength: 100,
   },
   creatorId: {
     type: String, // ObjectId 또는 'seized'
