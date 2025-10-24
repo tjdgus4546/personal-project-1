@@ -1057,11 +1057,18 @@ module.exports = (io, app) => {
   });
 
 
-  socket.on('revealAnswer', async ({ sessionId }) => {
+  socket.on('revealAnswer', async ({ sessionId, questionIndex }) => {
     try {
       if (!ObjectId.isValid(sessionId)) return;
       let session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
+
+      // ✅ 문제 인덱스 검증 (지연된 요청 방지)
+      const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+      if (questionIndex !== undefined && questionIndex !== actualQuestionIndex) {
+        console.log(`⚠️ revealAnswer: 이전 문제의 지연된 요청 무시 (요청: ${questionIndex}, 현재: ${actualQuestionIndex})`);
+        return;
+      }
 
       // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
       if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
@@ -1139,11 +1146,17 @@ module.exports = (io, app) => {
   });
 
   // 정답공개후 다음 문제로 넘기기
-  socket.on('nextQuestion', async ({ sessionId }) => {
+  socket.on('nextQuestion', async ({ sessionId, questionIndex }) => {
     try {
       if (!ObjectId.isValid(sessionId)) return;
       let session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
+
+      // ✅ 문제 인덱스 검증 (지연된 요청 방지)
+      if (questionIndex !== undefined && questionIndex !== session.currentQuestionIndex) {
+        console.log(`⚠️ nextQuestion: 이전 문제의 지연된 요청 무시 (요청: ${questionIndex}, 현재: ${session.currentQuestionIndex})`);
+        return;
+      }
 
       // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
       if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
@@ -1153,12 +1166,6 @@ module.exports = (io, app) => {
           console.error('❌ 호스트 재할당 실패 - nextQuestion');
           return;
         }
-      }
-
-      // 호스트만 다음 문제로 넘길 수 있음 (호스트 재할당 후에도 현재 요청자가 호스트인지 확인)
-      if (session.host?.toString() !== socket.userId) {
-        console.log(`⚠️ nextQuestion: 호스트가 아닌 사용자의 요청 무시 (userId: ${socket.userId}, host: ${session.host})`);
-        return;
       }
 
       if (app.firstCorrectUsers) {

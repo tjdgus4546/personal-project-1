@@ -726,9 +726,12 @@ function showQuestion({ silent = false } = {}) {
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
-                        if (isHost()) {
-                            socket.emit('revealAnswer', { sessionId });
-                        }
+                        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+                        const actualIndex = questionOrder[currentIndex];
+                        socket.emit('revealAnswer', {
+                            sessionId,
+                            questionIndex: actualIndex
+                        });
                     }, timeLimit);
 
                     startCountdown(question.timeLimit || 90);
@@ -814,9 +817,12 @@ function showQuestion({ silent = false } = {}) {
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
-                        if (isHost()) {
-                            socket.emit('revealAnswer', { sessionId });
-                        }
+                        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+                        const actualIndex = questionOrder[currentIndex];
+                        socket.emit('revealAnswer', {
+                            sessionId,
+                            questionIndex: actualIndex
+                        });
                     }, timeLimit);
 
                     startCountdown(question.timeLimit || 90);
@@ -903,9 +909,12 @@ function showQuestion({ silent = false } = {}) {
 
     const timeLimit = (question.timeLimit || 90) * 1000;
     questionTimer = setTimeout(() => {
-        if (isHost()) {
-            socket.emit('revealAnswer', { sessionId });
-        }
+        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+        const actualIndex = questionOrder[currentIndex];
+        socket.emit('revealAnswer', {
+            sessionId,
+            questionIndex: actualIndex
+        });
     }, timeLimit);
 
     startCountdown(question.timeLimit || 90);
@@ -1466,9 +1475,12 @@ function setupSocketListeners() {
                 window.__isRevealingAnswer = false;
                 currentRevealedAt = null;
                 nextQuestionTimer = null;
-                if (isHost()) {
-                    socket.emit('nextQuestion', { sessionId, userId });
-                }
+                // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+                socket.emit('nextQuestion', {
+                    sessionId,
+                    userId,
+                    questionIndex: currentIndex
+                });
             }, remainingTime);
         }
         // 재접속이 아닐 때만 client-ready 전송
@@ -1531,10 +1543,13 @@ function setupSocketListeners() {
                     window.__isRevealingAnswer = false;
                     currentRevealedAt = null;
                     nextQuestionTimer = null;
-                    if (isHost()) {
-                        console.log('✅ 새 호스트가 nextQuestion 전송');
-                        socket.emit('nextQuestion', { sessionId, userId });
-                    }
+                    // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+                    console.log('✅ 새 호스트가 nextQuestion 전송');
+                    socket.emit('nextQuestion', {
+                        sessionId,
+                        userId,
+                        questionIndex: currentIndex
+                    });
                 }, remainingTime);
             }
         } else {
@@ -1558,6 +1573,20 @@ function setupSocketListeners() {
         if (!success) {
             console.error('다음 문제 전송 실패:', message);
             return;
+        }
+
+        // ✅ 이전 문제의 타이머 정리 (지연된 이벤트 방지)
+        if (questionTimer) {
+            clearTimeout(questionTimer);
+            questionTimer = null;
+        }
+        if (nextQuestionTimer) {
+            clearTimeout(nextQuestionTimer);
+            nextQuestionTimer = null;
+        }
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
         }
 
         const { currentIndex: newIndex, totalPlayers } = data;
@@ -1597,9 +1626,12 @@ function setupSocketListeners() {
 
         // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {
-            if (isHost()) {
-                socket.emit('revealAnswer', { sessionId });
-            }
+            // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+            const actualIndex = questionOrder[currentIndex];
+            socket.emit('revealAnswer', {
+                sessionId,
+                questionIndex: actualIndex
+            });
         }, remainingTime);
 
         // ✅ 남은 시간으로 카운트다운 시작
@@ -2258,9 +2290,12 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
         window.__isRevealingAnswer = false;
         currentRevealedAt = null;
         nextQuestionTimer = null;
-        if (isHost()) {
-            socket.emit('nextQuestion', { sessionId, userId });
-        }
+        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
+        socket.emit('nextQuestion', {
+            sessionId,
+            userId,
+            questionIndex: currentIndex
+        });
     }, 5000);
 }
 
