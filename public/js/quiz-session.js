@@ -1657,7 +1657,7 @@ function setupSocketListeners() {
         const totalTimeLimit = (question.timeLimit || 90) * 1000;
 
         // ✅ 경과 시간 계산 (재접속 시 대응)
-        const elapsed = Date.now() - questionStartAt.getTime();
+        const elapsed = Math.max(0, Date.now() - questionStartAt.getTime());
         const remainingTime = Math.max(0, totalTimeLimit - elapsed);
         const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
 
