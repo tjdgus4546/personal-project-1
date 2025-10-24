@@ -9,6 +9,8 @@ let questions = [];
 let quizData = null;
 let currentIndex = 0;
 let questionTimer = null;
+let nextQuestionTimer = null; // 정답 공개 후 5초 타이머
+let currentRevealedAt = null; // 정답 공개 시간
 let host = null;
 let questionStartAt = null;
 let countdownInterval = null;
@@ -1373,7 +1375,7 @@ function setupSocketListeners() {
                 return;
             }
 
-            const { quiz, host: newHost, questionOrder: order, isReconnect, currentIndex: serverCurrentIndex, playerAnswered } = data;
+            const { quiz, host: newHost, questionOrder: order, isReconnect, currentIndex: serverCurrentIndex, playerAnswered, revealedAt } = data;
 
             if (!quiz || !Array.isArray(quiz.questions)) {
                 console.error('잘못된 퀴즈 구조:', quiz);
@@ -1443,8 +1445,34 @@ function setupSocketListeners() {
             hasAnswered = playerAnswered[actualQuestionIndex] === true;
         }
 
+        // ✅ 재접속 시 정답 공개 상태인 경우 처리
+        if (isReconnect && revealedAt) {
+            window.__isRevealingAnswer = true;
+            currentRevealedAt = new Date(revealedAt);
+
+            // 기존 타이머가 있으면 취소
+            if (nextQuestionTimer) {
+                clearTimeout(nextQuestionTimer);
+            }
+
+            // 남은 시간 계산
+            const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+            const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+
+            console.log(`✅ 재접속 - 정답 공개 상태, 남은 시간: ${remainingTime / 1000}초`);
+
+            // 남은 시간 후 다음 문제로 넘어가기
+            nextQuestionTimer = setTimeout(() => {
+                window.__isRevealingAnswer = false;
+                currentRevealedAt = null;
+                nextQuestionTimer = null;
+                if (isHost()) {
+                    socket.emit('nextQuestion', { sessionId, userId });
+                }
+            }, remainingTime);
+        }
         // 재접속이 아닐 때만 client-ready 전송
-        if (!isReconnect) {
+        else if (!isReconnect) {
             socket.emit('client-ready', { sessionId });
         }
         } catch (error) {
@@ -1459,11 +1487,12 @@ function setupSocketListeners() {
             return;
         }
 
+        const previousHost = host;
         host = data.host;
 
         const isGameStarted = !document.getElementById('gameSection').classList.contains('hidden');
         const startBtn = document.getElementById('startBtn');
-        
+
         // 데스크톱 버튼
         const forceSkipBtn = document.getElementById('forceSkipBtn');
         // 모바일 버튼
@@ -1480,6 +1509,33 @@ function setupSocketListeners() {
             }
             if (!isGameStarted) {
                 startBtn?.classList.remove('hidden');
+            }
+
+            // ✅ 정답 공개 상태에서 새로운 호스트가 된 경우, 남은 시간 후 자동으로 nextQuestion 전송
+            if (window.__isRevealingAnswer && currentRevealedAt && previousHost !== host) {
+                console.log('✅ 새로운 호스트로 지정됨. 정답 공개 상태이므로 타이머 재설정');
+
+                // 기존 타이머 취소
+                if (nextQuestionTimer) {
+                    clearTimeout(nextQuestionTimer);
+                }
+
+                // 남은 시간 계산 (최대 5초)
+                const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+                const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+
+                console.log(`⏱️ 남은 시간: ${remainingTime / 1000}초`);
+
+                // 남은 시간 후 nextQuestion 전송
+                nextQuestionTimer = setTimeout(() => {
+                    window.__isRevealingAnswer = false;
+                    currentRevealedAt = null;
+                    nextQuestionTimer = null;
+                    if (isHost()) {
+                        console.log('✅ 새 호스트가 nextQuestion 전송');
+                        socket.emit('nextQuestion', { sessionId, userId });
+                    }
+                }, remainingTime);
             }
         } else {
             forceSkipBtn.classList.add('hidden');
@@ -1532,14 +1588,22 @@ function setupSocketListeners() {
         if (questionTimer) clearTimeout(questionTimer);
         if (countdownInterval) clearInterval(countdownInterval);
 
-        const timeLimit = (question.timeLimit || 90) * 1000;
+        const totalTimeLimit = (question.timeLimit || 90) * 1000;
+
+        // ✅ 경과 시간 계산 (재접속 시 대응)
+        const elapsed = Date.now() - questionStartAt.getTime();
+        const remainingTime = Math.max(0, totalTimeLimit - elapsed);
+        const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
+
+        // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {
             if (isHost()) {
                 socket.emit('revealAnswer', { sessionId });
             }
-        }, timeLimit);
+        }, remainingTime);
 
-        startCountdown(question.timeLimit || 90);
+        // ✅ 남은 시간으로 카운트다운 시작
+        startCountdown(remainingSeconds);
     });
 
     socket.on('chat', ({ user, nickname, profileImage, message }) => {
@@ -2182,10 +2246,18 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     }
 
     window.__isRevealingAnswer = true;
+    currentRevealedAt = revealedAt ? new Date(revealedAt) : new Date();
+
+    // 기존 타이머가 있으면 취소
+    if (nextQuestionTimer) {
+        clearTimeout(nextQuestionTimer);
+    }
 
     // 5초 후 다음 문제로 넘어가기 (서버 시간 차이를 고려하지 않고 정확히 5초)
-    setTimeout(() => {
+    nextQuestionTimer = setTimeout(() => {
         window.__isRevealingAnswer = false;
+        currentRevealedAt = null;
+        nextQuestionTimer = null;
         if (isHost()) {
             socket.emit('nextQuestion', { sessionId, userId });
         }

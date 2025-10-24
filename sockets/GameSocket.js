@@ -323,7 +323,8 @@ module.exports = (io, app) => {
               currentQuestionIndex: session.questionOrder[session.currentQuestionIndex],
               isReconnect: true, // 재접속 플래그
               currentIndex: session.currentQuestionIndex, // questionOrder 배열의 인덱스
-              playerAnswered: playerAnswered // 플레이어의 answered 상태
+              playerAnswered: playerAnswered, // 플레이어의 answered 상태
+              revealedAt: session.revealedAt // ✅ 정답 공개 시간 전송
             }
           });
 
@@ -459,10 +460,16 @@ module.exports = (io, app) => {
                   );
                   const remainingConnected = updatedSession.players.filter(p => p.connected);
 
+                  // ✅ 모든 남은 플레이어가 준비 완료되고, 아직 타이머가 시작되지 않은 경우만 시작
                   if (readyForThisQuestion.length >= remainingConnected.length && remainingConnected.length > 0) {
-                    // 모든 남은 플레이어가 준비 완료
-                    const startResult = await GameSession.findByIdAndUpdate(
-                      sessionId,
+                    const startResult = await GameSession.findOneAndUpdate(
+                      {
+                        _id: sessionId,
+                        $or: [
+                          { questionStartAt: null },
+                          { questionStartAt: { $exists: false } }
+                        ]
+                      },
                       { $set: { questionStartAt: new Date() } },
                       { new: true }
                     );
@@ -666,15 +673,21 @@ module.exports = (io, app) => {
         const allReady = readyCount >= totalCount;
 
         if (allReady) {
-          // 문제 시작 시간 설정 (원자적 업데이트)
-          const startResult = await GameSession.findByIdAndUpdate(
-            sessionId,
+          // ✅ 문제 시작 시간 설정 (이미 시작되지 않은 경우만 - 타이머 초기화 방지)
+          const startResult = await GameSession.findOneAndUpdate(
+            {
+              _id: sessionId,
+              $or: [
+                { questionStartAt: null },
+                { questionStartAt: { $exists: false } }
+              ]
+            },
             { $set: { questionStartAt: new Date() } },
             { new: true }
           );
 
           if (!startResult) {
-            console.error('❌ 세션 저장 중 에러 발생 - client-ready-all');
+            // 이미 시작되었거나 세션이 없음 (에러가 아니라 정상)
             return;
           }
 
@@ -1050,6 +1063,16 @@ module.exports = (io, app) => {
       let session = await safeFindSessionById(GameSession, sessionId);
       if (!session) return;
 
+      // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
+      if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
+        console.log(`⚠️ revealAnswer: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
+        session = await ensureHostExists(sessionId, io);
+        if (!session) {
+          console.error('❌ 호스트 재할당 실패 - revealAnswer');
+          return;
+        }
+      }
+
       if (session.revealedAt) return;
 
       const quiz = await Quiz.findById(session.quizId);
@@ -1119,8 +1142,24 @@ module.exports = (io, app) => {
   socket.on('nextQuestion', async ({ sessionId }) => {
     try {
       if (!ObjectId.isValid(sessionId)) return;
-      const session = await safeFindSessionById(GameSession, sessionId);
-      if (!session || session.host?.toString() !== socket.userId) return;
+      let session = await safeFindSessionById(GameSession, sessionId);
+      if (!session) return;
+
+      // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
+      if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
+        console.log(`⚠️ nextQuestion: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
+        session = await ensureHostExists(sessionId, io);
+        if (!session) {
+          console.error('❌ 호스트 재할당 실패 - nextQuestion');
+          return;
+        }
+      }
+
+      // 호스트만 다음 문제로 넘길 수 있음 (호스트 재할당 후에도 현재 요청자가 호스트인지 확인)
+      if (session.host?.toString() !== socket.userId) {
+        console.log(`⚠️ nextQuestion: 호스트가 아닌 사용자의 요청 무시 (userId: ${socket.userId}, host: ${session.host})`);
+        return;
+      }
 
       if (app.firstCorrectUsers) {
         delete app.firstCorrectUsers[sessionId];
@@ -1133,6 +1172,56 @@ module.exports = (io, app) => {
   });
   
   });
+
+  // 호스트 자동 재할당 함수
+  async function ensureHostExists(sessionId, io) {
+    try {
+      const session = await safeFindSessionById(GameSession, sessionId);
+      if (!session) return null;
+
+      // 호스트가 이미 있고 연결되어 있으면 그대로 반환
+      if (session.host) {
+        const hostPlayer = session.players.find(p =>
+          p.userId.toString() === session.host.toString() && p.connected
+        );
+        if (hostPlayer) {
+          return session;
+        }
+      }
+
+      // 호스트가 없거나 연결이 끊겼으면 새로운 호스트 할당
+      const connectedPlayer = session.players.find(p => p.connected);
+      if (!connectedPlayer) {
+        console.warn('⚠️ 연결된 플레이어가 없어 호스트를 할당할 수 없습니다.');
+        return session;
+      }
+
+      const newHostId = new ObjectId(connectedPlayer.userId);
+      session.host = newHostId;
+      session.markModified('host');
+
+      const success = await safeSaveSession(session);
+      if (!success) {
+        console.error('❌ 호스트 재할당 중 세션 저장 실패');
+        return session;
+      }
+
+      console.log(`✅ 새로운 호스트 할당: ${connectedPlayer.nickname || 'Unknown'} (${newHostId})`);
+
+      // 모든 클라이언트에게 호스트 변경 알림
+      io.to(sessionId).emit('host-updated', {
+        success: true,
+        data: {
+          host: newHostId.toString()
+        }
+      });
+
+      return session;
+    } catch (error) {
+      console.error('❌ ensureHostExists 에러:', error);
+      return null;
+    }
+  }
 
   async function addPlayedQuizzes(quizId, userId, app) {
     try {
@@ -1167,6 +1256,16 @@ module.exports = (io, app) => {
         if (!ObjectId.isValid(sessionId)) return;
         let session = await safeFindSessionById(GameSession, sessionId);
         if (!session || !session.isActive) return;
+
+        // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
+        if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
+          console.log(`⚠️ revealAnswer (internal): 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
+          session = await ensureHostExists(sessionId, io);
+          if (!session) {
+            console.error('❌ 호스트 재할당 실패 - revealAnswer (internal)');
+            return;
+          }
+        }
 
         // 중복투표 방지
         if (session.revealedAt) return;
@@ -1435,6 +1534,7 @@ module.exports = (io, app) => {
         {
           $set: {
             revealedAt: null,
+            questionStartAt: null, // ✅ 다음 문제의 타이머를 위해 리셋
             currentQuestionIndex: nextQuestionIndex,
             skipVotes: [],
             readyPlayers: []
@@ -1493,8 +1593,18 @@ module.exports = (io, app) => {
   async function handleChoiceQuestionCompletion(sessionId, io, app, triggerType = 'all_answered') {
     try {
       const GameSession = require('../models/GameSession')(app.get('quizDb'));
-      const session = await safeFindSessionById(GameSession, sessionId);
+      let session = await safeFindSessionById(GameSession, sessionId);
       if (!session || !session.isActive) return;
+
+      // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
+      if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
+        console.log(`⚠️ handleChoiceQuestionCompletion: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
+        session = await ensureHostExists(sessionId, io);
+        if (!session) {
+          console.error('❌ 호스트 재할당 실패 - handleChoiceQuestionCompletion');
+          return;
+        }
+      }
 
       const orderIndex = session.currentQuestionIndex;
       const actualIndex = session.questionOrder[orderIndex];
