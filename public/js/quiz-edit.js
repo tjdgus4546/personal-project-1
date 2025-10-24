@@ -17,6 +17,10 @@ let questionImageFile = null; // File 객체 저장
 let answerImageFile = null; // File 객체 저장
 const quizId = new URLSearchParams(window.location.search).get('quizId');
 
+// 자동 저장 관련 변수
+let autoSaveTimeout = null;
+let isSavingAuto = false;
+
 // 문제 타입 자동 감지 (기존 문제용)
 function detectQuestionType(question) {
     if (question.questionType) {
@@ -92,6 +96,11 @@ export function selectQuestionType(type) {
 
     // 타입에 따른 폼 표시/숨김
     updateFormVisibility();
+
+    // 타입이 변경되었으면 자동 저장 트리거
+    if (previousType !== type && currentEditingIndex !== null) {
+        triggerAutoSave();
+    }
 }
 
 // 폼 표시 업데이트 함수
@@ -584,6 +593,7 @@ export function addAnswer() {
     currentAnswers.push(answer);
     input.value = '';
     renderAnswers();
+    triggerAutoSave(); // 자동 저장 트리거
 }
 
 // 정답 렌더링
@@ -610,6 +620,7 @@ function renderAnswers() {
 export function removeAnswer(index) {
     currentAnswers.splice(index, 1);
     renderAnswers();
+    triggerAutoSave(); // 자동 저장 트리거
 }
 
 // 오답 추가
@@ -635,6 +646,7 @@ export function addIncorrect() {
     currentIncorrects.push(incorrect);
     input.value = '';
     renderIncorrects();
+    triggerAutoSave(); // 자동 저장 트리거
 }
 
 // 오답 렌더링
@@ -661,6 +673,7 @@ function renderIncorrects() {
 export function removeIncorrect(index) {
     currentIncorrects.splice(index, 1);
     renderIncorrects();
+    triggerAutoSave(); // 자동 저장 트리거
 }
 
 // 문제 카드 렌더링
@@ -861,18 +874,49 @@ function updateQuestionCount() {
 }
 
 // 새 문제 만들기
-export function createNewQuestion() {
+export async function createNewQuestion() {
     if (questions.length >= 50) {
         alert('퀴즈에는 최대 50개의 문제만 추가할 수 있습니다.');
         return;
     }
 
-    // 현재 편집 중인 문제가 저장되지 않았는지 확인
+    // 현재 편집 중인 문제가 있으면 먼저 저장
     if (currentEditingIndex !== null) {
-        const currentQuestion = questions[currentEditingIndex];
-        // 정답이 없으면 저장되지 않은 것으로 판단
-        if (!currentQuestion.answers || currentQuestion.answers.length === 0) {
-            showToast('이전 문제를 저장해야 합니다!', 'error');
+        // 정답이 있으면 저장
+        if (currentAnswers.length > 0) {
+            updateAutoSaveStatus('saving');
+
+            // 현재 폼 필드 값을 먼저 캡처
+            const currentFormData = {
+                text: document.getElementById('questionText').value.trim(),
+                timeLimit: parseInt(document.getElementById('timeLimit').value),
+                youtubeUrl: document.getElementById('youtubeUrl')?.value?.trim(),
+                startTime: document.getElementById('startTime')?.value,
+                endTime: document.getElementById('endTime')?.value,
+                answerYoutubeUrl: document.getElementById('answerYoutubeUrl')?.value,
+                answerStartTime: document.getElementById('answerStartTime')?.value,
+                hint: document.getElementById('hintInput')?.value?.trim() || null,
+                hintShowTime: parseInt(document.getElementById('hintShowTime')?.value) || 10,
+                isChoice: document.getElementById('isMultipleChoice')?.checked,
+                questionType: currentQuestionType,
+                answers: [...currentAnswers],
+                incorrectAnswers: [...currentIncorrects],
+                imageFile: questionImageFile,
+                answerImageFile: answerImageFile
+            };
+
+            try {
+                await saveQuestion(currentFormData);
+                updateAutoSaveStatus('saved');
+            } catch (error) {
+                updateAutoSaveStatus('error');
+                console.error('새 문제 생성 시 저장 실패:', error);
+                showToast('현재 문제 저장에 실패했습니다!', 'error');
+                return;
+            }
+        } else {
+            // 정답이 없으면 경고
+            showToast('현재 문제에 정답을 추가해야 합니다!', 'error');
             return;
         }
     }
@@ -901,12 +945,48 @@ export function createNewQuestion() {
         switchView('edit');
     }
 
-    editQuestion(questions.length - 1);
+    await editQuestion(questions.length - 1);
     renderQuestions();
 }
 
 // 문제 편집 함수 (기존 문제 불러올 때)
-export function editQuestion(index) {
+export async function editQuestion(index) {
+    // 다른 문제로 전환하는 경우, 현재 문제를 먼저 저장
+    if (currentEditingIndex !== null && currentEditingIndex !== index) {
+        // 정답이 있으면 저장 (유효성 검사)
+        if (currentAnswers.length > 0) {
+            updateAutoSaveStatus('saving');
+
+            // 현재 폼 필드 값을 먼저 저장 (전역 변수에 임시 보관)
+            const currentFormData = {
+                text: document.getElementById('questionText').value.trim(),
+                timeLimit: parseInt(document.getElementById('timeLimit').value),
+                youtubeUrl: document.getElementById('youtubeUrl')?.value?.trim(),
+                startTime: document.getElementById('startTime')?.value,
+                endTime: document.getElementById('endTime')?.value,
+                answerYoutubeUrl: document.getElementById('answerYoutubeUrl')?.value,
+                answerStartTime: document.getElementById('answerStartTime')?.value,
+                hint: document.getElementById('hintInput')?.value?.trim() || null,
+                hintShowTime: parseInt(document.getElementById('hintShowTime')?.value) || 10,
+                isChoice: document.getElementById('isMultipleChoice')?.checked,
+                questionType: currentQuestionType,
+                answers: [...currentAnswers],
+                incorrectAnswers: [...currentIncorrects],
+                imageFile: questionImageFile,
+                answerImageFile: answerImageFile
+            };
+
+            try {
+                await saveQuestion(currentFormData);
+                updateAutoSaveStatus('saved');
+            } catch (error) {
+                updateAutoSaveStatus('error');
+                console.error('문제 전환 시 저장 실패:', error);
+                // 저장 실패해도 계속 진행 (사용자가 수동 저장할 수 있도록)
+            }
+        }
+    }
+
     // 전체보기 뷰에서 클릭 시 편집 뷰로 전환
     if (currentView === 'overview') {
         switchView('edit');
@@ -1009,15 +1089,114 @@ export function editQuestion(index) {
     if (question.answerYoutubeUrl) {
         updateAnswerYoutubePreview();
     }
-    
+
     // 사이드바 업데이트
     renderSidebar();
+
+    // 자동 저장 이벤트 리스너 설정 (기존 리스너 제거 후 재설정)
+    setupAutoSaveListeners();
+}
+
+// 자동 저장 이벤트 리스너 설정
+function setupAutoSaveListeners() {
+    const fields = [
+        'questionText',
+        'timeLimit',
+        'hintInput',
+        'hintShowTime',
+        'youtubeUrl',
+        'startTime',
+        'endTime',
+        'answerYoutubeUrl',
+        'answerStartTime'
+    ];
+
+    fields.forEach(fieldId => {
+        const element = document.getElementById(fieldId);
+        if (element && !element.dataset.autoSaveListener) {
+            element.addEventListener('input', triggerAutoSave);
+            element.dataset.autoSaveListener = 'true';
+        }
+    });
+
+    // 객관식 체크박스도 자동 저장
+    const multipleChoiceCheckbox = document.getElementById('isMultipleChoice');
+    if (multipleChoiceCheckbox && !multipleChoiceCheckbox.dataset.autoSaveListener) {
+        multipleChoiceCheckbox.addEventListener('change', triggerAutoSave);
+        multipleChoiceCheckbox.dataset.autoSaveListener = 'true';
+    }
+}
+
+// 자동 저장 상태 표시
+function updateAutoSaveStatus(status) {
+    const statusElement = document.getElementById('autoSaveStatus');
+    if (!statusElement) return;
+
+    switch(status) {
+        case 'saving':
+            statusElement.textContent = '저장 중...';
+            statusElement.className = 'text-sm text-blue-400';
+            break;
+        case 'saved':
+            statusElement.textContent = '자동 저장됨';
+            statusElement.className = 'text-sm text-green-400';
+            // 3초 후 메시지 제거
+            setTimeout(() => {
+                if (statusElement.textContent === '자동 저장됨') {
+                    statusElement.textContent = '';
+                }
+            }, 3000);
+            break;
+        case 'error':
+            statusElement.textContent = '저장 실패';
+            statusElement.className = 'text-sm text-red-400';
+            break;
+        default:
+            statusElement.textContent = '';
+    }
+}
+
+// 자동 저장 함수
+async function autoSaveQuestion() {
+    if (currentEditingIndex === null) return;
+    if (isSaving || isSavingAuto) return;
+
+    // 정답이 없으면 자동 저장하지 않음 (최소 유효성 검사)
+    if (currentAnswers.length === 0) {
+        return;
+    }
+
+    isSavingAuto = true;
+    updateAutoSaveStatus('saving');
+
+    try {
+        await saveQuestion();
+        updateAutoSaveStatus('saved');
+    } catch (error) {
+        console.error('자동 저장 실패:', error);
+        updateAutoSaveStatus('error');
+    } finally {
+        isSavingAuto = false;
+    }
+}
+
+// Debounce: 입력이 멈춘 후 30초 뒤에 백업용 자동 저장
+function triggerAutoSave() {
+    // 기존 타이머 취소
+    if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+    }
+
+    // 30초 후 자동 저장 (백업용)
+    autoSaveTimeout = setTimeout(() => {
+        autoSaveQuestion();
+    }, 30000);
 }
 
 // 저장 중 플래그
 let isSaving = false;
 
-export async function saveQuestion() {
+export async function saveQuestion(preCapturedData = null) {
     if (currentEditingIndex === null) return;
 
     // 이미 저장 중이면 무시
@@ -1025,18 +1204,25 @@ export async function saveQuestion() {
         return;
     }
 
-    const text = document.getElementById('questionText').value.trim();
-    const timeLimitInput = document.getElementById('timeLimit');
-    const timeLimitValue = timeLimitInput.value;
-    const timeLimit = parseInt(timeLimitValue);
-    const isChoice = document.getElementById('isMultipleChoice').checked;
+    // 사전에 캡처된 데이터가 있으면 사용, 없으면 DOM에서 읽기
+    const text = preCapturedData ? preCapturedData.text : document.getElementById('questionText').value.trim();
+    const timeLimit = preCapturedData ? preCapturedData.timeLimit : parseInt(document.getElementById('timeLimit').value);
+    const isChoice = preCapturedData ? preCapturedData.isChoice : document.getElementById('isMultipleChoice').checked;
+    const youtubeUrl = preCapturedData ? preCapturedData.youtubeUrl : document.getElementById('youtubeUrl')?.value?.trim();
+
+    // 답안 및 오답 데이터
+    const answers = preCapturedData ? preCapturedData.answers : currentAnswers;
+    const incorrectAnswers = preCapturedData ? preCapturedData.incorrectAnswers : currentIncorrects;
+
+    // 이미지 파일
+    const questionImg = preCapturedData ? preCapturedData.imageFile : questionImageFile;
+    const answerImg = preCapturedData ? preCapturedData.answerImageFile : answerImageFile;
 
     // 유효성 검사 - 문제 텍스트, 이미지, 유튜브 중 하나는 있어야 함
-    const youtubeUrl = document.getElementById('youtubeUrl')?.value?.trim();
     const existingQuestion = questions[currentEditingIndex];
     const hasExistingImage = existingQuestion?.imageBase64; // 기존 저장된 이미지 확인
 
-    if (!text && !questionImageFile && !hasExistingImage && !youtubeUrl) {
+    if (!text && !questionImg && !hasExistingImage && !youtubeUrl) {
         showToast('문제 텍스트, 이미지, 또는 유튜브 링크 중 하나는 입력해야 합니다.', 'error');
         return;
     }
@@ -1046,53 +1232,68 @@ export async function saveQuestion() {
         return;
     }
 
-    // 🔄 정답 입력란에 값이 있으면 자동으로 추가
-    const answerInput = document.getElementById('answerInput');
-    const answerInputValue = answerInput?.value?.trim();
+    // 사전 캡처된 데이터가 없을 때만 입력란 자동 추가 로직 실행
+    if (!preCapturedData) {
+        // 🔄 정답 입력란에 값이 있으면 자동으로 추가
+        const answerInput = document.getElementById('answerInput');
+        const answerInputValue = answerInput?.value?.trim();
 
-    if (currentAnswers.length === 0) {
-        // 정답이 없는데 입력란에 값이 있으면 자동 추가
-        if (answerInputValue) {
-            currentAnswers.push(answerInputValue);
-            answerInput.value = ''; // 입력란 초기화
-            renderAnswers(); // 화면 업데이트
-        } else {
+        if (currentAnswers.length === 0) {
+            // 정답이 없는데 입력란에 값이 있으면 자동 추가
+            if (answerInputValue) {
+                currentAnswers.push(answerInputValue);
+                answerInput.value = ''; // 입력란 초기화
+                renderAnswers(); // 화면 업데이트
+            } else {
+                showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
+                return;
+            }
+        }
+
+        // 🔄 객관식: 오답 입력란에 값이 있으면 자동으로 추가
+        if (isChoice) {
+            const incorrectInput = document.getElementById('incorrectInput');
+            const incorrectInputValue = incorrectInput?.value?.trim();
+
+            if (currentIncorrects.length === 0) {
+                // 오답이 없는데 입력란에 값이 있으면 자동 추가
+                if (incorrectInputValue) {
+                    currentIncorrects.push(incorrectInputValue);
+                    incorrectInput.value = ''; // 입력란 초기화
+                    renderIncorrects(); // 화면 업데이트
+                } else {
+                    showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
+                    return;
+                }
+            }
+        }
+    } else {
+        // 사전 캡처된 데이터 사용 시 유효성 검사
+        if (answers.length === 0) {
             showToast('최소 1개 이상의 정답을 추가하세요.', 'error');
+            return;
+        }
+
+        if (isChoice && incorrectAnswers.length === 0) {
+            showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
             return;
         }
     }
 
-    // 🔄 객관식: 오답 입력란에 값이 있으면 자동으로 추가
-    if (isChoice) {
-        const incorrectInput = document.getElementById('incorrectInput');
-        const incorrectInputValue = incorrectInput?.value?.trim();
-
-        if (currentIncorrects.length === 0) {
-            // 오답이 없는데 입력란에 값이 있으면 자동 추가
-            if (incorrectInputValue) {
-                currentIncorrects.push(incorrectInputValue);
-                incorrectInput.value = ''; // 입력란 초기화
-                renderIncorrects(); // 화면 업데이트
-            } else {
-                showToast('객관식 문제는 최소 1개 이상의 오답이 필요합니다.', 'error');
-                return;
-            }
-        }
-    }
-
     // 힌트 데이터 가져오기
-    const hintInput = document.getElementById('hintInput');
-    const hintShowTimeInput = document.getElementById('hintShowTime');
-    const hint = hintInput?.value?.trim() || null;
-    const hintShowTime = hintShowTimeInput ? parseInt(hintShowTimeInput.value) : 10;
+    const hint = preCapturedData ? preCapturedData.hint : (document.getElementById('hintInput')?.value?.trim() || null);
+    const hintShowTime = preCapturedData ? preCapturedData.hintShowTime : (document.getElementById('hintShowTime') ? parseInt(document.getElementById('hintShowTime').value) : 10);
+
+    // 문제 타입 결정
+    const questionType = preCapturedData ? preCapturedData.questionType : currentQuestionType;
 
     // 기본 문제 데이터
     let finalQuestionData = {
-        questionType: currentQuestionType,
+        questionType: questionType,
         text: text,
         timeLimit: timeLimit,
-        answers: [...currentAnswers],
-        incorrectAnswers: isChoice ? [...currentIncorrects] : [],
+        answers: [...answers],
+        incorrectAnswers: isChoice ? [...incorrectAnswers] : [],
         isChoice: isChoice,
         imageBase64: null,
         answerImageBase64: null,
@@ -1107,26 +1308,26 @@ export async function saveQuestion() {
     };
 
     // 타입별 데이터 추가 (사용하지 않는 필드는 명시적으로 null 유지)
-    if (currentQuestionType === 'text') {
+    if (questionType === 'text') {
         // 텍스트 문제: 이미지와 유튜브 데이터는 null
         // imageBase64, answerImageBase64, youtubeUrl 등은 이미 null로 초기화됨
 
-    } else if (currentQuestionType === 'image') {
+    } else if (questionType === 'image') {
         // 이미지 문제: 유튜브 데이터는 null
         const existingQuestion = questions[currentEditingIndex];
 
         // 새 이미지를 업로드했거나 기존 이미지가 있어야 함
-        if (!questionImageFile && !existingQuestion?.imageBase64) {
+        if (!questionImg && !existingQuestion?.imageBase64) {
             showToast('문제 이미지를 업로드하세요.', 'error');
             return;
         }
 
         // Presigned URL로 이미지 업로드 (새 이미지가 있을 때만)
         try {
-            if (questionImageFile) {
+            if (questionImg) {
                 showToast('문제 이미지 업로드 중...', 'info');
                 const questionImageUrl = await uploadToS3WithPresignedUrl(
-                    questionImageFile,
+                    questionImg,
                     `questions/${quizId}`,
                     `q${currentEditingIndex}_${Date.now()}`
                 );
@@ -1137,10 +1338,10 @@ export async function saveQuestion() {
             }
 
             // 정답 이미지도 처리
-            if (answerImageFile) {
+            if (answerImg) {
                 showToast('정답 이미지 업로드 중...', 'info');
                 const answerImageUrl = await uploadToS3WithPresignedUrl(
-                    answerImageFile,
+                    answerImg,
                     `answers/${quizId}`,
                     `a${currentEditingIndex}_${Date.now()}`
                 );
@@ -1157,23 +1358,30 @@ export async function saveQuestion() {
         }
         // youtubeUrl 관련 필드는 이미 null로 초기화됨
 
-    } else if (currentQuestionType === 'video' || currentQuestionType === 'audio') {
+    } else if (questionType === 'video' || questionType === 'audio') {
         // 영상/소리 문제: 이미지 데이터는 명시적으로 null 설정
-        const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
         if (!youtubeUrl) {
             showToast('유튜브 URL을 입력하세요.', 'error');
             return;
         }
 
-        // 유튜브 데이터 설정
+        // 유튜브 데이터 설정 (사전 캡처된 데이터가 있으면 사용, 없으면 DOM에서 읽기)
         finalQuestionData.youtubeUrl = youtubeUrl;
-        finalQuestionData.youtubeStartTime = parseTimeToSeconds(document.getElementById('startTime').value) || 0;
-        finalQuestionData.youtubeEndTime = parseTimeToSeconds(document.getElementById('endTime').value) || 0;
+        finalQuestionData.youtubeStartTime = preCapturedData ?
+            parseTimeToSeconds(preCapturedData.startTime) || 0 :
+            parseTimeToSeconds(document.getElementById('startTime').value) || 0;
+        finalQuestionData.youtubeEndTime = preCapturedData ?
+            parseTimeToSeconds(preCapturedData.endTime) || 0 :
+            parseTimeToSeconds(document.getElementById('endTime').value) || 0;
 
-        const answerYoutubeUrl = document.getElementById('answerYoutubeUrl').value.trim();
+        const answerYoutubeUrl = preCapturedData ?
+            preCapturedData.answerYoutubeUrl :
+            document.getElementById('answerYoutubeUrl').value.trim();
         if (answerYoutubeUrl) {
             finalQuestionData.answerYoutubeUrl = answerYoutubeUrl;
-            finalQuestionData.answerYoutubeStartTime = parseTimeToSeconds(document.getElementById('answerStartTime').value) || 0;
+            finalQuestionData.answerYoutubeStartTime = preCapturedData ?
+                parseTimeToSeconds(preCapturedData.answerStartTime) || 0 :
+                parseTimeToSeconds(document.getElementById('answerStartTime').value) || 0;
         }
 
         // 이미지 데이터는 명시적으로 null (이전 이미지 삭제)

@@ -462,15 +462,20 @@
                             <div id="saveToastContainer" class="relative h-0"></div>
 
                             <!-- 저장 버튼들 -->
-                            <div class="flex space-x-3 pt-6 border-t border-gray-700">
-                                <button onclick="saveQuestion()" 
-                                        class="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-4 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 shadow-lg">
-                                    저장
-                                </button>
-                                <button onclick="deleteCurrentQuestion()" 
-                                        class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-6 py-4 rounded-xl font-medium transition-all duration-200 border border-red-500/30">
-                                    삭제
-                                </button>
+                            <div class="pt-6 border-t border-gray-700">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span id="autoSaveStatus" class="text-sm text-gray-400"></span>
+                                </div>
+                                <div class="flex space-x-3">
+                                    <button onclick="saveQuestion()"
+                                            class="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-4 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 shadow-lg">
+                                        저장
+                                    </button>
+                                    <button onclick="deleteCurrentQuestion()"
+                                            class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-6 py-4 rounded-xl font-medium transition-all duration-200 border border-red-500/30">
+                                        삭제
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
