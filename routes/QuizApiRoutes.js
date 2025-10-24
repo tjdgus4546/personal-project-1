@@ -381,7 +381,9 @@ module.exports = (quizDb) => {
             answerYoutubeUrl: q.answerYoutubeUrl || null,
             answerYoutubeStartTime: q.answerYoutubeStartTime || 0,
             order: index + 1,
-            timeLimit: q.timeLimit || 90
+            timeLimit: q.timeLimit || 90,
+            hint: q.hint || null,
+            hintShowTime: q.hintShowTime || 10
         }));
 
         // 🔥 S3에 이미지 업로드
@@ -642,7 +644,9 @@ module.exports = (quizDb) => {
             answerYoutubeUrl: questionData.answerYoutubeUrl || null,
             answerYoutubeStartTime: questionData.answerYoutubeStartTime || 0,
             order: index + 1,
-            timeLimit: questionData.timeLimit || 90
+            timeLimit: questionData.timeLimit || 90,
+            hint: questionData.hint || null,
+            hintShowTime: questionData.hintShowTime || 10
         };
 
         if (index === quiz.questions.length) {

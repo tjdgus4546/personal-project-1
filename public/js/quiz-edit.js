@@ -890,7 +890,9 @@ export function createNewQuestion() {
         answerImageBase64: '',
         answers: [],
         incorrectAnswers: [],
-        isChoice: false
+        isChoice: false,
+        hint: null, // 힌트 (선택)
+        hintShowTime: '' // 빈 값으로 시작 (editQuestion에서 채움)
     };
 
     questions.push(newQuestion);
@@ -976,10 +978,27 @@ export function editQuestion(index) {
     // 정답/오답
     currentAnswers = [...(question.answers || [])];
     currentIncorrects = [...(question.incorrectAnswers || [])];
-    
+
     renderAnswers();
     renderIncorrects();
-    
+
+    // 힌트 데이터 로드
+    document.getElementById('hintInput').value = question.hint || '';
+
+    // 🔄 힌트 공개 시간: 빈 값이면 이전 문제 값 또는 10초 기본값
+    let hintShowTimeValue;
+    if (question.hintShowTime === '' || question.hintShowTime === undefined || question.hintShowTime === null) {
+        // 새 문제인 경우: 이전 문제의 힌트 공개 시간 가져오기
+        if (currentEditingIndex > 0 && questions[currentEditingIndex - 1]) {
+            hintShowTimeValue = questions[currentEditingIndex - 1].hintShowTime || 10;
+        } else {
+            hintShowTimeValue = 10; // 첫 문제는 10초 기본값
+        }
+    } else {
+        hintShowTimeValue = question.hintShowTime; // 기존 값 사용
+    }
+    document.getElementById('hintShowTime').value = hintShowTimeValue;
+
     // 객관식 토글
     toggleMultipleChoice();
     
@@ -1061,6 +1080,12 @@ export async function saveQuestion() {
         }
     }
 
+    // 힌트 데이터 가져오기
+    const hintInput = document.getElementById('hintInput');
+    const hintShowTimeInput = document.getElementById('hintShowTime');
+    const hint = hintInput?.value?.trim() || null;
+    const hintShowTime = hintShowTimeInput ? parseInt(hintShowTimeInput.value) : 10;
+
     // 기본 문제 데이터
     let finalQuestionData = {
         questionType: currentQuestionType,
@@ -1076,7 +1101,9 @@ export async function saveQuestion() {
         youtubeEndTime: null,
         answerYoutubeUrl: null,
         answerYoutubeStartTime: null,
-        answerYoutubeEndTime: null
+        answerYoutubeEndTime: null,
+        hint: hint, // 힌트 (선택)
+        hintShowTime: hintShowTime // 힌트 표시 시간
     };
 
     // 타입별 데이터 추가 (사용하지 않는 필드는 명시적으로 null 유지)

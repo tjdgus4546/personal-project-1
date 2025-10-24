@@ -318,7 +318,7 @@
               <div id="timerDisplay" class="text-sm font-bold text-gray-300">
                 남은 시간: --
               </div>
-              
+
               <!-- 가운데: 문제 번호 (절대 위치) -->
               <div id="currentQuestionNumber" class="hidden sm:block absolute left-1/2 transform -translate-x-1/2 text-blue-400 font-bold text-sm">
                 문제 - / -
@@ -349,6 +349,11 @@
           <!-- 문제 내용 -->
           <div id="questionBox" class="min-h-[300px] sm:min-h-[360px]">
             <!-- 문제 내용이 여기에 표시됩니다 -->
+          </div>
+
+          <!-- 힌트 표시 영역 (문제 텍스트 바로 아래) -->
+          <div id="hintDisplay" class="hidden text-sm text-gray-300">
+            <span id="hintText"></span>
           </div>
         </div>
 

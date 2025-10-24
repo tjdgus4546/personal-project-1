@@ -212,6 +212,12 @@ async function loadSessionData() {
                 // ✅ actualIndex 정의
                 const actualIndex = questionOrder[currentIndex];
 
+                // 힌트 숨기기
+                const hintDisplay = document.getElementById('hintDisplay');
+                if (hintDisplay) {
+                    hintDisplay.classList.add('hidden');
+                }
+
                 // ✅ questions 배열과 actualIndex 유효성 체크
                 if (questions && questions[actualIndex]) {
                     const answers = questions[actualIndex].answers;
@@ -1115,6 +1121,12 @@ function showAnswer({ answers, answerImageBase64, revealedAt }) {
     // 기존 내용 완전히 지우기
     box.innerHTML = '';
 
+    // 힌트 숨기기
+    const hintDisplay = document.getElementById('hintDisplay');
+    if (hintDisplay) {
+        hintDisplay.classList.add('hidden');
+    }
+
     let html = '';
     
     // 정답 이미지 (있는 경우)
@@ -1475,6 +1487,12 @@ function setupSocketListeners() {
 
         // ✅ 재접속 시 정답 공개 상태인 경우 처리
         if (isReconnect && revealedAt) {
+            // 힌트 숨기기
+            const hintDisplay = document.getElementById('hintDisplay');
+            if (hintDisplay) {
+                hintDisplay.classList.add('hidden');
+            }
+
             window.__isRevealingAnswer = true;
             currentRevealedAt = new Date(revealedAt);
 
@@ -2236,9 +2254,15 @@ function extractYoutubeVideoId(url) {
 
 function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }) {
     const box = document.getElementById('questionBox');
-    
+
     if (questionTimer) clearTimeout(questionTimer);
     if (countdownInterval) clearInterval(countdownInterval);
+
+    // 힌트 숨기기
+    const hintDisplay = document.getElementById('hintDisplay');
+    if (hintDisplay) {
+        hintDisplay.classList.add('hidden');
+    }
 
     const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
 
@@ -2322,16 +2346,35 @@ function startCountdown(timeLimit) {
     if (countdownInterval) clearInterval(countdownInterval);
 
     const timerDisplay = document.getElementById('timerDisplay');
+    const hintDisplay = document.getElementById('hintDisplay');
+    const hintText = document.getElementById('hintText');
     let remaining = timeLimit;
+
+    // 힌트 표시 숨김 (새 문제 시작)
+    if (hintDisplay) {
+        hintDisplay.classList.add('hidden');
+    }
 
     if (timerDisplay) {
         timerDisplay.textContent = `남은 시간: ${remaining}초`;
     }
 
+    // 현재 문제의 힌트 정보 가져오기
+    const actualIndex = questionOrder[currentIndex];
+    const currentQuestion = questions[actualIndex];
+    const hint = currentQuestion?.hint;
+    const hintShowTime = currentQuestion?.hintShowTime || 10;
+
     countdownInterval = setInterval(() => {
         remaining--;
         if (timerDisplay) {
             timerDisplay.textContent = `남은 시간: ${remaining}초`;
+        }
+
+        // 힌트 표시 조건: 힌트가 있고, 남은 시간이 설정한 시간 이하일 때
+        if (hint && remaining <= hintShowTime && remaining > 0 && hintDisplay && hintText) {
+            hintText.textContent = hint;
+            hintDisplay.classList.remove('hidden');
         }
 
         if (remaining <= 0) {

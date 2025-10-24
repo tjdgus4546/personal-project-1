@@ -43,6 +43,8 @@ const questionSchema = new Schema({
   answerImageBase64: { type: String },
   order: { type: Number, required: true },
   timeLimit: {type: Number, default: 30 , min: 5, max: 1800 },
+  hint: { type: String, maxlength: 100, default: null }, // 힌트 텍스트 (선택)
+  hintShowTime: { type: Number, default: 10, min: 1, max: 1800 }, // 힌트 표시 시간 (초, 남은 시간)
 });
 
 const quizSchema = new Schema({
