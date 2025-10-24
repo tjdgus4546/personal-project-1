@@ -172,24 +172,36 @@ module.exports = (quizDb) => {
                 .limit(parseInt(limit));
         }
 
-        // 제작자 정보 추가
-        const quizzesWithCreator = await Promise.all(quizzes.map(async (quiz) => {
+        // 제작자 정보 추가 (N+1 쿼리 방지 - 한 번에 조회)
+        // 1. 모든 creatorId 수집 (seized 제외)
+        const creatorIds = [...new Set(
+            quizzes
+                .map(q => q.creatorId?.toString ? q.creatorId.toString() : q.creatorId)
+                .filter(id => id !== 'seized' && id != null)
+        )];
+
+        // 2. 한 번에 모든 사용자 조회
+        const creators = await User.find({ _id: { $in: creatorIds } })
+            .select('_id nickname')
+            .lean();
+
+        // 3. Map으로 변환 (O(1) 조회)
+        const creatorMap = new Map(creators.map(c => [c._id.toString(), c.nickname]));
+
+        // 4. 퀴즈에 제작자 정보 추가 (DB 조회 없음!)
+        const quizzesWithCreator = quizzes.map((quiz) => {
             const quizObj = quiz.toObject();
+            const creatorIdStr = quizObj.creatorId?.toString ? quizObj.creatorId.toString() : quizObj.creatorId;
 
             // 압수된 퀴즈는 제작자를 "관리자"로 표시
-            if (quizObj.creatorId === 'seized') {
+            if (creatorIdStr === 'seized') {
                 quizObj.creatorNickname = '관리자';
             } else {
-                try {
-                    const creator = await User.findById(quizObj.creatorId).select('nickname');
-                    quizObj.creatorNickname = creator ? creator.nickname : '알 수 없음';
-                } catch (err) {
-                    quizObj.creatorNickname = '알 수 없음';
-                }
+                quizObj.creatorNickname = creatorMap.get(creatorIdStr) || '알 수 없음';
             }
 
             return quizObj;
-        }));
+        });
 
         const hasMore = quizzes.length === parseInt(limit);
 

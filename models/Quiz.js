@@ -143,4 +143,13 @@ quizSchema.index({ recommendationCount: -1, createdAt: -1 });
 // 10. 인기순 정렬 최적화
 quizSchema.index({ completedGameCount: -1, createdAt: -1 });
 
+// 11. 공개 퀴즈 목록 조회 최적화 (isComplete 필터 + 정렬 조건)
+quizSchema.index({ isComplete: 1, completedGameCount: -1, createdAt: -1 });
+
+// 12. 공개 퀴즈 추천순 조회 최적화
+quizSchema.index({ isComplete: 1, recommendationCount: -1, createdAt: -1 });
+
+// 13. 공개 퀴즈 최신순 조회 최적화
+quizSchema.index({ isComplete: 1, createdAt: -1 });
+
 module.exports = (quizDb) => quizDb.model('Quiz', quizSchema);
