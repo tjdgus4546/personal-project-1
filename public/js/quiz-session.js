@@ -204,38 +204,57 @@ async function loadSessionData() {
         
         if (data.isStarted) {
             showGameSection();
-            
+
             if (data.revealedAt) {
                 showQuestion({ silent: true });
                 renderScoreboard(data.players, false);
 
-                const answers = questions[actualIndex].answers;
-                if (answers) {
-                    const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
-                    const answerDiv = document.createElement('div');
-                    answerDiv.className = 'answer-reveal';
-                    answerDiv.innerHTML = `<h3>정답 공개</h3><p>${displayAnswer}</p>`;
-                    document.getElementById('questionBox').appendChild(answerDiv);
-                }
+                // ✅ actualIndex 정의
+                const actualIndex = questionOrder[currentIndex];
 
-                const answerImage = questions[currentIndex]?.answerImageBase64;
-                if (answerImage) {
-                    const img = document.createElement('img');
-                    img.src = answerImage;
-                    img.alt = '정답 이미지';
-                    img.className = 'question-image';
-                    document.getElementById('questionBox').appendChild(img);
+                // ✅ questions 배열과 actualIndex 유효성 체크
+                if (questions && questions[actualIndex]) {
+                    const answers = questions[actualIndex].answers;
+                    if (answers) {
+                        const displayAnswer = Array.isArray(answers) ? answers[0] : answers;
+                        const answerDiv = document.createElement('div');
+                        answerDiv.className = 'answer-reveal';
+                        answerDiv.innerHTML = `<h3>정답 공개</h3><p>${displayAnswer}</p>`;
+                        document.getElementById('questionBox').appendChild(answerDiv);
+                    }
+
+                    const answerImage = questions[actualIndex]?.answerImageBase64;
+                    if (answerImage) {
+                        const img = document.createElement('img');
+                        img.src = answerImage;
+                        img.alt = '정답 이미지';
+                        img.className = 'question-image';
+                        document.getElementById('questionBox').appendChild(img);
+                    }
                 }
 
                 window.__isRevealingAnswer = true;
-                const elapsed = (Date.now() - new Date(data.revealedAt)) / 1000;
-                const wait = Math.max(0, Math.min(5, 5 - elapsed)); // 최대 5초, 최소 0초
-                setTimeout(() => {
+                currentRevealedAt = new Date(data.revealedAt);
+
+                // 기존 타이머가 있으면 취소
+                if (nextQuestionTimer) {
+                    clearTimeout(nextQuestionTimer);
+                }
+
+                const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+                const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+
+                nextQuestionTimer = setTimeout(() => {
                     window.__isRevealingAnswer = false;
-                    if (isHost()) {
-                        socket.emit('nextQuestion', { sessionId, userId });
-                    }
-                }, wait * 1000);
+                    currentRevealedAt = null;
+                    nextQuestionTimer = null;
+                    // ✅ 모든 유저가 이벤트 발송
+                    socket.emit('nextQuestion', {
+                        sessionId,
+                        userId,
+                        questionIndex: currentIndex
+                    });
+                }, remainingTime);
             } else {
                 // 정답 공개 중이 아닌 경우 - 문제를 표시하되 타이머는 시작하지 않음 (서버에서 question-start 이벤트를 기다림)
                 showQuestion({ silent: true });
