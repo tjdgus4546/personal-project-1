@@ -444,6 +444,8 @@ export function updateYoutubePreview() {
     }
 
     if (!url) {
+        // iframe src를 비워서 백그라운드 재생 중단
+        document.getElementById('youtubeIframe').src = '';
         document.getElementById('youtubePreview').classList.add('hidden');
         return;
     }
@@ -477,6 +479,8 @@ export function updateAnswerYoutubePreview() {
     const startTime = document.getElementById('answerStartTime').value;
     
     if (!url) {
+        // iframe src를 비워서 백그라운드 재생 중단
+        document.getElementById('answerYoutubeIframe').src = '';
         document.getElementById('answerYoutubePreview').classList.add('hidden');
         return;
     }
@@ -1082,13 +1086,9 @@ export async function editQuestion(index) {
     // 객관식 토글
     toggleMultipleChoice();
     
-    // 유튜브 미리보기 업데이트
-    if (question.youtubeUrl) {
-        updateYoutubePreview();
-    }
-    if (question.answerYoutubeUrl) {
-        updateAnswerYoutubePreview();
-    }
+    // 유튜브 미리보기 업데이트 (URL이 없어도 호출해서 iframe 정리)
+    updateYoutubePreview();
+    updateAnswerYoutubePreview();
 
     // 사이드바 업데이트
     renderSidebar();
