@@ -1080,6 +1080,13 @@ module.exports = (io, app) => {
         }
       }
 
+      // ✅ 호스트 검증 (호스트만 정답 공개 가능)
+      const userId = socket.userId;
+      if (!userId || session.host.toString() !== userId.toString()) {
+        console.log(`⚠️ revealAnswer: 호스트가 아닌 사용자의 요청 무시 (사용자: ${userId}, 호스트: ${session.host})`);
+        return;
+      }
+
       if (session.revealedAt) return;
 
       const quiz = await Quiz.findById(session.quizId);
@@ -1166,6 +1173,13 @@ module.exports = (io, app) => {
           console.error('❌ 호스트 재할당 실패 - nextQuestion');
           return;
         }
+      }
+
+      // ✅ 호스트 검증 (호스트만 다음 문제로 넘기기 가능)
+      const userId = socket.userId;
+      if (!userId || session.host.toString() !== userId.toString()) {
+        console.log(`⚠️ nextQuestion: 호스트가 아닌 사용자의 요청 무시 (사용자: ${userId}, 호스트: ${session.host})`);
+        return;
       }
 
       if (app.firstCorrectUsers) {
@@ -1532,11 +1546,12 @@ module.exports = (io, app) => {
         return;
       }
 
-      // 다음 문제로 이동 (원자적 업데이트)
+      // 다음 문제로 이동 (원자적 업데이트로 중복 방지)
       const updateResult = await GameSession.findOneAndUpdate(
         {
           _id: sessionId,
-          isActive: true // 활성 세션만 업데이트
+          isActive: true, // 활성 세션만 업데이트
+          currentQuestionIndex: nextQuestionIndex - 1 // ✅ 아직 이전 문제인 경우만 업데이트 (중복 방지)
         },
         {
           $set: {
@@ -1551,7 +1566,7 @@ module.exports = (io, app) => {
       );
 
       if (!updateResult) {
-        console.error('❌ 세션 저장 중 에러 발생 - goToNextQuestion2');
+        console.log('⚠️ 이미 다음 문제로 넘어갔거나 세션이 없음 - goToNextQuestion (중복 요청 차단됨)');
         return;
       }
 

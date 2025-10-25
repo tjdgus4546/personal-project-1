@@ -242,25 +242,26 @@ async function loadSessionData() {
                 window.__isRevealingAnswer = true;
                 currentRevealedAt = new Date(data.revealedAt);
 
-                // 기존 타이머가 있으면 취소
-                if (nextQuestionTimer) {
-                    clearTimeout(nextQuestionTimer);
+                // ✅ 타이머가 이미 실행 중이면 새로 만들지 않음 (중복 방지)
+                if (!nextQuestionTimer) {
+                    const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+                    const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+                    // ✅ currentIndex 클로저 캡처
+                    const questionIndexAtReveal = currentIndex;
+
+                    nextQuestionTimer = setTimeout(() => {
+                        window.__isRevealingAnswer = false;
+                        currentRevealedAt = null;
+                        nextQuestionTimer = null;
+                        if (isHost()) {
+                            socket.emit('nextQuestion', {
+                                sessionId,
+                                userId,
+                                questionIndex: questionIndexAtReveal
+                            });
+                        }
+                    }, remainingTime);
                 }
-
-                const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
-                const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
-
-                nextQuestionTimer = setTimeout(() => {
-                    window.__isRevealingAnswer = false;
-                    currentRevealedAt = null;
-                    nextQuestionTimer = null;
-                    // ✅ 모든 유저가 이벤트 발송
-                    socket.emit('nextQuestion', {
-                        sessionId,
-                        userId,
-                        questionIndex: currentIndex
-                    });
-                }, remainingTime);
             } else {
                 // 정답 공개 중이 아닌 경우 - 문제를 표시하되 타이머는 시작하지 않음 (서버에서 question-start 이벤트를 기다림)
                 showQuestion({ silent: true });
@@ -751,12 +752,13 @@ function showQuestion({ silent = false } = {}) {
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
-                        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-                        const actualIndex = questionOrder[currentIndex];
-                        socket.emit('revealAnswer', {
-                            sessionId,
-                            questionIndex: actualIndex
-                        });
+                        if (isHost()) {
+                            const actualIndex = questionOrder[currentIndex];
+                            socket.emit('revealAnswer', {
+                                sessionId,
+                                questionIndex: actualIndex
+                            });
+                        }
                     }, timeLimit);
 
                     startCountdown(question.timeLimit || 90);
@@ -834,7 +836,7 @@ function showQuestion({ silent = false } = {}) {
                 setTimeout(() => {
                     createYoutubePlayer(videoId, startTime, endTime, 'youtubePlayerAudio');
                 }, 100);
-                
+
                 // 타이머 시작
                 if (!silent) {
                     if (questionTimer) clearTimeout(questionTimer);
@@ -842,12 +844,13 @@ function showQuestion({ silent = false } = {}) {
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
-                        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-                        const actualIndex = questionOrder[currentIndex];
-                        socket.emit('revealAnswer', {
-                            sessionId,
-                            questionIndex: actualIndex
-                        });
+                        if (isHost()) {
+                            const actualIndex = questionOrder[currentIndex];
+                            socket.emit('revealAnswer', {
+                                sessionId,
+                                questionIndex: actualIndex
+                            });
+                        }
                     }, timeLimit);
 
                     startCountdown(question.timeLimit || 90);
@@ -934,12 +937,13 @@ function showQuestion({ silent = false } = {}) {
 
     const timeLimit = (question.timeLimit || 90) * 1000;
     questionTimer = setTimeout(() => {
-        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-        const actualIndex = questionOrder[currentIndex];
-        socket.emit('revealAnswer', {
-            sessionId,
-            questionIndex: actualIndex
-        });
+        if (isHost()) {
+            const actualIndex = questionOrder[currentIndex];
+            socket.emit('revealAnswer', {
+                sessionId,
+                questionIndex: actualIndex
+            });
+        }
     }, timeLimit);
 
     startCountdown(question.timeLimit || 90);
@@ -1496,29 +1500,30 @@ function setupSocketListeners() {
             window.__isRevealingAnswer = true;
             currentRevealedAt = new Date(revealedAt);
 
-            // 기존 타이머가 있으면 취소
-            if (nextQuestionTimer) {
-                clearTimeout(nextQuestionTimer);
+            // ✅ 타이머가 이미 실행 중이면 새로 만들지 않음 (중복 방지)
+            if (!nextQuestionTimer) {
+                // 남은 시간 계산
+                const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+                const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+                // ✅ currentIndex 클로저 캡처
+                const questionIndexAtReveal = currentIndex;
+
+                console.log(`✅ 재접속 - 정답 공개 상태, 남은 시간: ${remainingTime / 1000}초`);
+
+                // 남은 시간 후 다음 문제로 넘어가기
+                nextQuestionTimer = setTimeout(() => {
+                    window.__isRevealingAnswer = false;
+                    currentRevealedAt = null;
+                    nextQuestionTimer = null;
+                    if (isHost()) {
+                        socket.emit('nextQuestion', {
+                            sessionId,
+                            userId,
+                            questionIndex: questionIndexAtReveal
+                        });
+                    }
+                }, remainingTime);
             }
-
-            // 남은 시간 계산
-            const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
-            const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
-
-            console.log(`✅ 재접속 - 정답 공개 상태, 남은 시간: ${remainingTime / 1000}초`);
-
-            // 남은 시간 후 다음 문제로 넘어가기
-            nextQuestionTimer = setTimeout(() => {
-                window.__isRevealingAnswer = false;
-                currentRevealedAt = null;
-                nextQuestionTimer = null;
-                // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-                socket.emit('nextQuestion', {
-                    sessionId,
-                    userId,
-                    questionIndex: currentIndex
-                });
-            }, remainingTime);
         }
         // 재접속이 아닐 때만 client-ready 전송
         else if (!isReconnect) {
@@ -1564,30 +1569,33 @@ function setupSocketListeners() {
             if (window.__isRevealingAnswer && currentRevealedAt && previousHost !== host) {
                 console.log('✅ 새로운 호스트로 지정됨. 정답 공개 상태이므로 타이머 재설정');
 
-                // 기존 타이머 취소
-                if (nextQuestionTimer) {
-                    clearTimeout(nextQuestionTimer);
+                // ✅ 타이머가 이미 실행 중이면 새로 만들지 않음 (중복 방지)
+                if (!nextQuestionTimer) {
+                    // 남은 시간 계산 (최대 5초)
+                    const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
+                    const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
+                    // ✅ currentIndex 클로저 캡처
+                    const questionIndexAtReveal = currentIndex;
+
+                    console.log(`⏱️ 남은 시간: ${remainingTime / 1000}초`);
+
+                    // 남은 시간 후 nextQuestion 전송
+                    nextQuestionTimer = setTimeout(() => {
+                        window.__isRevealingAnswer = false;
+                        currentRevealedAt = null;
+                        nextQuestionTimer = null;
+                        if (isHost()) {
+                            console.log('✅ 호스트가 nextQuestion 전송');
+                            socket.emit('nextQuestion', {
+                                sessionId,
+                                userId,
+                                questionIndex: questionIndexAtReveal
+                            });
+                        }
+                    }, remainingTime);
+                } else {
+                    console.log('⏭️ 타이머가 이미 실행 중이므로 새로 만들지 않음');
                 }
-
-                // 남은 시간 계산 (최대 5초)
-                const elapsed = (Date.now() - currentRevealedAt.getTime()) / 1000;
-                const remainingTime = Math.max(0, Math.min(5, 5 - elapsed)) * 1000;
-
-                console.log(`⏱️ 남은 시간: ${remainingTime / 1000}초`);
-
-                // 남은 시간 후 nextQuestion 전송
-                nextQuestionTimer = setTimeout(() => {
-                    window.__isRevealingAnswer = false;
-                    currentRevealedAt = null;
-                    nextQuestionTimer = null;
-                    // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-                    console.log('✅ 새 호스트가 nextQuestion 전송');
-                    socket.emit('nextQuestion', {
-                        sessionId,
-                        userId,
-                        questionIndex: currentIndex
-                    });
-                }, remainingTime);
             }
         } else {
             forceSkipBtn.classList.add('hidden');
@@ -1624,6 +1632,17 @@ function setupSocketListeners() {
         if (countdownInterval) {
             clearInterval(countdownInterval);
             countdownInterval = null;
+        }
+
+        // ✅ 이전 문제의 유튜브 플레이어 즉시 정리 (백그라운드 재생 방지)
+        if (youtubePlayer) {
+            try {
+                youtubePlayer.stopVideo();
+                youtubePlayer.destroy();
+            } catch (error) {
+                console.error('유튜브 플레이어 정지 실패:', error);
+            }
+            youtubePlayer = null;
         }
 
         const { currentIndex: newIndex, totalPlayers } = data;
@@ -1663,12 +1682,13 @@ function setupSocketListeners() {
 
         // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {
-            // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-            const actualIndex = questionOrder[currentIndex];
-            socket.emit('revealAnswer', {
-                sessionId,
-                questionIndex: actualIndex
-            });
+            if (isHost()) {
+                const actualIndex = questionOrder[currentIndex];
+                socket.emit('revealAnswer', {
+                    sessionId,
+                    questionIndex: actualIndex
+                });
+            }
         }, remainingTime);
 
         // ✅ 남은 시간으로 카운트다운 시작
@@ -2258,6 +2278,17 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     if (questionTimer) clearTimeout(questionTimer);
     if (countdownInterval) clearInterval(countdownInterval);
 
+    // ✅ 이전 문제의 유튜브 플레이어 즉시 정리 (백그라운드 재생 방지)
+    if (youtubePlayer) {
+        try {
+            youtubePlayer.stopVideo();
+            youtubePlayer.destroy();
+        } catch (error) {
+            console.error('유튜브 플레이어 정지 실패:', error);
+        }
+        youtubePlayer = null;
+    }
+
     // 힌트 숨기기
     const hintDisplay = document.getElementById('hintDisplay');
     if (hintDisplay) {
@@ -2329,16 +2360,19 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
     }
 
     // 5초 후 다음 문제로 넘어가기 (서버 시간 차이를 고려하지 않고 정확히 5초)
+    // ✅ currentIndex 클로저 캡처 (타이머 실행 시점에 바뀔 수 있음)
+    const questionIndexAtReveal = currentIndex;
     nextQuestionTimer = setTimeout(() => {
         window.__isRevealingAnswer = false;
         currentRevealedAt = null;
         nextQuestionTimer = null;
-        // ✅ 모든 유저가 이벤트 발송 (서버에서 중복 방지)
-        socket.emit('nextQuestion', {
-            sessionId,
-            userId,
-            questionIndex: currentIndex
-        });
+        if (isHost()) {
+            socket.emit('nextQuestion', {
+                sessionId,
+                userId,
+                questionIndex: questionIndexAtReveal
+            });
+        }
     }, 5000);
 }
 
