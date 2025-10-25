@@ -798,7 +798,7 @@ module.exports = (io, app) => {
         const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
         const scoreIncrement = isFirstCorrectUser ? 2 : 1;
 
-        // 점수 업데이트 (별도 쿼리)
+        // 점수 업데이트 (DB)
         await GameSession.updateOne(
           {
             _id: sessionId,
@@ -812,7 +812,10 @@ module.exports = (io, app) => {
           }
         );
 
+        // ✅ 메모리의 session 객체에도 반영 (스코어보드 emit용)
         session = updateResult;
+        session.players[playerIndex].score = (session.players[playerIndex].score || 0) + scoreIncrement;
+        session.players[playerIndex].correctAnswersCount = (session.players[playerIndex].correctAnswersCount || 0) + 1;
 
         const userInfo = sessionUserCache.get(sessionId)?.get(socket.userId) || {
             nickname: null,
@@ -907,7 +910,7 @@ module.exports = (io, app) => {
         const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
         const scoreIncrement = isFirstCorrectUser ? 2 : 1;
 
-        // 점수 업데이트 (별도 쿼리)
+        // 점수 업데이트 (DB)
         await GameSession.updateOne(
           {
             _id: sessionId,
@@ -921,7 +924,10 @@ module.exports = (io, app) => {
           }
         );
 
+        // ✅ 메모리의 session 객체에도 반영 (스코어보드 emit용)
         session = updateResult;
+        session.players[playerIndex].score = (session.players[playerIndex].score || 0) + scoreIncrement;
+        session.players[playerIndex].correctAnswersCount = (session.players[playerIndex].correctAnswersCount || 0) + 1;
 
         await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
 
