@@ -769,44 +769,48 @@ module.exports = (io, app) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        if (!app.firstCorrectUsers) {
-          app.firstCorrectUsers = {};
-        }
-
-        const isFirst = !app.firstCorrectUsers[sessionId];
-        const scoreIncrement = isFirst ? 2 : 1;
-
-        if (isFirst) {
-          app.firstCorrectUsers[sessionId] = displayName;
-        }
-
-        // 원자적 업데이트로 버전 충돌 방지 + 중복 방지 조건 추가
+        // ✅ $push 위치를 이용한 원자적 첫 번째 정답자 판정
+        // 배열에 추가하고 그 위치(index)를 반환받음
         const updateResult = await GameSession.findOneAndUpdate(
           {
             _id: sessionId,
-            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 이미 답변하지 않은 경우만 업데이트
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 중복 방지
           },
           {
             $set: {
               [`players.${playerIndex}.answered.${qIndex}`]: true,
               [`players.${playerIndex}.lastCorrectTime`]: new Date()
             },
-            $inc: {
-              [`players.${playerIndex}.score`]: scoreIncrement,
-              [`players.${playerIndex}.correctAnswersCount`]: 1
-            },
-            $addToSet: {
-              [`correctUsers.${qIndex}`]: displayName
+            $push: {
+              [`correctUsers.${qIndex}`]: displayName  // $addToSet 대신 $push 사용
             }
           },
           { new: true }
         );
 
-        // 업데이트 실패 = 이미 답변했거나 세션이 없음
         if (!updateResult) {
           console.log(`⚠️ 중복 정답 시도 방지: ${displayName} (문제 ${qIndex})`);
           return;
         }
+
+        // 배열에 추가된 후의 위치로 첫 번째 정답자 판정
+        const correctUsersArray = updateResult.correctUsers?.[qIndex] || [];
+        const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
+        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
+
+        // 점수 업데이트 (별도 쿼리)
+        await GameSession.updateOne(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.userId`]: new ObjectId(socket.userId)
+          },
+          {
+            $inc: {
+              [`players.${playerIndex}.score`]: scoreIncrement,
+              [`players.${playerIndex}.correctAnswersCount`]: 1
+            }
+          }
+        );
 
         session = updateResult;
 
@@ -876,18 +880,18 @@ module.exports = (io, app) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        // 원자적 업데이트로 중복 방지
+        // ✅ $push 위치를 이용한 원자적 첫 번째 정답자 판정
         const updateResult = await GameSession.findOneAndUpdate(
           {
             _id: sessionId,
-            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true }
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 중복 방지
           },
           {
             $set: {
               [`players.${playerIndex}.answered.${qIndex}`]: true
             },
-            $addToSet: {
-              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName
+            $push: {
+              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName  // $addToSet 대신 $push 사용
             }
           },
           { new: true }
@@ -897,6 +901,25 @@ module.exports = (io, app) => {
           console.log(`⚠️ 중복 답변 방지: ${displayName} (객관식 문제 ${qIndex})`);
           return;
         }
+
+        // 배열에 추가된 후의 위치로 첫 번째 정답자 판정
+        const correctUsersArray = updateResult.choiceQuestionCorrectUsers?.[qIndex] || [];
+        const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
+        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
+
+        // 점수 업데이트 (별도 쿼리)
+        await GameSession.updateOne(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.userId`]: new ObjectId(socket.userId)
+          },
+          {
+            $inc: {
+              [`players.${playerIndex}.score`]: scoreIncrement,
+              [`players.${playerIndex}.correctAnswersCount`]: 1
+            }
+          }
+        );
 
         session = updateResult;
 
@@ -1660,36 +1683,13 @@ module.exports = (io, app) => {
 
       if (shouldComplete) {
         const correctDisplayNames = session.choiceQuestionCorrectUsers[qIndex] || [];
-        
-        if (correctDisplayNames.length > 0) {
-          correctDisplayNames.forEach((displayName, index) => {
-            const player = session.players.find(p =>
-              (p.nickname || 'Unknown') === displayName
-            );
-            if (player) {
-              if (index === 0) {
-                // 첫 번째 정답자: 2점
-                player.score += 2;
-              } else {
-                // 나머지 정답자: 1점
-                player.score += 1;
-              }
-              player.correctAnswersCount = (player.correctAnswersCount || 0) + 1;
-              player.lastCorrectTime = new Date(); // 정답 맞춘 시간 기록
-            }
-          });
 
-          session.markModified('players');
-        }
+        // ✅ 점수는 이미 정답 제출 시 즉시 증가시켰으므로 여기서는 계산하지 않음
+        // (이전에는 forEach로 점수를 계산했지만, race condition 때문에 즉시 처리로 변경)
 
         // 정답 공개 상태로 변경
         const revealedAt = new Date();
         session.revealedAt = revealedAt;
-
-        // 첫 정답자 초기화
-        if (app.firstCorrectUsers) {
-          delete app.firstCorrectUsers[sessionId];
-        }
 
         const success = await safeSaveSession(session);
         if (!success) {
