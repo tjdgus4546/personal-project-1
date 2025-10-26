@@ -747,8 +747,14 @@ function showQuestion({ silent = false } = {}) {
                 
                 // 타이머 시작
                 if (!silent) {
-                    if (questionTimer) clearTimeout(questionTimer);
-                    if (countdownInterval) clearInterval(countdownInterval);
+                    if (questionTimer) {
+                        clearTimeout(questionTimer);
+                        questionTimer = null;
+                    }
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
@@ -839,8 +845,14 @@ function showQuestion({ silent = false } = {}) {
 
                 // 타이머 시작
                 if (!silent) {
-                    if (questionTimer) clearTimeout(questionTimer);
-                    if (countdownInterval) clearInterval(countdownInterval);
+                    if (questionTimer) {
+                        clearTimeout(questionTimer);
+                        questionTimer = null;
+                    }
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
 
                     const timeLimit = (question.timeLimit || 90) * 1000;
                     questionTimer = setTimeout(() => {
@@ -932,8 +944,14 @@ function showQuestion({ silent = false } = {}) {
 
     if (silent) return;
 
-    if (questionTimer) clearTimeout(questionTimer);
-    if (countdownInterval) clearInterval(countdownInterval);
+    if (questionTimer) {
+        clearTimeout(questionTimer);
+        questionTimer = null;
+    }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
 
     const timeLimit = (question.timeLimit || 90) * 1000;
     questionTimer = setTimeout(() => {
@@ -1654,14 +1672,18 @@ function setupSocketListeners() {
         updateQuestionNumber();
 
         // 로딩 완료 알림
+        console.log(`📨 client-ready emit (문제 ${currentIndex + 1})`);
         socket.emit('client-ready', { sessionId });
     });
 
     // 모든 플레이어 준비 완료 후 문제 시작
     socket.on('question-start', ({ success, data }) => {
         if (!success) {
+            console.log('❌ question-start 실패');
             return;
         }
+
+        console.log('✅ question-start 이벤트 수신');
 
         const { questionStartAt: startAt } = data;
         questionStartAt = new Date(startAt);
@@ -1670,8 +1692,14 @@ function setupSocketListeners() {
         const actualIndex = questionOrder[currentIndex];
         const question = questions[actualIndex];
 
-        if (questionTimer) clearTimeout(questionTimer);
-        if (countdownInterval) clearInterval(countdownInterval);
+        if (questionTimer) {
+            clearTimeout(questionTimer);
+            questionTimer = null;
+        }
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
 
         const totalTimeLimit = (question.timeLimit || 90) * 1000;
 
@@ -1680,14 +1708,21 @@ function setupSocketListeners() {
         const remainingTime = Math.max(0, totalTimeLimit - elapsed);
         const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
 
+        console.log(`⏱️ 타이머 시작: ${remainingSeconds}초 (문제 ${currentIndex + 1})`);
+        console.log(`👑 호스트 여부: ${isHost()} (userId: ${userId}, host: ${host})`);
+
         // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {
+            console.log(`⏰ 타이머 종료! 호스트 여부: ${isHost()}`);
             if (isHost()) {
                 const actualIndex = questionOrder[currentIndex];
+                console.log(`📤 정답 공개 요청 emit (questionIndex: ${actualIndex})`);
                 socket.emit('revealAnswer', {
                     sessionId,
                     questionIndex: actualIndex
                 });
+            } else {
+                console.log('⚠️ 호스트가 아니어서 revealAnswer를 emit하지 않음');
             }
         }, remainingTime);
 
@@ -2377,7 +2412,10 @@ function showAnswerWithYoutube({ answers, answerImageBase64, revealedAt, index }
 }
 
 function startCountdown(timeLimit) {
-    if (countdownInterval) clearInterval(countdownInterval);
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
 
     const timerDisplay = document.getElementById('timerDisplay');
     const hintDisplay = document.getElementById('hintDisplay');
@@ -2413,6 +2451,7 @@ function startCountdown(timeLimit) {
 
         if (remaining <= 0) {
             clearInterval(countdownInterval);
+            countdownInterval = null;
         }
     }, 1000);
 }
