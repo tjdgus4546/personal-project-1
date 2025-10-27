@@ -186,9 +186,9 @@ async function searchQuizzes(searchTerm) {
 // 통합된 퀴즈 로딩 함수
 async function loadQuizzes() {
     if (isLoading || !hasMore) return;
-    
+
     isLoading = true;
-    
+
     try {
         let url;
         if (currentSearchTerm) {
@@ -196,7 +196,7 @@ async function loadQuizzes() {
         } else {
             url = `/api/quiz/list?page=${currentPage}&limit=20&sort=${currentSortOrder}`;
         }
-        
+
         const response = await fetch(url, { credentials: 'include' });
         const data = await response.json();
         
