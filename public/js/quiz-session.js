@@ -1272,9 +1272,10 @@ function setupEventListeners() {
         socket.emit('voteSkip', { sessionId });
     });
 
-    // 강제 스킵 버튼
-    document.getElementById('forceSkipBtn').addEventListener('click', () => {
+    // 강제 스킵 버튼 (클릭 후 포커스 제거하여 엔터 키 실수 방지)
+    document.getElementById('forceSkipBtn').addEventListener('click', (e) => {
         socket.emit('forceSkip', { sessionId });
+        e.target.blur(); // 클릭 후 포커스 제거
     });
 
     // 모바일 스킵 투표 버튼
@@ -1283,8 +1284,9 @@ function setupEventListeners() {
     });
 
     // 모바일 강제 스킵 버튼
-    document.getElementById('forceSkipBtnMobile').addEventListener('click', () => {
+    document.getElementById('forceSkipBtnMobile').addEventListener('click', (e) => {
         socket.emit('forceSkip', { sessionId });
+        e.target.blur(); // 클릭 후 포커스 제거
     });
 
     // ❌ 제거: HTML form onsubmit과 중복되어 두 번 호출되는 문제 발생
@@ -1319,33 +1321,58 @@ function setupEventListeners() {
         }
     }
 
-    // K 키: 스킵 투표 핸들러
+    // K 키: 스킵 투표, P 키: 강제 스킵 핸들러
     function handleSkipVoteKey(e) {
+        // 입력 필드에서는 단축키 비활성화
+        if (document.activeElement.tagName === 'INPUT' ||
+            document.activeElement.tagName === 'TEXTAREA') {
+            return;
+        }
+
+        const gameSection = document.getElementById('gameSection');
+        if (gameSection.classList.contains('hidden')) {
+            return;
+        }
+
+        // K 키: 스킵 투표
         if (e.key === 'k' || e.key === 'K') {
-            if (document.activeElement.tagName !== 'INPUT' &&
-                document.activeElement.tagName !== 'TEXTAREA') {
+            const voteSkipBtn = document.getElementById('voteSkipBtn');
+            const voteSkipBtnMobile = document.getElementById('voteSkipBtnMobile');
 
-                const gameSection = document.getElementById('gameSection');
+            if (!voteSkipBtn.classList.contains('hidden') ||
+                !voteSkipBtnMobile.classList.contains('hidden')) {
+                socket.emit('voteSkip', { sessionId });
 
-                if (!gameSection.classList.contains('hidden')) {
-                    const voteSkipBtn = document.getElementById('voteSkipBtn');
-                    const voteSkipBtnMobile = document.getElementById('voteSkipBtnMobile');
-
-                    if (!voteSkipBtn.classList.contains('hidden') ||
-                        !voteSkipBtnMobile.classList.contains('hidden')) {
-                        socket.emit('voteSkip', { sessionId });
-
-                        // 시각적 피드백
-                        [voteSkipBtn, voteSkipBtnMobile].forEach(btn => {
-                            if (!btn.classList.contains('hidden')) {
-                                btn.classList.add('scale-95', 'opacity-70');
-                                setTimeout(() => {
-                                    btn.classList.remove('scale-95', 'opacity-70');
-                                }, 150);
-                            }
-                        });
+                // 시각적 피드백
+                [voteSkipBtn, voteSkipBtnMobile].forEach(btn => {
+                    if (!btn.classList.contains('hidden')) {
+                        btn.classList.add('scale-95', 'opacity-70');
+                        setTimeout(() => {
+                            btn.classList.remove('scale-95', 'opacity-70');
+                        }, 150);
                     }
-                }
+                });
+            }
+        }
+
+        // P 키: 강제 스킵 (호스트만)
+        if (e.key === 'p' || e.key === 'P') {
+            const forceSkipBtn = document.getElementById('forceSkipBtn');
+            const forceSkipBtnMobile = document.getElementById('forceSkipBtnMobile');
+
+            if (!forceSkipBtn.classList.contains('hidden') ||
+                !forceSkipBtnMobile.classList.contains('hidden')) {
+                socket.emit('forceSkip', { sessionId });
+
+                // 시각적 피드백
+                [forceSkipBtn, forceSkipBtnMobile].forEach(btn => {
+                    if (!btn.classList.contains('hidden')) {
+                        btn.classList.add('scale-95', 'opacity-70');
+                        setTimeout(() => {
+                            btn.classList.remove('scale-95', 'opacity-70');
+                        }, 150);
+                    }
+                });
             }
         }
     }
