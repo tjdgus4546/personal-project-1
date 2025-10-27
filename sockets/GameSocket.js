@@ -139,26 +139,32 @@ module.exports = (io, app, redisClient) => {
           return;
         }
 
-        const user = await User.findById(userId).select('nickname profileImage');
+        // ⚡ 캐시 먼저 확인, 없으면 DB 조회
+        let userInfo = sessionUserCache.get(sessionId)?.get(socket.userId);
 
-        if (!sessionUserCache.has(sessionId)) {
+        if (!userInfo) {
+          const user = await User.findById(userId).select('nickname profileImage');
+          userInfo = {
+            nickname: user?.nickname || null,
+            profileImage: user?.profileImage || null
+          };
+
+          if (!sessionUserCache.has(sessionId)) {
             sessionUserCache.set(sessionId, new Map());
+          }
+          sessionUserCache.get(sessionId).set(socket.userId, userInfo);
         }
-        
-        sessionUserCache.get(sessionId).set(socket.userId, {
-            nickname: user?.nickname,
-            profileImage: user?.profileImage
-        });
 
-        
+
         let updated = false;
         let player = session.players.find(p => p.userId.toString() === userId.toString());
-        
+
         if (!player) {
+          // 신규 플레이어 추가
           session.players.push({
             userId,
-            nickname: user?.nickname || null,
-            profileImage: user?.profileImage || null,
+            nickname: userInfo.nickname,
+            profileImage: userInfo.profileImage,
             score: 0,
             correctAnswersCount: 0,
             answered: {},
@@ -168,13 +174,17 @@ module.exports = (io, app, redisClient) => {
           });
           updated = true;
         } else {
-          // 재접속 시 갱신
-          player.connected = true;
-          player.lastSeen = new Date();
-          player.socketId = socket.id;
-          player.nickname = user?.nickname || null,
-          player.profileImage = user?.profileImage || null;
-          updated = true;
+          // 재접속 시 갱신 (실제로 변경된 값만 체크)
+          if (!player.connected) {
+            player.connected = true;
+            updated = true;
+          }
+          if (player.socketId !== socket.id) {
+            player.socketId = socket.id;
+            updated = true;
+          }
+          // nickname, profileImage는 변경되지 않으므로 업데이트 불필요
+          player.lastSeen = new Date(); // lastSeen은 항상 갱신 (저장은 updated가 true일 때만)
         }
         
         // 방장 지정 (세션 생성자) → 제일 먼저 들어온 사람을 host로 지정
@@ -201,10 +211,43 @@ module.exports = (io, app, redisClient) => {
         socket.userId = userId;
         socket.firstCorrectUser = null;
 
+        const connectedCount = session.players.filter(p => p.connected).length;
+
+        // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
+        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator inviteCode completedGameCount questions');
+
+        // ✅ 한 번에 모든 초기 데이터 전송 (HTTP 요청 불필요)
+        socket.emit('join-success', {
+          success: true,
+          data: {
+            sessionId: sessionId,
+            host: session.host?.toString() || '__NONE__',
+            inviteCode: quiz?.inviteCode || null,
+            quiz: {
+              title: quiz?.title || '제목 없음',
+              description: quiz?.description || '',
+              titleImageBase64: quiz?.titleImageBase64 || null,
+              completedGameCount: quiz?.completedGameCount || 0,
+              questions: [] // ⚡ 빈 배열 (문제 수만 필요하므로)
+            },
+            questionCount: quiz?.questions?.length || 0,
+            players: session.players.map(p => ({
+              nickname: p.nickname,
+              userId: p.userId.toString(),
+              connected: p.connected,
+              profileImage: p.profileImage,
+              score: p.score,
+              correctAnswersCount: p.correctAnswersCount || 0
+            })),
+            isStarted: session.isStarted || false,
+            skipVotes: session.skipVotes.length,
+            totalPlayers: connectedCount
+          }
+        });
+
         // 점수판 전송 (메모리의 session 상태 사용 - DB 저장 완료 후이므로 최신 데이터)
         emitScoreboard(io, sessionId, session.players);
 
-        const connectedCount = session.players.filter(p => p.connected).length;
         // 스킵투표 인원수 공개
         io.to(sessionId).emit('voteSkipUpdate', {
           success: true,
@@ -329,8 +372,6 @@ module.exports = (io, app, redisClient) => {
         handleSocketError(socket, error, 'joinSession');
       }
     });
-
-    socket.emit('session-ready');
 
     socket.on('disconnect', async () => {
       try {

@@ -1386,15 +1386,52 @@ function setupSocketListeners() {
         }
     });
 
-    socket.on('session-ready', () => {
-        // ⚠️ 게임이 이미 시작된 경우 loadSessionData() 호출하지 않음
-        // game-started 이벤트에서 해시된 데이터를 받으므로 평문 데이터를 덮어쓰면 안 됨
-        const gameSection = document.getElementById('gameSection');
-        const isGameStarted = gameSection && !gameSection.classList.contains('hidden');
+    // ⚡ joinSession 성공 시 한 번에 모든 데이터 수신 (HTTP 요청 불필요!)
+    socket.on('join-success', (response) => {
+        if (!response.success) return;
 
-        if (!isGameStarted) {
-            loadSessionData();
+        const data = response.data;
+
+        // 세션 데이터 저장
+        host = data.host;
+
+        // ⚡ 문제 수 표시 (questions 배열 없이)
+        document.getElementById('totalQuestions').textContent = data.questionCount || 0;
+
+        // 퀴즈 정보 표시 (questions는 제외)
+        document.getElementById('quizTitle').textContent = data.quiz.title;
+        document.getElementById('quizDescription').textContent = data.quiz.description || '이 퀴즈에 도전해보세요!';
+
+        // 썸네일 이미지 표시
+        const thumbnailContainer = document.getElementById('quizThumbnail');
+        const defaultThumbnail = document.getElementById('defaultThumbnail');
+
+        if (data.quiz.titleImageBase64) {
+            if (defaultThumbnail) {
+                defaultThumbnail.style.display = 'none';
+            }
+
+            let imgElement = thumbnailContainer.querySelector('img:not(#recommendIcon)');
+            if (!imgElement) {
+                imgElement = document.createElement('img');
+                imgElement.className = 'absolute inset-0 w-full h-full object-cover';
+                imgElement.alt = data.quiz.title;
+                thumbnailContainer.insertBefore(imgElement, thumbnailContainer.firstChild);
+            }
+            imgElement.src = data.quiz.titleImageBase64;
         }
+
+        // 초대 코드 표시
+        if (data.inviteCode) {
+            setInviteCode(data.inviteCode);
+        } else {
+            document.getElementById('inviteCodeDisplay').textContent = '없음';
+        }
+
+        // 로딩 완료 플래그
+        isDataLoaded = true;
+
+        console.log('✅ Join success - 모든 데이터 수신 완료 (HTTP 요청 없음)');
     });
 
     socket.on('join-error', ({ success, message }) => {
