@@ -183,7 +183,15 @@ module.exports = (io, app, redisClient) => {
             player.socketId = socket.id;
             updated = true;
           }
-          // nickname, profileImage는 변경되지 않으므로 업데이트 불필요
+          // ⚡ nickname, profileImage 업데이트 (이전에 저장 안 되어있을 수 있음)
+          if (player.nickname !== userInfo.nickname) {
+            player.nickname = userInfo.nickname;
+            updated = true;
+          }
+          if (player.profileImage !== userInfo.profileImage) {
+            player.profileImage = userInfo.profileImage;
+            updated = true;
+          }
           player.lastSeen = new Date(); // lastSeen은 항상 갱신 (저장은 updated가 true일 때만)
         }
         
@@ -214,15 +222,14 @@ module.exports = (io, app, redisClient) => {
         const connectedCount = session.players.filter(p => p.connected).length;
 
         // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
-        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator inviteCode completedGameCount questions');
+        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator completedGameCount questions');
 
-        // ✅ 한 번에 모든 초기 데이터 전송 (HTTP 요청 불필요)
-        socket.emit('join-success', {
+        const joinSuccessData = {
           success: true,
           data: {
             sessionId: sessionId,
             host: session.host?.toString() || '__NONE__',
-            inviteCode: quiz?.inviteCode || null,
+            inviteCode: session.inviteCode || null, // ⚡ GameSession에서 가져오기
             quiz: {
               title: quiz?.title || '제목 없음',
               description: quiz?.description || '',
@@ -243,7 +250,10 @@ module.exports = (io, app, redisClient) => {
             skipVotes: session.skipVotes.length,
             totalPlayers: connectedCount
           }
-        });
+        };
+
+        // ✅ 한 번에 모든 초기 데이터 전송 (HTTP 요청 불필요)
+        socket.emit('join-success', joinSuccessData);
 
         // 점수판 전송 (메모리의 session 상태 사용 - DB 저장 완료 후이므로 최신 데이터)
         emitScoreboard(io, sessionId, session.players);

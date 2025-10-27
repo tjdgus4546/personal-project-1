@@ -1421,6 +1421,11 @@ function setupSocketListeners() {
             imgElement.src = data.quiz.titleImageBase64;
         }
 
+        // ⚡ 플레이어 목록 표시 (waiting-room 이벤트 기다릴 필요 없음)
+        if (data.players && data.players.length > 0) {
+            renderPlayerList(data.players);
+        }
+
         // 초대 코드 표시
         if (data.inviteCode) {
             setInviteCode(data.inviteCode);
@@ -1430,8 +1435,6 @@ function setupSocketListeners() {
 
         // 로딩 완료 플래그
         isDataLoaded = true;
-
-        console.log('✅ Join success - 모든 데이터 수신 완료 (HTTP 요청 없음)');
     });
 
     socket.on('join-error', ({ success, message }) => {
