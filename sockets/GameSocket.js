@@ -19,7 +19,7 @@ function hashAnswer(answer) {
   return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
-module.exports = (io, app) => {
+module.exports = (io, app, redisClient) => {
     /**
    * 스코어보드 업데이트 emit 함수
    * @param {Object} io - Socket.IO 인스턴스
@@ -87,19 +87,6 @@ module.exports = (io, app) => {
       });
     }
 
-    // firstCorrectUsers도 같은 방식으로 정리
-    if (app.firstCorrectUsers) {
-      for (const sessionId in app.firstCorrectUsers) {
-        GameSession.findById(sessionId).then(session => {
-          if (!session) {
-            delete app.firstCorrectUsers[sessionId];
-            console.log(`🧹 만료된 firstCorrectUsers 정리: ${sessionId}`);
-          }
-        }).catch(err => {
-          // DB 조회 실패 시 무시
-        });
-      }
-    }
   }, 30 * 60 * 1000); // 30분마다 실행
 
   io.use(cookieParser());
@@ -412,9 +399,6 @@ module.exports = (io, app) => {
             if (connectedCount === 0) {
               if (sessionUserCache.has(sessionId)) {
                 sessionUserCache.delete(sessionId);
-              }
-              if (app.firstCorrectUsers && app.firstCorrectUsers[sessionId]) {
-                delete app.firstCorrectUsers[sessionId];
               }
               return;
             }
@@ -769,69 +753,74 @@ module.exports = (io, app) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        // ✅ $push 위치를 이용한 원자적 첫 번째 정답자 판정
-        // 배열에 추가하고 그 위치(index)를 반환받음
-        const updateResult = await GameSession.findOneAndUpdate(
-          {
-            _id: sessionId,
-            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 중복 방지
-          },
-          {
-            $set: {
-              [`players.${playerIndex}.answered.${qIndex}`]: true,
-              [`players.${playerIndex}.lastCorrectTime`]: new Date()
-            },
-            $push: {
-              [`correctUsers.${qIndex}`]: displayName  // $addToSet 대신 $push 사용
-            }
-          },
-          { new: true }
-        );
+        // ⚡ Redis로 첫 번째 정답자 판정
+        const redisKey = `first:${sessionId}:${qIndex}`;
+        let isFirstCorrectUser = false;
 
-        if (!updateResult) {
-          console.log(`⚠️ 중복 정답 시도 방지: ${displayName} (문제 ${qIndex})`);
+        try {
+          // SET NX: key가 없을 때만 설정 (원자적 연산!)
+          const result = await redisClient.set(redisKey, displayName, {
+            NX: true,  // key가 없을 때만 설정
+            EX: 3600   // 1시간 후 자동 삭제
+          });
+          isFirstCorrectUser = result === 'OK';
+        } catch (redisError) {
+          console.error('❌ Redis 에러:', redisError);
+          socket.emit('socket-error', {
+            success: false,
+            message: 'Redis 연결 오류가 발생했습니다.'
+          });
           return;
         }
-
-        // 배열에 추가된 후의 위치로 첫 번째 정답자 판정
-        const correctUsersArray = updateResult.correctUsers?.[qIndex] || [];
-        const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
-        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
-
-        // 점수 업데이트 (DB)
-        await GameSession.updateOne(
-          {
-            _id: sessionId,
-            [`players.${playerIndex}.userId`]: new ObjectId(socket.userId)
-          },
-          {
-            $inc: {
-              [`players.${playerIndex}.score`]: scoreIncrement,
-              [`players.${playerIndex}.correctAnswersCount`]: 1
-            }
-          }
-        );
-
-        // ✅ 메모리의 session 객체에도 반영 (스코어보드 emit용)
-        session = updateResult;
-        session.players[playerIndex].score = (session.players[playerIndex].score || 0) + scoreIncrement;
-        session.players[playerIndex].correctAnswersCount = (session.players[playerIndex].correctAnswersCount || 0) + 1;
 
         const userInfo = sessionUserCache.get(sessionId)?.get(socket.userId) || {
             nickname: null,
             profileImage: null
         };
 
+        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
+
+        // 즉시 채팅 emit
         io.to(sessionId).emit('correct', {
           success: true,
           data: {
             nickname: displayName,
-            profileImage: userInfo.profileImage
+            profileImage: userInfo.profileImage,
+            isFirst: isFirstCorrectUser
           }
         });
 
-        emitScoreboard(io, sessionId, session.players);
-        await handleSubjectiveQuestionCompletion(sessionId, io, app);
+        // DB 업데이트 (백그라운드)
+        GameSession.findOneAndUpdate(
+          {
+            _id: sessionId,
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true }
+          },
+          {
+            $set: {
+              [`players.${playerIndex}.answered.${qIndex}`]: true,
+              [`players.${playerIndex}.lastCorrectTime`]: new Date()
+            },
+            $inc: {
+              [`players.${playerIndex}.score`]: scoreIncrement,
+              [`players.${playerIndex}.correctAnswersCount`]: 1
+            },
+            $push: {
+              [`correctUsers.${qIndex}`]: displayName
+            }
+          },
+          { new: true }
+        ).then(updateResult => {
+          if (!updateResult) {
+            console.log(`⚠️ 중복 정답 시도 방지: ${displayName}`);
+            return;
+          }
+          session = updateResult;
+          emitScoreboard(io, sessionId, session.players);
+          handleSubjectiveQuestionCompletion(sessionId, io, app);
+        }).catch(err => {
+          console.error('❌ DB 업데이트 실패:', err);
+        });
       } catch (error) {
         handleSocketError(socket, error, 'correct');
       }
@@ -883,53 +872,57 @@ module.exports = (io, app) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        // ✅ $push 위치를 이용한 원자적 첫 번째 정답자 판정
-        const updateResult = await GameSession.findOneAndUpdate(
+        // ⚡ Redis로 첫 번째 정답자 판정
+        const redisKey = `first:${sessionId}:${qIndex}`;
+        let isFirstCorrectUser = false;
+
+        try {
+          // SET NX: key가 없을 때만 설정 (원자적 연산!)
+          const result = await redisClient.set(redisKey, displayName, {
+            NX: true,  // key가 없을 때만 설정
+            EX: 3600   // 1시간 후 자동 삭제
+          });
+          isFirstCorrectUser = result === 'OK';
+        } catch (redisError) {
+          console.error('❌ Redis 에러 (객관식):', redisError);
+          socket.emit('socket-error', {
+            success: false,
+            message: 'Redis 연결 오류가 발생했습니다.'
+          });
+          return;
+        }
+
+        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
+
+        // DB 업데이트 (백그라운드)
+        GameSession.findOneAndUpdate(
           {
             _id: sessionId,
-            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true } // 중복 방지
+            [`players.${playerIndex}.answered.${qIndex}`]: { $ne: true }
           },
           {
             $set: {
               [`players.${playerIndex}.answered.${qIndex}`]: true
             },
-            $push: {
-              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName  // $addToSet 대신 $push 사용
-            }
-          },
-          { new: true }
-        );
-
-        if (!updateResult) {
-          console.log(`⚠️ 중복 답변 방지: ${displayName} (객관식 문제 ${qIndex})`);
-          return;
-        }
-
-        // 배열에 추가된 후의 위치로 첫 번째 정답자 판정
-        const correctUsersArray = updateResult.choiceQuestionCorrectUsers?.[qIndex] || [];
-        const isFirstCorrectUser = correctUsersArray.length === 1; // 배열 길이가 1이면 첫 번째
-        const scoreIncrement = isFirstCorrectUser ? 2 : 1;
-
-        // 점수 업데이트 (DB)
-        await GameSession.updateOne(
-          {
-            _id: sessionId,
-            [`players.${playerIndex}.userId`]: new ObjectId(socket.userId)
-          },
-          {
             $inc: {
               [`players.${playerIndex}.score`]: scoreIncrement,
               [`players.${playerIndex}.correctAnswersCount`]: 1
+            },
+            $push: {
+              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName
             }
+          },
+          { new: true }
+        ).then(updateResult => {
+          if (!updateResult) {
+            console.log(`⚠️ 중복 답변 방지: ${displayName} (객관식)`);
+            return;
           }
-        );
-
-        // ✅ 메모리의 session 객체에도 반영 (스코어보드 emit용)
-        session = updateResult;
-        session.players[playerIndex].score = (session.players[playerIndex].score || 0) + scoreIncrement;
-        session.players[playerIndex].correctAnswersCount = (session.players[playerIndex].correctAnswersCount || 0) + 1;
-
-        await handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
+          session = updateResult;
+          handleChoiceQuestionCompletion(sessionId, io, app, 'all_answered');
+        }).catch(err => {
+          console.error('❌ 객관식 DB 업데이트 실패:', err);
+        });
 
       } catch (error) {
         handleSocketError(socket, error, 'correct');
@@ -1211,11 +1204,17 @@ module.exports = (io, app) => {
         return;
       }
 
-      if (app.firstCorrectUsers) {
-        delete app.firstCorrectUsers[sessionId];
+      // ⚡ Redis 키 정리 (이전 문제의 첫 번째 정답자 정보 삭제)
+      if (redisClient && redisClient.isOpen) {
+        try {
+          const redisKey = `first:${sessionId}:${questionIndex}`;
+          await redisClient.del(redisKey);
+        } catch (redisError) {
+          console.error('⚠️ Redis 키 삭제 실패:', redisError);
+        }
       }
 
-      await goToNextQuestion(sessionId, io, app);
+      await goToNextQuestion(sessionId, io, app, redisClient);
     } catch (error) {
       handleSocketError(socket, error, 'nextQuestion');
     }
@@ -1497,7 +1496,7 @@ module.exports = (io, app) => {
   }
 
   //문제 타이머 함수
-  async function goToNextQuestion(sessionId, io, app) {
+  async function goToNextQuestion(sessionId, io, app, redisClient) {
     try {
       const quizDb = app.get('quizDb');
       const GameSession = require('../models/GameSession')(quizDb);
@@ -1550,10 +1549,20 @@ module.exports = (io, app) => {
           console.log(`🧹 세션 캐시 정리: ${sessionId}`);
         }
 
-        // firstCorrectUsers 정리
-        if (app.firstCorrectUsers && app.firstCorrectUsers[sessionId]) {
-          delete app.firstCorrectUsers[sessionId];
-          console.log(`🧹 firstCorrectUsers 정리: ${sessionId}`);
+        // ⚡ Redis 키 정리 (모든 문제의 첫 번째 정답자 정보 삭제)
+        if (redisClient && redisClient.isOpen) {
+          try {
+            const questionCount = session.questionOrder.length;
+            const deletePromises = [];
+            for (let i = 0; i < questionCount; i++) {
+              const redisKey = `first:${sessionId}:${i}`;
+              deletePromises.push(redisClient.del(redisKey));
+            }
+            await Promise.all(deletePromises);
+            console.log(`🧹 Redis 키 정리 완료: ${sessionId} (${questionCount}개 문제)`);
+          } catch (redisError) {
+            console.error('⚠️ Redis 키 정리 실패:', redisError);
+          }
         }
 
         // 📊 점수 기록 저장 및 퍼센타일 임계값 계산

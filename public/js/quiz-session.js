@@ -1543,8 +1543,10 @@ function setupSocketListeners() {
                 }, remainingTime);
             }
         }
-        // 재접속이 아닐 때만 client-ready 전송
-        else if (!isReconnect) {
+        // ✅ 정답 공개 전이면 무조건 client-ready 전송 (재접속 시에도!)
+        // 이렇게 해야 재접속 시에도 타이머가 정상적으로 시작됩니다
+        else {
+            console.log(`📨 client-ready emit (재접속: ${isReconnect})`);
             socket.emit('client-ready', { sessionId });
         }
         } catch (error) {

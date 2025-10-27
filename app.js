@@ -328,8 +328,8 @@ connectDB().then(({ userDb, quizDb }) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
   });
-  // 소켓 로직 파일 연결
-  const gameSocketMonitor = require('./sockets/GameSocket')(io, app);
+  // 소켓 로직 파일 연결 (Redis client 추가 전달)
+  const gameSocketMonitor = require('./sockets/GameSocket')(io, app, pubClient);
 
   // ===== 에러 핸들러 (모든 라우트 정의 후 마지막에 배치) =====
 
