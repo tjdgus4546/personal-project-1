@@ -418,12 +418,18 @@ module.exports = (io, app, redisClient) => {
               return;
             }
 
-            // 해당 유저 제거
+            // 해당 유저 처리: 게임 시작 전이면 배열에서 제거, 시작 후면 connected: false로 마킹
             const player = session.players.find(p => p.userId.toString() === userId.toString());
             if (player) {
-              player.connected = false;
-              player.lastSeen = new Date();
-              player.socketId = null;
+              if (!session.isStarted) {
+                // 게임 시작 전: 완전히 제거
+                session.players = session.players.filter(p => p.userId.toString() !== userId.toString());
+              } else {
+                // 게임 시작 후: 재접속 가능하도록 connected만 false로 마킹
+                player.connected = false;
+                player.lastSeen = new Date();
+                player.socketId = null;
+              }
               session.markModified('players');
             }
 
@@ -537,6 +543,9 @@ module.exports = (io, app, redisClient) => {
                   isStarted: session.isStarted || false
                 }
               });
+
+              // 대기실에도 스코어보드가 표시되므로 업데이트 필요
+              emitScoreboard(io, sessionId, session.players);
             }
           } catch (error) {
             handleSocketError(socket, error, 'disconnect:setTimeout');
