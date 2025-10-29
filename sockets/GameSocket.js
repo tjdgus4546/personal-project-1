@@ -59,6 +59,39 @@ module.exports = (io, app, redisClient) => {
       }
     });
   }
+
+  /**
+   * ⚡ Redis에서 접속 인원 수 가져오기 (헬퍼 함수)
+   * @param {string} sessionId - 세션 ID
+   * @param {Object} session - 세션 객체 (fallback용)
+   * @returns {Promise<number>} 접속 인원 수
+   */
+  async function getConnectedCount(sessionId, session) {
+    const actualCount = session.players.filter(p => p.connected).length;
+
+    if (redisClient && redisClient.isOpen) {
+      try {
+        const cachedCount = await redisClient.get(`session:${sessionId}:connected`);
+        if (cachedCount !== null) {
+          const redisCount = parseInt(cachedCount, 10);
+
+          // ⚠️ Redis 값이 음수거나 실제 값과 크게 다르면 동기화
+          if (redisCount < 0 || Math.abs(redisCount - actualCount) > 0) {
+            await redisClient.set(`session:${sessionId}:connected`, actualCount);
+            return actualCount;
+          }
+
+          return redisCount;
+        }
+      } catch (redisErr) {
+        console.error('Redis 카운터 조회 실패:', redisErr);
+      }
+    }
+
+    // Redis 실패 시 또는 값이 없을 때 fallback
+    return actualCount;
+  }
+
   const quizDb = app.get('quizDb');
   const userDb = app.get('userDb');
   const GameSession = require('../models/GameSession')(quizDb);
@@ -121,6 +154,13 @@ module.exports = (io, app, redisClient) => {
 
         if (!ObjectId.isValid(sessionId)) return;
 
+        // ⚡ 재접속 시 disconnect 타이머 취소
+        const timerKey = `${sessionId}:${userId}`;
+        if (disconnectTimers.has(timerKey)) {
+          clearTimeout(disconnectTimers.get(timerKey));
+          disconnectTimers.delete(timerKey);
+        }
+
         const session = await safeFindSessionById(GameSession, sessionId);
         if (!session) return;
 
@@ -172,11 +212,29 @@ module.exports = (io, app, redisClient) => {
             socketId: socket.id,
           });
           updated = true;
+
+          // ⚡ Redis 접속 인원 카운터 증가
+          if (redisClient && redisClient.isOpen) {
+            try {
+              await redisClient.incr(`session:${sessionId}:connected`);
+            } catch (redisErr) {
+              console.error('Redis 카운터 증가 실패:', redisErr);
+            }
+          }
         } else {
           // 재접속 시 갱신 (실제로 변경된 값만 체크)
           if (!player.connected) {
             player.connected = true;
             updated = true;
+
+            // ⚡ Redis 접속 인원 카운터 증가 (재접속)
+            if (redisClient && redisClient.isOpen) {
+              try {
+                await redisClient.incr(`session:${sessionId}:connected`);
+              } catch (redisErr) {
+                console.error('Redis 카운터 증가 실패:', redisErr);
+              }
+            }
           }
           if (player.socketId !== socket.id) {
             player.socketId = socket.id;
@@ -218,7 +276,8 @@ module.exports = (io, app, redisClient) => {
         socket.userId = userId;
         socket.firstCorrectUser = null;
 
-        const connectedCount = session.players.filter(p => p.connected).length;
+        // ⚡ Redis에서 접속 인원 가져오기
+        const connectedCount = await getConnectedCount(sessionId, session);
 
         // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
         const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator completedGameCount questions');
@@ -376,10 +435,13 @@ module.exports = (io, app, redisClient) => {
         const quizDb = app.get('quizDb');
         const GameSession = require('../models/GameSession')(quizDb);
 
+        // ⚡ 타이머 키를 sessionId:userId로 관리 (세션별로 독립적)
+        const timerKey = `${sessionId}:${userId}`;
+
         // 기존 타이머가 있으면 취소 (빠른 재접속 시 중복 방지)
-        if (disconnectTimers.has(userId)) {
-          clearTimeout(disconnectTimers.get(userId));
-          disconnectTimers.delete(userId);
+        if (disconnectTimers.has(timerKey)) {
+          clearTimeout(disconnectTimers.get(timerKey));
+          disconnectTimers.delete(timerKey);
         }
 
         // 3초 후에도 같은 사용자가 다시 접속해 있지 않다면 제거
@@ -405,7 +467,7 @@ module.exports = (io, app, redisClient) => {
 
             // 해당 유저 처리: 게임 시작 전이면 배열에서 제거, 시작 후면 connected: false로 마킹
             const player = session.players.find(p => p.userId.toString() === userId.toString());
-            if (player) {
+            if (player && player.connected) {
               if (!session.isStarted) {
                 // 게임 시작 전: 완전히 제거
                 session.players = session.players.filter(p => p.userId.toString() !== userId.toString());
@@ -416,6 +478,20 @@ module.exports = (io, app, redisClient) => {
                 player.socketId = null;
               }
               session.markModified('players');
+
+              // ⚡ Redis 접속 인원 카운터 감소 (0 이하로 내려가지 않도록)
+              if (redisClient && redisClient.isOpen) {
+                try {
+                  const currentCount = await redisClient.get(`session:${sessionId}:connected`);
+                  const currentCountInt = currentCount ? parseInt(currentCount, 10) : 0;
+
+                  if (currentCountInt > 0) {
+                    await redisClient.decr(`session:${sessionId}:connected`);
+                  }
+                } catch (redisErr) {
+                  console.error('Redis 카운터 감소 실패:', redisErr);
+                }
+              }
             }
 
             // host였으면 새로 지정
@@ -435,7 +511,8 @@ module.exports = (io, app, redisClient) => {
             session = await safeFindSessionById(GameSession, sessionId);
             if (!session) return;
 
-            const connectedCount = session.players.filter(p => p.connected).length;
+            // ⚡ Redis에서 접속 인원 가져오기
+            const connectedCount = await getConnectedCount(sessionId, session);
 
             // 🛡️ 모든 플레이어가 나간 경우 즉시 메모리 정리
             if (connectedCount === 0) {
@@ -536,12 +613,12 @@ module.exports = (io, app, redisClient) => {
             handleSocketError(socket, error, 'disconnect:setTimeout');
           } finally {
             // 타이머 정리
-            disconnectTimers.delete(userId);
+            disconnectTimers.delete(timerKey);
           }
         }, 3000); // 3초 후에도 접속 안 되어 있으면 제거
 
-        // 타이머를 Map에 저장
-        disconnectTimers.set(userId, timer);
+        // 타이머를 Map에 저장 (세션별로 독립적)
+        disconnectTimers.set(timerKey, timer);
 
         // 모든 소켓 이벤트 리스너 제거 (메모리 누수 방지)
         socket.removeAllListeners('joinSession');
@@ -628,6 +705,16 @@ module.exports = (io, app, redisClient) => {
         session.cachedQuizData = hashedQuiz;
         session.markModified('cachedQuizData');
 
+        // ⚡ Redis 접속 인원 카운터 초기화
+        const connectedCount = session.players.filter(p => p.connected).length;
+        if (redisClient && redisClient.isOpen) {
+          try {
+            await redisClient.set(`session:${sessionId}:connected`, connectedCount);
+          } catch (redisErr) {
+            console.error('Redis 카운터 초기화 실패:', redisErr);
+          }
+        }
+
         const success = await safeSaveSession(session);
         if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - startGame');
@@ -647,7 +734,7 @@ module.exports = (io, app, redisClient) => {
           }
         });
 
-        const connectedCount = session.players.filter(p => p.connected).length;
+        // connectedCount는 이미 659줄에서 선언됨
 
         io.to(sessionId).emit('voteSkipUpdate', {
           success: true,
@@ -1049,7 +1136,8 @@ module.exports = (io, app, redisClient) => {
             return;
           }
 
-        const connectedCount = session.players.filter(p => p.connected).length;
+        // ⚡ Redis에서 접속 인원 가져오기
+        const connectedCount = await getConnectedCount(sessionId, session);
 
         io.to(sessionId).emit('voteSkipUpdate', {
           success: true,
@@ -1413,7 +1501,7 @@ module.exports = (io, app, redisClient) => {
 
       const userPlayedQuizzesMap = new Map();
       users.forEach(user => {
-        const playedQuizIds = user.playedQuizzes.map(id => id.toString());
+        const playedQuizIds = (user.playedQuizzes || []).map(id => id.toString());
         userPlayedQuizzesMap.set(user._id.toString(), playedQuizIds);
       });
 
@@ -1573,7 +1661,7 @@ module.exports = (io, app, redisClient) => {
           sessionUserCache.delete(sessionId);
         }
 
-        // ⚡ Redis 키 정리 (모든 문제의 첫 번째 정답자 정보 삭제)
+        // ⚡ Redis 키 정리 (모든 문제의 첫 번째 정답자 정보 + 접속 인원 카운터 삭제)
         if (redisClient && redisClient.isOpen) {
           try {
             const questionCount = session.questionOrder.length;
@@ -1582,6 +1670,8 @@ module.exports = (io, app, redisClient) => {
               const redisKey = `first:${sessionId}:${i}`;
               deletePromises.push(redisClient.del(redisKey));
             }
+            // 접속 인원 카운터도 삭제
+            deletePromises.push(redisClient.del(`session:${sessionId}:connected`));
             await Promise.all(deletePromises);
           } catch (redisError) {
             console.error('⚠️ Redis 키 정리 실패:', redisError);
@@ -1630,12 +1720,15 @@ module.exports = (io, app, redisClient) => {
 
       session = updateResult;
 
+      // ⚡ Redis에서 접속 인원 가져오기
+      const connectedCount = await getConnectedCount(sessionId, session);
+
       // 문제 데이터만 전송 (타이머 시작 X)
       io.to(sessionId).emit('next', {
         success: true,
         data: {
           currentIndex: session.currentQuestionIndex,
-          totalPlayers: session.players.length,
+          totalPlayers: connectedCount,
         }
       });
     } catch (error) {
