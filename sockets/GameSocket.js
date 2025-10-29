@@ -280,7 +280,17 @@ module.exports = (io, app, redisClient) => {
         const connectedCount = await getConnectedCount(sessionId, session);
 
         // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
-        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator completedGameCount questions');
+        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator completedGameCount questions recommendationCount recommendations');
+
+        // 제작자 닉네임 조회
+        let creatorNickname = '알 수 없음';
+        if (quiz?.creator) {
+          const creator = await User.findById(quiz.creator).select('nickname');
+          creatorNickname = creator?.nickname || '알 수 없음';
+        }
+
+        // 현재 사용자가 추천했는지 확인
+        const hasRecommended = quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false;
 
         const joinSuccessData = {
           success: true,
@@ -289,11 +299,15 @@ module.exports = (io, app, redisClient) => {
             host: session.host?.toString() || '__NONE__',
             inviteCode: session.inviteCode || null, // ⚡ GameSession에서 가져오기
             quiz: {
+              _id: quiz?._id,
               title: quiz?.title || '제목 없음',
               description: quiz?.description || '',
               titleImageBase64: quiz?.titleImageBase64 || null,
               completedGameCount: quiz?.completedGameCount || 0,
-              questions: [] // ⚡ 빈 배열 (문제 수만 필요하므로)
+              questions: [], // ⚡ 빈 배열 (문제 수만 필요하므로)
+              recommendationCount: quiz?.recommendationCount || 0,
+              hasRecommended: hasRecommended,
+              creatorNickname: creatorNickname
             },
             questionCount: quiz?.questions?.length || 0,
             players: session.players.map(p => ({

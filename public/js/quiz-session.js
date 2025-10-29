@@ -1417,6 +1417,7 @@ function setupSocketListeners() {
         const data = response.data;
 
         // 세션 데이터 저장
+        sessionData = data;
         host = data.host;
 
         // ⚡ 문제 수 표시 (questions 배열 없이)
@@ -1455,6 +1456,39 @@ function setupSocketListeners() {
             setInviteCode(data.inviteCode);
         } else {
             document.getElementById('inviteCodeDisplay').textContent = '없음';
+        }
+
+        // 추천 버튼 표시 및 상태 설정
+        const recommendSection = document.getElementById('recommendSection');
+        const recommendIcon = document.getElementById('recommendIcon');
+        const recommendCount = document.getElementById('recommendCount');
+
+        if (recommendSection) {
+            // 추천 버튼 표시
+            recommendSection.classList.remove('hidden');
+
+            // 추천 수 표시
+            if (recommendCount) {
+                recommendCount.textContent = data.quiz.recommendationCount || 0;
+            }
+
+            // 추천 상태에 따라 아이콘 변경
+            if (recommendIcon) {
+                if (data.quiz.hasRecommended) {
+                    recommendIcon.src = '/images/Thumbsup2.png';
+                } else {
+                    recommendIcon.src = '/images/Thumbsup1.png';
+                }
+            }
+        }
+
+        // 제작자 정보 표시
+        const creatorSection = document.getElementById('creatorSection');
+        const creatorNickname = document.getElementById('creatorNickname');
+
+        if (creatorSection && creatorNickname && data.quiz.creatorNickname) {
+            creatorNickname.textContent = data.quiz.creatorNickname;
+            creatorSection.classList.remove('hidden');
         }
 
         // 로딩 완료 플래그
