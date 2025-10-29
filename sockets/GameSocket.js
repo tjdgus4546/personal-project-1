@@ -280,12 +280,12 @@ module.exports = (io, app, redisClient) => {
         const connectedCount = await getConnectedCount(sessionId, session);
 
         // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
-        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creator completedGameCount questions recommendationCount recommendations');
+        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creatorId completedGameCount questions recommendationCount recommendations');
 
         // 제작자 닉네임 조회
         let creatorNickname = '알 수 없음';
-        if (quiz?.creator) {
-          const creator = await User.findById(quiz.creator).select('nickname');
+        if (quiz?.creatorId) {
+          const creator = await User.findById(quiz.creatorId).select('nickname');
           creatorNickname = creator?.nickname || '알 수 없음';
         }
 
