@@ -556,51 +556,18 @@ module.exports = (io, app, redisClient) => {
                 }
               });
 
-              // 나간 유저의 ready 상태 제거 및 재확인
-              const currentQuestionIndex = session.currentQuestionIndex;
+              // 나간 유저의 ready 상태 제거
               const removedKeys = session.readyPlayers.filter(
                 key => key.includes(`_${userId}`)
               );
 
               if (removedKeys.length > 0) {
                 // 원자적 업데이트로 해당 유저의 ready 상태 제거
-                const updatedSession = await GameSession.findByIdAndUpdate(
+                await GameSession.findByIdAndUpdate(
                   sessionId,
                   { $pull: { readyPlayers: { $in: removedKeys } } },
                   { new: true }
                 );
-
-                if (updatedSession) {
-                  // 남은 플레이어로 ready 체크
-                  const readyForThisQuestion = updatedSession.readyPlayers.filter(
-                    key => key.startsWith(`${currentQuestionIndex}_`)
-                  );
-                  const remainingConnected = updatedSession.players.filter(p => p.connected);
-
-                  // ✅ 모든 남은 플레이어가 준비 완료되고, 아직 타이머가 시작되지 않은 경우만 시작
-                  if (readyForThisQuestion.length >= remainingConnected.length && remainingConnected.length > 0) {
-                    const startResult = await GameSession.findOneAndUpdate(
-                      {
-                        _id: sessionId,
-                        $or: [
-                          { questionStartAt: null },
-                          { questionStartAt: { $exists: false } }
-                        ]
-                      },
-                      { $set: { questionStartAt: new Date() } },
-                      { new: true }
-                    );
-
-                    if (startResult) {
-                      io.to(sessionId).emit('question-start', {
-                        success: true,
-                        data: {
-                          questionStartAt: startResult.questionStartAt
-                        }
-                      });
-                    }
-                  }
-                }
               }
 
             } else {
