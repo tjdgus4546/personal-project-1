@@ -48,7 +48,6 @@ let userId = null;
     if (protectedEvents.includes(event)) {
       // 내부 토큰이 없으면 차단
       if (args[args.length - 1] !== internalToken) {
-        console.warn('⚠️ 보안: 이 이벤트는 직접 호출할 수 없습니다.');
         return;
       }
       // 내부 토큰 제거 후 실제 emit
@@ -578,7 +577,6 @@ function sendMessage() {
 
     // ✅ questions 배열 유효성 체크 (재접속 시 타이밍 이슈 방지)
     if (!questions || !questions[actualIndex]) {
-        console.warn('⚠️ 문제 데이터 로딩 중... 잠시 후 다시 시도해주세요.');
         return;
     }
 
@@ -622,7 +620,6 @@ function choiceQuestionSendMessage() {
 
         // ✅ questions 배열 유효성 체크 (재접속 시 타이밍 이슈 방지)
         if (!questions || !questions[actualIndex]) {
-            console.warn('⚠️ 문제 데이터 로딩 중... 잠시 후 다시 시도해주세요.');
             return;
         }
 
@@ -1593,8 +1590,6 @@ function setupSocketListeners() {
                 // ✅ currentIndex 클로저 캡처
                 const questionIndexAtReveal = currentIndex;
 
-                console.log(`✅ 재접속 - 정답 공개 상태, 남은 시간: ${remainingTime / 1000}초`);
-
                 // 남은 시간 후 다음 문제로 넘어가기
                 nextQuestionTimer = setTimeout(() => {
                     window.__isRevealingAnswer = false;
@@ -1654,8 +1649,6 @@ function setupSocketListeners() {
 
             // ✅ 정답 공개 상태에서 새로운 호스트가 된 경우, 남은 시간 후 자동으로 nextQuestion 전송
             if (window.__isRevealingAnswer && currentRevealedAt && previousHost !== host) {
-                console.log('✅ 새로운 호스트로 지정됨. 정답 공개 상태이므로 타이머 재설정');
-
                 // ✅ 타이머가 이미 실행 중이면 새로 만들지 않음 (중복 방지)
                 if (!nextQuestionTimer) {
                     // 남은 시간 계산 (최대 5초)
@@ -1664,15 +1657,12 @@ function setupSocketListeners() {
                     // ✅ currentIndex 클로저 캡처
                     const questionIndexAtReveal = currentIndex;
 
-                    console.log(`⏱️ 남은 시간: ${remainingTime / 1000}초`);
-
                     // 남은 시간 후 nextQuestion 전송
                     nextQuestionTimer = setTimeout(() => {
                         window.__isRevealingAnswer = false;
                         currentRevealedAt = null;
                         nextQuestionTimer = null;
                         if (isHost()) {
-                            console.log('✅ 호스트가 nextQuestion 전송');
                             socket.emit('nextQuestion', {
                                 sessionId,
                                 userId,
@@ -1680,8 +1670,6 @@ function setupSocketListeners() {
                             });
                         }
                     }, remainingTime);
-                } else {
-                    console.log('⏭️ 타이머가 이미 실행 중이므로 새로 만들지 않음');
                 }
             }
         } else {
@@ -1748,11 +1736,8 @@ function setupSocketListeners() {
     // 모든 플레이어 준비 완료 후 문제 시작
     socket.on('question-start', ({ success, data }) => {
         if (!success) {
-            console.log('❌ question-start 실패');
             return;
         }
-
-        console.log('✅ question-start 이벤트 수신');
 
         const { questionStartAt: startAt } = data;
         questionStartAt = new Date(startAt);
@@ -1777,21 +1762,14 @@ function setupSocketListeners() {
         const remainingTime = Math.max(0, totalTimeLimit - elapsed);
         const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
 
-        console.log(`⏱️ 타이머 시작: ${remainingSeconds}초 (문제 ${currentIndex + 1})`);
-        console.log(`👑 호스트 여부: ${isHost()} (userId: ${userId}, host: ${host})`);
-
         // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {
-            console.log(`⏰ 타이머 종료! 호스트 여부: ${isHost()}`);
             if (isHost()) {
                 const actualIndex = questionOrder[currentIndex];
-                console.log(`📤 정답 공개 요청 emit (questionIndex: ${actualIndex})`);
                 socket.emit('revealAnswer', {
                     sessionId,
                     questionIndex: actualIndex
                 });
-            } else {
-                console.log('⚠️ 호스트가 아니어서 revealAnswer를 emit하지 않음');
             }
         }, remainingTime);
 

@@ -448,6 +448,33 @@ module.exports = (quizDb) => {
         }
         quiz.isComplete = true;
         await quiz.save();
+
+        // ✅ QuizRecord 미리 생성 (race condition 방지)
+        const QuizRecord = require('../models/QuizRecord')(req.app.get('quizDb'));
+        try {
+          await QuizRecord.findOneAndUpdate(
+            { quizId: quiz._id },
+            {
+              $setOnInsert: {
+                records: [],
+                totalCount: 0,
+                percentileThresholds: {
+                  top1: null,
+                  top3: null,
+                  top5: null,
+                  top10: null,
+                  top30: null,
+                  top50: null
+                }
+              }
+            },
+            { upsert: true, new: true }
+          );
+        } catch (recordErr) {
+          // QuizRecord 생성 실패해도 퀴즈 공개는 성공으로 처리
+          console.error('QuizRecord 생성 실패:', recordErr.message);
+        }
+
         res.json({ message: '퀴즈가 완료되었습니다.' });
     } catch (err) {
         res.status(500).json({ message: '퀴즈 완료 처리 실패', error: err.message });

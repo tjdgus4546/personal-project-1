@@ -80,7 +80,6 @@ module.exports = (io, app, redisClient) => {
       GameSession.findById(sessionId).then(session => {
         if (!session) {
           sessionUserCache.delete(sessionId);
-          console.log(`🧹 만료된 세션 캐시 정리: ${sessionId}`);
         }
       }).catch(err => {
         // DB 조회 실패 시 무시
@@ -306,14 +305,6 @@ module.exports = (io, app, redisClient) => {
              quizDataToSend.questions[0].answers[0].length !== 64);
 
           if (needsRegeneration) {
-            console.warn('⚠️ cachedQuizData 없음/손상 - 퀴즈 재생성:', {
-              sessionId,
-              hasCached: !!quizDataToSend,
-              hasQuestions: !!quizDataToSend?.questions,
-              questionCount: quizDataToSend?.questions?.length || 0,
-              hasAnswers: !!quizDataToSend?.questions?.[0]?.answers,
-              answerCount: quizDataToSend?.questions?.[0]?.answers?.length || 0
-            });
             const quizDb = app.get('quizDb');
             const Quiz = require('../models/Quiz')(quizDb);
             const quiz = await Quiz.findById(session.quizId);
@@ -333,12 +324,6 @@ module.exports = (io, app, redisClient) => {
                   };
                 })
               };
-
-              console.log('✅ 퀴즈 재생성 완료:', {
-                quizId: session.quizId,
-                questionCount: quizDataToSend.questions.length,
-                firstQuestionAnswers: quizDataToSend.questions[0]?.answers?.length || 0
-              });
 
               // 캐시 복원
               session.cachedQuizData = quizDataToSend;
@@ -789,7 +774,6 @@ module.exports = (io, app, redisClient) => {
 
         // 🛡️ 서버에서 정답 검증
         if (!answer) {
-          console.warn(`⚠️ 정답 값이 없음: ${userId}`);
           return;
         }
 
@@ -807,7 +791,6 @@ module.exports = (io, app, redisClient) => {
 
         // 정답이 아니면 처리 중단
         if (!isCorrect) {
-          console.log(`❌ 오답: ${player.nickname || 'Unknown'} - "${answer}"`);
           return;
         }
 
@@ -872,7 +855,6 @@ module.exports = (io, app, redisClient) => {
           { new: true }
         ).then(updateResult => {
           if (!updateResult) {
-            console.log(`⚠️ 중복 정답 시도 방지: ${displayName}`);
             return;
           }
           session = updateResult;
@@ -908,7 +890,6 @@ module.exports = (io, app, redisClient) => {
 
         // 🛡️ 서버에서 정답 검증
         if (!answer) {
-          console.warn(`⚠️ 정답 값이 없음: ${userId}`);
           return;
         }
 
@@ -926,7 +907,6 @@ module.exports = (io, app, redisClient) => {
 
         // 정답이 아니면 처리 중단
         if (!isCorrect) {
-          console.log(`❌ 객관식 오답: ${player.nickname || 'Unknown'} - "${answer}"`);
           return;
         }
 
@@ -975,7 +955,6 @@ module.exports = (io, app, redisClient) => {
           { new: true }
         ).then(updateResult => {
           if (!updateResult) {
-            console.log(`⚠️ 중복 답변 방지: ${displayName} (객관식)`);
             return;
           }
           session = updateResult;
@@ -1019,7 +998,6 @@ module.exports = (io, app, redisClient) => {
 
             // 만약 실제로는 정답인데 오답으로 속이려 하면 차단
             if (isActuallyCorrect) {
-              console.warn(`⚠️ 부정 시도: 정답을 오답으로 제출 - ${player.nickname || 'Unknown'}`);
               return;
             }
           }
@@ -1040,7 +1018,6 @@ module.exports = (io, app, redisClient) => {
         );
 
         if (!updateResult) {
-          console.log(`⚠️ 중복 답변 방지: 오답 (객관식 문제 ${qIndex})`);
           return;
         }
 
@@ -1148,13 +1125,11 @@ module.exports = (io, app, redisClient) => {
       // ✅ 문제 인덱스 검증 (지연된 요청 방지)
       const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
       if (questionIndex !== undefined && questionIndex !== actualQuestionIndex) {
-        console.log(`⚠️ revealAnswer: 이전 문제의 지연된 요청 무시 (요청: ${questionIndex}, 현재: ${actualQuestionIndex})`);
         return;
       }
 
       // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
       if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
-        console.log(`⚠️ revealAnswer: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
         session = await ensureHostExists(sessionId, io);
         if (!session) {
           console.error('❌ 호스트 재할당 실패 - revealAnswer');
@@ -1165,7 +1140,6 @@ module.exports = (io, app, redisClient) => {
       // ✅ 호스트 검증 (호스트만 정답 공개 가능)
       const userId = socket.userId;
       if (!userId || session.host.toString() !== userId.toString()) {
-        console.log(`⚠️ revealAnswer: 호스트가 아닌 사용자의 요청 무시 (사용자: ${userId}, 호스트: ${session.host})`);
         return;
       }
 
@@ -1205,7 +1179,6 @@ module.exports = (io, app, redisClient) => {
       );
 
       if (!updateResult) {
-        console.log('⚠️ 이미 정답이 공개되었거나 세션이 없음 - revealAnswer event');
         return;
       }
 
@@ -1243,13 +1216,11 @@ module.exports = (io, app, redisClient) => {
 
       // ✅ 문제 인덱스 검증 (지연된 요청 방지)
       if (questionIndex !== undefined && questionIndex !== session.currentQuestionIndex) {
-        console.log(`⚠️ nextQuestion: 이전 문제의 지연된 요청 무시 (요청: ${questionIndex}, 현재: ${session.currentQuestionIndex})`);
         return;
       }
 
       // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
       if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
-        console.log(`⚠️ nextQuestion: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
         session = await ensureHostExists(sessionId, io);
         if (!session) {
           console.error('❌ 호스트 재할당 실패 - nextQuestion');
@@ -1260,7 +1231,6 @@ module.exports = (io, app, redisClient) => {
       // ✅ 호스트 검증 (호스트만 다음 문제로 넘기기 가능)
       const userId = socket.userId;
       if (!userId || session.host.toString() !== userId.toString()) {
-        console.log(`⚠️ nextQuestion: 호스트가 아닌 사용자의 요청 무시 (사용자: ${userId}, 호스트: ${session.host})`);
         return;
       }
 
@@ -1301,7 +1271,6 @@ module.exports = (io, app, redisClient) => {
       // 호스트가 없거나 연결이 끊겼으면 새로운 호스트 할당
       const connectedPlayer = session.players.find(p => p.connected);
       if (!connectedPlayer) {
-        console.warn('⚠️ 연결된 플레이어가 없어 호스트를 할당할 수 없습니다.');
         return session;
       }
 
@@ -1314,8 +1283,6 @@ module.exports = (io, app, redisClient) => {
         console.error('❌ 호스트 재할당 중 세션 저장 실패');
         return session;
       }
-
-      console.log(`✅ 새로운 호스트 할당: ${connectedPlayer.nickname || 'Unknown'} (${newHostId})`);
 
       // 모든 클라이언트에게 호스트 변경 알림
       io.to(sessionId).emit('host-updated', {
@@ -1368,7 +1335,6 @@ module.exports = (io, app, redisClient) => {
 
         // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
         if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
-          console.log(`⚠️ revealAnswer (internal): 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
           session = await ensureHostExists(sessionId, io);
           if (!session) {
             console.error('❌ 호스트 재할당 실패 - revealAnswer (internal)');
@@ -1411,7 +1377,6 @@ module.exports = (io, app, redisClient) => {
         );
 
         if (!updateResult) {
-          console.log('⚠️ 이미 정답이 공개되었거나 세션이 없음');
           return;
         }
 
@@ -1606,7 +1571,6 @@ module.exports = (io, app, redisClient) => {
         // 세션 관련 캐시 정리 (메모리 누수 방지)
         if (sessionUserCache.has(sessionId)) {
           sessionUserCache.delete(sessionId);
-          console.log(`🧹 세션 캐시 정리: ${sessionId}`);
         }
 
         // ⚡ Redis 키 정리 (모든 문제의 첫 번째 정답자 정보 삭제)
@@ -1619,7 +1583,6 @@ module.exports = (io, app, redisClient) => {
               deletePromises.push(redisClient.del(redisKey));
             }
             await Promise.all(deletePromises);
-            console.log(`🧹 Redis 키 정리 완료: ${sessionId} (${questionCount}개 문제)`);
           } catch (redisError) {
             console.error('⚠️ Redis 키 정리 실패:', redisError);
           }
@@ -1630,8 +1593,6 @@ module.exports = (io, app, redisClient) => {
           session.quizId,
           session.players
         );
-
-        console.log('🎯 게임 종료 - 임계값:', percentileThresholds);
 
         io.to(sessionId).emit('end', {
           success: true,
@@ -1664,7 +1625,6 @@ module.exports = (io, app, redisClient) => {
       );
 
       if (!updateResult) {
-        console.log('⚠️ 이미 다음 문제로 넘어갔거나 세션이 없음 - goToNextQuestion (중복 요청 차단됨)');
         return;
       }
 
@@ -1718,7 +1678,6 @@ module.exports = (io, app, redisClient) => {
 
       // 호스트가 없거나 연결이 끊긴 경우 자동으로 새로운 호스트 할당
       if (!session.host || !session.players.find(p => p.userId.toString() === session.host.toString() && p.connected)) {
-        console.log(`⚠️ handleChoiceQuestionCompletion: 호스트가 없어 자동 재할당 시도 (세션: ${sessionId})`);
         session = await ensureHostExists(sessionId, io);
         if (!session) {
           console.error('❌ 호스트 재할당 실패 - handleChoiceQuestionCompletion');
