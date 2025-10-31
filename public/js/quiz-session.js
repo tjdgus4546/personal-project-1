@@ -1642,7 +1642,6 @@ function setupSocketListeners() {
         // ✅ 정답 공개 전이면 무조건 client-ready 전송 (재접속 시에도!)
         // 이렇게 해야 재접속 시에도 타이머가 정상적으로 시작됩니다
         else {
-            console.log(`📨 client-ready emit (재접속: ${isReconnect})`);
             socket.emit('client-ready', { sessionId });
         }
         } catch (error) {
@@ -1763,7 +1762,6 @@ function setupSocketListeners() {
         updateQuestionNumber();
 
         // 로딩 완료 알림
-        console.log(`📨 client-ready emit (문제 ${currentIndex + 1})`);
         socket.emit('client-ready', { sessionId });
     });
 
