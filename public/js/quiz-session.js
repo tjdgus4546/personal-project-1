@@ -1924,6 +1924,12 @@ function showGameEndScreen(players) {
         document.getElementById('endQuizTitle').textContent = quizData.title;
         document.getElementById('endRecommendCount').textContent = quizData.recommendationCount || 0;
 
+        // 제작자 정보 표시
+        const endCreatorNickname = document.getElementById('endCreatorNickname');
+        if (endCreatorNickname) {
+            endCreatorNickname.textContent = quizData.creatorNickname || '알 수 없음';
+        }
+
         // 추천 상태에 따라 아이콘 변경
         const endRecommendIcon = document.getElementById('endRecommendIcon');
         if (quizData.hasRecommended) {
