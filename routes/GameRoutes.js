@@ -5,9 +5,10 @@ const { ObjectId } = require('mongoose').Types;
 const jwt = require('jsonwebtoken');
 
 const authenticateToken = require('../middlewares/AuthMiddleware');
+const { optionalAuthenticateToken } = require('../middlewares/AuthMiddleware');
 
-// 세션 정보 조회
-router.get('/session/:id', authenticateToken, async (req, res) => {
+// 세션 정보 조회 (게스트 접근 허용)
+router.get('/session/:id', optionalAuthenticateToken, async (req, res) => {
   const id = req.params.id;
   if (!ObjectId.isValid(id)) {
     return res.status(400).json({ message: '잘못된 세션 ID 형식' });
@@ -24,32 +25,39 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
     if (!session) return res.status(404).json({ message: '세션 없음' });
 
     // 인가 로직: 이 사용자가 해당 세션에 참여할 권한이 있는가?
-    const isHost = session.host ? session.host.toString() === req.user.id : false;
-    const isParticipant = session.players.some(p => p.userId.toString() === req.user.id);
+    // 게스트는 세션에 이미 참여한 경우에만 접근 가능
+    if (req.user) {
+      const isHost = session.host ? session.host.toString() === req.user.id : false;
+      const isParticipant = session.players.some(p => p.userId && p.userId.toString() === req.user.id);
 
-    if (!isHost && !isParticipant) {
-      return res.status(403).json({ message: '이 세션에 접근할 권한이 없습니다.' });
+      if (!isHost && !isParticipant) {
+        return res.status(403).json({ message: '이 세션에 접근할 권한이 없습니다.' });
+      }
     }
 
     // 퀴즈 정보 가져오기 (추천 정보 포함)
     const quiz = await Quiz.findById(session.quizId).lean();
     if (!quiz) return res.status(404).json({ message: '퀴즈 없음' });
 
-    // 현재 사용자가 이 퀴즈를 추천했는지 확인 (O(1) 인덱스 검색)
+    // 현재 사용자가 이 퀴즈를 추천했는지 확인 (로그인한 경우만)
     let hasRecommended = false;
-    try {
-      const Recommendation = require('../models/Recommendation')(quizDb);
-      hasRecommended = await Recommendation.exists({
-        userId: new ObjectId(req.user.id),
-        quizId: new ObjectId(session.quizId)
-      });
-    } catch (recErr) {
-      console.error('추천 확인 중 오류 (무시하고 계속):', recErr);
-      // 에러가 나도 계속 진행 (추천 기능만 비활성화)
+    if (req.user) {
+      try {
+        const Recommendation = require('../models/Recommendation')(quizDb);
+        hasRecommended = await Recommendation.exists({
+          userId: new ObjectId(req.user.id),
+          quizId: new ObjectId(session.quizId)
+        });
+      } catch (recErr) {
+        console.error('추천 확인 중 오류 (무시하고 계속):', recErr);
+        // 에러가 나도 계속 진행 (추천 기능만 비활성화)
+      }
     }
 
-    // 각 플레이어의 최신 프로필 이미지 정보 가져오기
-    const playerIds = session.players.map(p => p.userId);
+    // 각 플레이어의 최신 프로필 이미지 정보 가져오기 (게스트 제외)
+    const playerIds = session.players
+      .filter(p => !p.isGuest && ObjectId.isValid(p.userId))
+      .map(p => p.userId);
     const users = await User.find({ _id: { $in: playerIds } }).select('_id nickname profileImage').lean();
 
     // 사용자 정보를 ID로 매핑
@@ -106,21 +114,31 @@ router.get('/session/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 세션 생성
-router.post('/start', authenticateToken, async (req, res) => {
+// 세션 생성 (게스트 접근 허용)
+router.post('/start', optionalAuthenticateToken, async (req, res) => {
   const quizDb = req.app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
   const Quiz = require('../models/Quiz')(quizDb);
 
-  const { quizId } = req.body;
-  const { id: userId } = req.user;
+  const { quizId, guestNickname } = req.body;
+
+  // 게스트 또는 로그인 사용자 구분
+  let userId = null;
+  let isGuest = false;
+
+  if (req.user) {
+    userId = req.user.id;
+  } else {
+    // 게스트: 닉네임이 없으면 401 반환 (클라이언트가 닉네임 입력 후 재시도)
+    if (!guestNickname || guestNickname.trim().length === 0) {
+      return res.status(401).json({ message: '게스트 닉네임을 입력해주세요.' });
+    }
+    userId = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    isGuest = true;
+  }
 
   if (!ObjectId.isValid(quizId)) {
-
     return res.status(400).json({ message: 'Invalid Quiz ID format.' });
-  }
-  if (!ObjectId.isValid(userId)) {
-    return res.status(400).json({ message: 'Invalid User ID format.' });
   }
 
   try {
@@ -143,7 +161,9 @@ router.post('/start', authenticateToken, async (req, res) => {
         session = await GameSession.create({
           quizId,
           players: [{
-            userId,
+            userId: isGuest ? userId : new ObjectId(userId),
+            nickname: isGuest ? guestNickname : null,
+            isGuest: isGuest,
             score: 0,
             answered: {},
             connected: true,
@@ -156,7 +176,7 @@ router.post('/start', authenticateToken, async (req, res) => {
           currentQuestionIndex: 0,
           inviteCode,
           isStarted: false,
-          host: userId,
+          host: isGuest ? userId : new ObjectId(userId),
         });
 
         // 성공 시 루프 탈출
@@ -182,6 +202,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       message: 'Game session created successfully',
       sessionId: session._id,
       inviteCode,
+      guestId: isGuest ? userId : null,
     });
   } catch (err) {
     console.error('Failed to create game session:', err);
@@ -189,12 +210,26 @@ router.post('/start', authenticateToken, async (req, res) => {
   }
 });
 
-// 세션 참여 라우트
-router.post('/join', authenticateToken, async (req, res) => {
-  const { inviteCode } = req.body;
-  const { id: userId } = req.user;
+// 세션 참여 라우트 (게스트 접근 허용)
+router.post('/join', optionalAuthenticateToken, async (req, res) => {
+  const { inviteCode, guestNickname } = req.body;
   const quizDb = req.app.get('quizDb');
   const GameSession = require('../models/GameSession')(quizDb);
+
+  // 게스트 또는 로그인 사용자 구분
+  let userId = null;
+  let isGuest = false;
+
+  if (req.user) {
+    userId = req.user.id;
+  } else {
+    // 게스트: 닉네임이 없으면 401 반환 (클라이언트가 닉네임 입력 후 재시도)
+    if (!guestNickname || guestNickname.trim().length === 0) {
+      return res.status(401).json({ message: '게스트 닉네임을 입력해주세요.' });
+    }
+    userId = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    isGuest = true;
+  }
 
   if (!inviteCode) {
     return res.status(400).json({ message: '초대 코드를 입력해주세요.' });
@@ -206,25 +241,32 @@ router.post('/join', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: '유효하지 않은 초대 코드입니다.' });
     }
 
-    const existingPlayer = session.players.find(player => player.userId.toString() === userId);
+    const existingPlayer = session.players.find(player => {
+      const playerUserId = player.userId ? player.userId.toString() : player.userId;
+      return playerUserId === userId.toString();
+    });
+
     if (existingPlayer) {
       // 이미 참여한 플레이어면 상태만 업데이트 (재연결)
       existingPlayer.connected = true;
       existingPlayer.lastSeen = new Date();
       existingPlayer.socketId = null; // Socket ID는 나중에 업데이트됨
-      
+
       await session.save();
-      
-      return res.status(200).json({ 
-        message: '세션에 다시 참여했습니다.', 
+
+      return res.status(200).json({
+        message: '세션에 다시 참여했습니다.',
         sessionId: session._id,
-        reconnected: true
+        reconnected: true,
+        guestId: isGuest ? userId : null
       });
     }
 
     // 새 플레이어 추가
     session.players.push({
-      userId,
+      userId: isGuest ? userId : new ObjectId(userId),
+      nickname: isGuest ? guestNickname : null,
+      isGuest: isGuest,
       score: 0,
       answered: {},
       connected: true, // 초기 연결 상태
@@ -234,9 +276,10 @@ router.post('/join', authenticateToken, async (req, res) => {
 
     await session.save();
 
-    res.status(200).json({ 
-      message: '세션에 성공적으로 참여했습니다.', 
-      sessionId: session._id 
+    res.status(200).json({
+      message: '세션에 성공적으로 참여했습니다.',
+      sessionId: session._id,
+      guestId: isGuest ? userId : null
     });
 
   } catch (err) {

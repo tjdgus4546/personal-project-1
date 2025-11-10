@@ -239,7 +239,7 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/api', apiLimiter, commentRoutes); // 댓글 라우트 (GET은 인증 불필요, POST는 인증 필요)
   app.use('/api', contactRoutes); // 문의하기 (자체 Rate Limiter 사용)
   app.use('/api/s3', apiLimiter, authenticateToken, s3Routes); // S3 Presigned URL (인증 필요)
-  app.use('/game', apiLimiter, authenticateToken, gameRoutes);
+  app.use('/game', apiLimiter, gameRoutes); // 인증은 각 라우트에서 개별 처리 (게스트 지원)
   app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
   app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)
 

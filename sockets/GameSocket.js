@@ -123,17 +123,31 @@ module.exports = (io, app, redisClient) => {
 
   io.use(cookieParser());
 
+  // 선택적 인증 미들웨어 (게스트 접근 허용)
   io.use(async (socket, next) => {
     try {
       const token = socket.request.cookies.accessToken;
 
       if (!token) {
-        console.warn('Socket.IO: No access token found in cookies.');
-        return next(new Error('Authentication error: No token provided.'));
+        // 게스트: 토큰 없으면 handshake query에서 guestId 확인
+        const guestId = socket.handshake.query.guestId;
+        const guestNickname = socket.handshake.query.guestNickname;
+
+        if (guestId && guestNickname) {
+          socket.userId = guestId;
+          socket.guestNickname = guestNickname;
+          socket.isGuest = true;
+          return next();
+        }
+
+        console.warn('Socket.IO: No authentication provided (neither token nor guestId).');
+        return next(new Error('Authentication error: No credentials provided.'));
       }
 
+      // 로그인 사용자: 토큰 검증
       const decoded = jwt.verify(token, JWT_SECRET);
       socket.userId = decoded.id;
+      socket.isGuest = false;
       next();
     } catch (err) {
       console.error('Socket.IO: JWT verification failed:', err.message);
@@ -178,25 +192,39 @@ module.exports = (io, app, redisClient) => {
           return;
         }
 
-        // ⚡ 캐시 먼저 확인, 없으면 DB 조회
-        let userInfo = sessionUserCache.get(sessionId)?.get(socket.userId);
+        // ⚡ 게스트 또는 로그인 사용자 구분
+        let userInfo;
 
-        if (!userInfo) {
-          const user = await User.findById(userId).select('nickname profileImage');
+        if (socket.isGuest) {
+          // 게스트: handshake에서 닉네임 가져오기
           userInfo = {
-            nickname: user?.nickname || null,
-            profileImage: user?.profileImage || null
+            nickname: socket.guestNickname,
+            profileImage: null
           };
+        } else {
+          // 로그인 사용자: 캐시 먼저 확인, 없으면 DB 조회
+          userInfo = sessionUserCache.get(sessionId)?.get(socket.userId);
 
-          if (!sessionUserCache.has(sessionId)) {
-            sessionUserCache.set(sessionId, new Map());
+          if (!userInfo) {
+            const user = await User.findById(userId).select('nickname profileImage');
+            userInfo = {
+              nickname: user?.nickname || null,
+              profileImage: user?.profileImage || null
+            };
+
+            if (!sessionUserCache.has(sessionId)) {
+              sessionUserCache.set(sessionId, new Map());
+            }
+            sessionUserCache.get(sessionId).set(socket.userId, userInfo);
           }
-          sessionUserCache.get(sessionId).set(socket.userId, userInfo);
         }
 
 
         let updated = false;
-        let player = session.players.find(p => p.userId.toString() === userId.toString());
+        let player = session.players.find(p => {
+          const playerUserId = p.userId ? p.userId.toString() : p.userId;
+          return playerUserId === userId.toString();
+        });
 
         if (!player) {
           // 신규 플레이어 추가
@@ -289,8 +317,8 @@ module.exports = (io, app, redisClient) => {
           creatorNickname = creator?.nickname || '알 수 없음';
         }
 
-        // 현재 사용자가 추천했는지 확인
-        const hasRecommended = quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false;
+        // 현재 사용자가 추천했는지 확인 (로그인한 경우만)
+        const hasRecommended = socket.isGuest ? false : (quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false);
 
         const joinSuccessData = {
           success: true,
@@ -702,7 +730,10 @@ module.exports = (io, app, redisClient) => {
             return;
         }
 
-        await addPlayedQuizzes(quiz._id, socket.userId, app);
+        // 게스트가 아닌 경우만 플레이 기록 저장 (게스트는 User DB에 없음)
+        if (!socket.isGuest) {
+          await addPlayedQuizzes(quiz._id, socket.userId, app);
+        }
 
         // 문제 데이터만 전송 (타이머는 아직 시작하지 않음)
         io.to(sessionId).emit('game-started', {
@@ -864,13 +895,13 @@ module.exports = (io, app, redisClient) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        // ⚡ Redis로 첫 번째 정답자 판정
+        // ⚡ Redis로 첫 번째 정답자 판정 (userId 사용)
         const redisKey = `first:${sessionId}:${qIndex}`;
         let isFirstCorrectUser = false;
 
         try {
           // SET NX: key가 없을 때만 설정 (원자적 연산!)
-          const result = await redisClient.set(redisKey, displayName, {
+          const result = await redisClient.set(redisKey, userId, {
             NX: true,  // key가 없을 때만 설정
             EX: 3600   // 1시간 후 자동 삭제
           });
@@ -901,7 +932,7 @@ module.exports = (io, app, redisClient) => {
           }
         });
 
-        // DB 업데이트 (백그라운드)
+        // DB 업데이트 (백그라운드) - correctUsers에 userId 저장
         GameSession.findOneAndUpdate(
           {
             _id: sessionId,
@@ -917,7 +948,7 @@ module.exports = (io, app, redisClient) => {
               [`players.${playerIndex}.correctAnswersCount`]: 1
             },
             $push: {
-              [`correctUsers.${qIndex}`]: displayName
+              [`correctUsers.${qIndex}`]: userId  // userId 저장 (닉네임 대신)
             }
           },
           { new: true }
@@ -980,13 +1011,13 @@ module.exports = (io, app, redisClient) => {
 
         const displayName = player.nickname || 'Unknown';
 
-        // ⚡ Redis로 첫 번째 정답자 판정
+        // ⚡ Redis로 첫 번째 정답자 판정 (userId 사용)
         const redisKey = `first:${sessionId}:${qIndex}`;
         let isFirstCorrectUser = false;
 
         try {
           // SET NX: key가 없을 때만 설정 (원자적 연산!)
-          const result = await redisClient.set(redisKey, displayName, {
+          const result = await redisClient.set(redisKey, userId, {
             NX: true,  // key가 없을 때만 설정
             EX: 3600   // 1시간 후 자동 삭제
           });
@@ -1002,7 +1033,7 @@ module.exports = (io, app, redisClient) => {
 
         const scoreIncrement = isFirstCorrectUser ? 2 : 1;
 
-        // DB 업데이트 (백그라운드)
+        // DB 업데이트 (백그라운드) - choiceQuestionCorrectUsers에 userId 저장
         GameSession.findOneAndUpdate(
           {
             _id: sessionId,
@@ -1017,7 +1048,7 @@ module.exports = (io, app, redisClient) => {
               [`players.${playerIndex}.correctAnswersCount`]: 1
             },
             $push: {
-              [`choiceQuestionCorrectUsers.${qIndex}`]: displayName
+              [`choiceQuestionCorrectUsers.${qIndex}`]: userId  // userId 저장 (닉네임 대신)
             }
           },
           { new: true }
@@ -1107,10 +1138,10 @@ module.exports = (io, app, redisClient) => {
 
       const userId = socket.userId;
       const player = session.players.find(p => p.userId.toString() === userId.toString());
-      const displayName = player?.nickname || 'Unknown';
 
-      if (!session.skipVotes.includes(displayName)) {
-        session.skipVotes.push(displayName);
+      // userId로 중복 체크 (닉네임 대신)
+      if (!session.skipVotes.includes(userId)) {
+        session.skipVotes.push(userId);
         const success = await safeSaveSession(session);
           if (!success) {
             console.error('❌ 세션 저장 중 에러 발생 - voteSkip');
@@ -1253,8 +1284,14 @@ module.exports = (io, app, redisClient) => {
 
       session = updateResult;
 
-      // 현재 문제의 정답자 목록 가져오기
-      const correctUsers = session.correctUsers?.[qIndex] || [];
+      // 현재 문제의 정답자 목록 가져오기 (userId 배열)
+      const correctUserIds = session.correctUsers?.[qIndex] || [];
+
+      // userId를 nickname으로 변환
+      const correctUsers = correctUserIds.map(uid => {
+        const player = session.players.find(p => p.userId.toString() === uid.toString());
+        return player?.nickname || 'Unknown';
+      });
 
       // 모든 참가자에게 정답 전송
       io.to(sessionId).emit('revealAnswer_Emit', {
@@ -1372,6 +1409,17 @@ module.exports = (io, app, redisClient) => {
     try {
       if (!quizId || !userId) return;
 
+      // 게스트 사용자는 User DB에 없으므로 건너뛰기
+      if (typeof userId === 'string' && userId.startsWith('guest_')) {
+        return;
+      }
+
+      // ObjectId 유효성 검증
+      if (!ObjectId.isValid(userId)) {
+        console.warn('⚠️ 유효하지 않은 userId 형식:', userId);
+        return;
+      }
+
       const User = require('../models/User')(userDb);
 
       // 최적화: $addToSet는 이미 중복을 방지하므로 별도 체크 불필요
@@ -1451,8 +1499,14 @@ module.exports = (io, app, redisClient) => {
 
         session = updateResult;
 
-        // 현재 문제의 정답자 목록 가져오기
-        const correctUsers = session.correctUsers?.[qIndex] || [];
+        // 현재 문제의 정답자 목록 가져오기 (userId 배열)
+        const correctUserIds = session.correctUsers?.[qIndex] || [];
+
+        // userId를 nickname으로 변환
+        const correctUsers = correctUserIds.map(uid => {
+          const player = session.players.find(p => p.userId.toString() === uid.toString());
+          return player?.nickname || 'Unknown';
+        });
 
         io.to(sessionId).emit('revealAnswer_Emit', {
           success: true,
@@ -1476,8 +1530,13 @@ module.exports = (io, app, redisClient) => {
   // 퀴즈 기록 저장 및 퍼센타일 임계값 계산
   async function saveQuizRecordsAndCalculateThresholds(quizId, players) {
     try {
-      // 1. playedQuizzes에 해당 퀴즈가 없는 플레이어만 필터링
-      const userIds = players.map(p => p.userId);
+      // 1. 게스트가 아닌 플레이어만 필터링 (게스트는 User DB에 없음)
+      const registeredPlayers = players.filter(p => {
+        const uid = p.userId.toString();
+        return !uid.startsWith('guest_') && ObjectId.isValid(uid);
+      });
+
+      const userIds = registeredPlayers.map(p => p.userId);
       const users = await User.find({ _id: { $in: userIds } }).select('_id playedQuizzes').lean();
 
       const userPlayedQuizzesMap = new Map();
@@ -1486,8 +1545,8 @@ module.exports = (io, app, redisClient) => {
         userPlayedQuizzesMap.set(user._id.toString(), playedQuizIds);
       });
 
-      // playedQuizzes에 없는 플레이어만 필터링
-      const newPlayers = players.filter(player => {
+      // playedQuizzes에 없는 플레이어만 필터링 (registeredPlayers에서만)
+      const newPlayers = registeredPlayers.filter(player => {
         const playedQuizzes = userPlayedQuizzesMap.get(player.userId.toString()) || [];
         return !playedQuizzes.includes(quizId.toString());
       });
@@ -1790,7 +1849,13 @@ module.exports = (io, app, redisClient) => {
       }
 
       if (shouldComplete) {
-        const correctDisplayNames = session.choiceQuestionCorrectUsers[qIndex] || [];
+        const correctUserIds = session.choiceQuestionCorrectUsers[qIndex] || [];
+
+        // userId를 nickname으로 변환
+        const correctUsers = correctUserIds.map(uid => {
+          const player = session.players.find(p => p.userId.toString() === uid.toString());
+          return player?.nickname || 'Unknown';
+        });
 
         // ✅ 점수는 이미 정답 제출 시 즉시 증가시켰으므로 여기서는 계산하지 않음
         // (이전에는 forEach로 점수를 계산했지만, race condition 때문에 즉시 처리로 변경)
@@ -1817,7 +1882,7 @@ module.exports = (io, app, redisClient) => {
             answerImage: question.answerImageBase64,
             index: actualIndex,
             revealedAt,
-            correctUsers: correctDisplayNames
+            correctUsers: correctUsers
           }
         });
 

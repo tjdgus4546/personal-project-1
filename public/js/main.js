@@ -3,6 +3,12 @@
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { renderFooter } from './footer.js';
 import { renderMobileAd } from './mobile-ad.js';
+import {
+  getGuestNickname,
+  setGuestNickname,
+  setGuestId,
+  showNicknameModal
+} from './guestNicknameHelper.js';
 
 let allQuizzes = [];
 let currentPage = 1;
@@ -55,21 +61,22 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// 초대 코드로 게임 참여
+// 초대 코드로 게임 참여 (게스트 지원)
 async function joinByInvite() {
     // 데스크톱과 모바일 양쪽에서 값 가져오기
     const desktopInput = document.getElementById('inviteInput');
     const mobileInput = document.getElementById('inviteInputMobile');
-    
+
     const code = (desktopInput?.value || mobileInput?.value || '').trim();
-    
+
     if (!code) {
         alert('초대 코드를 입력하세요');
         return;
     }
 
     try {
-        const response = await fetch('/game/join', {
+        // 먼저 로그인 사용자로 시도
+        let response = await fetch('/game/join', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -79,9 +86,39 @@ async function joinByInvite() {
             credentials: 'include'
         });
 
+        // 401 에러: 게스트로 처리
+        if (response.status === 401) {
+            // 게스트 닉네임 가져오기 또는 입력 받기
+            let guestNickname = getGuestNickname();
+
+            if (!guestNickname) {
+                guestNickname = await showNicknameModal();
+                setGuestNickname(guestNickname);
+            }
+
+            // 게스트로 참여 재시도
+            response = await fetch('/game/join', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-requested-with': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    inviteCode: code,
+                    guestNickname: guestNickname
+                }),
+                credentials: 'include'
+            });
+        }
+
         const result = await response.json();
 
         if (response.ok) {
+            // 게스트 ID 저장 (게스트인 경우)
+            if (result.guestId) {
+                setGuestId(result.guestId);
+            }
+
             window.location.href = `/quiz/${result.sessionId}`;
         } else {
             console.error('게임 참여 실패:', result.message);
@@ -349,18 +386,12 @@ function renderQuizList(quizzes) {
 function updatePageUI(user) {
     const desktopInviteSection = document.getElementById('inviteSection');
     const mobileInviteSection = document.getElementById('inviteSectionMobile');
-    
+
     loadQuizList();
 
-    if (user) {
-        // 로그인 상태
-        if (desktopInviteSection) desktopInviteSection.classList.remove('hidden');
-        if (mobileInviteSection) mobileInviteSection.classList.remove('hidden');
-    } else { 
-        // 비로그인 상태
-        if (desktopInviteSection) desktopInviteSection.classList.add('hidden');
-        if (mobileInviteSection) mobileInviteSection.classList.add('hidden');
-    }
+    // 로그인 여부와 관계없이 초대 코드 입력란은 항상 표시 (게스트도 참여 가능)
+    if (desktopInviteSection) desktopInviteSection.classList.remove('hidden');
+    if (mobileInviteSection) mobileInviteSection.classList.remove('hidden');
 }
 
 // 이벤트 리스너 설정
@@ -577,7 +608,7 @@ function closeQuizModal(updateURL = true) {
     }
 }
 
-// 게임 세션 생성
+// 게임 세션 생성 (게스트 지원)
 async function createGameSession() {
     if (!currentQuizId) {
         alert('퀴즈 정보를 찾을 수 없습니다.');
@@ -591,7 +622,8 @@ async function createGameSession() {
     createBtn.disabled = true;
 
     try {
-        const response = await fetch('/game/start', {
+        // 먼저 로그인 사용자로 시도
+        let response = await fetch('/game/start', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -600,16 +632,64 @@ async function createGameSession() {
             credentials: 'include'
         });
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                alert('로그인이 필요합니다.');
-                window.location.href = '/login';
-                return;
+        // 401 에러: 게스트로 처리
+        if (response.status === 401) {
+            // 게스트 닉네임 가져오기 또는 입력 받기
+            let guestNickname = getGuestNickname();
+
+            if (!guestNickname) {
+                // ✅ currentQuizId를 임시 변수에 저장 (closeQuizModal이 null로 초기화하기 때문)
+                const savedQuizId = currentQuizId;
+
+                // 로딩 상태 해제
+                createBtn.innerHTML = originalText;
+                createBtn.disabled = false;
+
+                // 게임 상세보기 모달 먼저 닫기 (스타일 충돌 방지)
+                closeQuizModal();
+
+                guestNickname = await showNicknameModal();
+                setGuestNickname(guestNickname);
+
+                // ✅ currentQuizId 복구
+                currentQuizId = savedQuizId;
+
+                // 다시 로딩 상태로 (하지만 모달이 닫혀있으므로 의미없음, 직접 진행)
+                // createBtn.innerHTML = '세션 생성 중...';
+                // createBtn.disabled = true;
             }
-            throw new Error('게임 세션 생성에 실패했습니다.');
+
+            // 게스트로 세션 생성 재시도
+            response = await fetch('/game/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    quizId: currentQuizId,
+                    guestNickname: guestNickname
+                }),
+                credentials: 'include'
+            });
+        }
+
+        if (!response.ok) {
+            // 서버 에러 응답 상세 로깅
+            const errorData = await response.json().catch(() => ({}));
+            console.error('서버 응답 에러:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData: errorData
+            });
+            throw new Error(errorData.message || '게임 세션 생성에 실패했습니다.');
         }
 
         const data = await response.json();
+
+        // 게스트 ID 저장 (게스트인 경우)
+        if (data.guestId) {
+            setGuestId(data.guestId);
+        }
 
         if (data.sessionId) {
             closeQuizModal();
@@ -620,7 +700,7 @@ async function createGameSession() {
 
     } catch (error) {
         console.error('게임 세션 생성 실패:', error);
-        alert('게임 세션을 생성하는 중 오류가 발생했습니다.');
+        alert(error.message || '게임 세션을 생성하는 중 오류가 발생했습니다.');
     } finally {
         createBtn.innerHTML = originalText;
         createBtn.disabled = false;

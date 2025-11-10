@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const playerSchema = new Schema({
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  userId: { type: Schema.Types.Mixed, required: true }, // ObjectId 또는 String (게스트)
+  isGuest: { type: Boolean, default: false }, // 게스트 여부
   username: String,
   nickname: { type: String, default: null },
   profileImage: { type: String, default: null },
@@ -28,7 +29,7 @@ const gameSessionSchema = new Schema({
   isActive: { type: Boolean, default: true },
   inviteCode: { type: String, unique: true },
   isStarted: { type: Boolean, default: false },
-  host: { type: Schema.Types.ObjectId, ref: 'User' },
+  host: { type: Schema.Types.Mixed }, // ObjectId 또는 String (게스트)
   skipVotes: {type: [String], default: []},
   endedAt: { type: Date, default: null, },
   questionOrder: { type: [Number], default: [] },

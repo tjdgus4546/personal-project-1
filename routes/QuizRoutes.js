@@ -6,6 +6,7 @@ const path = require('path');
 
 // JWT 인증 미들웨어 (GameRoutes.js와 중복되므로, 별도 파일로 분리하는 것을 권장합니다)
 const authenticateToken = require('../middlewares/AuthMiddleware');
+const { optionalAuthenticateToken } = require('../middlewares/AuthMiddleware');
 
 router.get('/quiz/my-list', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/quiz-my-list.html'))
@@ -50,10 +51,9 @@ router.get('/quiz/session-expired', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/session-expired.html'));
 });
 
-// 퀴즈 세션 페이지 라우트
-router.get('/quiz/:sessionId', authenticateToken, async (req, res) => {
+// 퀴즈 세션 페이지 라우트 (게스트 지원)
+router.get('/quiz/:sessionId', optionalAuthenticateToken, async (req, res) => {
   const { sessionId } = req.params;
-  const { id: userId } = req.user;
 
   if (!ObjectId.isValid(sessionId)) {
     return res.status(400).send('Invalid session ID format');
@@ -70,17 +70,20 @@ router.get('/quiz/:sessionId', authenticateToken, async (req, res) => {
       return res.redirect('/quiz/session-expired');
     }
 
-    // 인가 로직: 사용자가 이 세션의 호스트이거나 참여자인지 확인
-    const isHost = session.host && session.host.toString() === userId;
-    const isParticipant = session.players.some(p => p.userId && p.userId.toString() === userId);
+    // 로그인한 사용자인 경우 권한 확인
+    if (req.user) {
+      const userId = req.user.id;
+      const isHost = session.host && session.host.toString() === userId;
+      const isParticipant = session.players.some(p => p.userId && p.userId.toString() === userId);
 
-    if (isHost || isParticipant) {
-      // 허가된 사용자: 퀴즈 세션 페이지를 보냄
-      res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
-    } else {
-      // 허가되지 않은 사용자: 에러 메시지 또는 메인 페이지로 리디렉션
-      res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>초대코드로 게임에 입장하시길 바랍니다. <a href="/">홈으로 돌아가기</a></p>');
+      if (!isHost && !isParticipant) {
+        return res.status(403).send('<h1>접근 권한이 없습니다.</h1><p>초대코드로 게임에 입장하시길 바랍니다. <a href="/">홈으로 돌아가기</a></p>');
+      }
     }
+    // 게스트는 세션 참여 여부를 WebSocket 연결 시 확인
+
+    // 퀴즈 세션 페이지를 보냄
+    res.sendFile(path.join(__dirname, '../public/quiz-session.html'));
   } catch (err) {
     console.error('Error authorizing session access:', err);
     res.status(500).send('Server error while checking session access.');

@@ -198,5 +198,20 @@ const authenticateToken = async (req, res, next) => {
   next();
 };
 
+// 선택적 JWT 인증 미들웨어 (게스트 접근 허용)
+const optionalAuthenticateToken = async (req, res, next) => {
+  const result = await verifyAndRefreshToken(req, res);
+
+  if (result.success) {
+    req.user = result.user;
+  } else {
+    // 인증 실패 시에도 계속 진행 (게스트로 처리)
+    req.user = null;
+  }
+
+  next();
+};
+
 module.exports = authenticateToken;
+module.exports.optionalAuthenticateToken = optionalAuthenticateToken;
 module.exports.verifyAndRefreshToken = verifyAndRefreshToken;

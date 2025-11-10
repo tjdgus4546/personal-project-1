@@ -2,6 +2,13 @@
 
 import { renderNavbar, getUserData, highlightCurrentPage } from './navbar.js';
 import { initializeComments } from './quiz-comments.js';
+import {
+  getGuestNickname,
+  setGuestNickname,
+  getGuestId,
+  setGuestId,
+  showNicknameModal
+} from './guestNicknameHelper.js';
 
 // 전역 변수들
 let currentSendFunction = sendMessage;
@@ -25,19 +32,19 @@ let globalYoutubeVolume = 50;
 let questionOrder = [];
 let correctUsersThisQuestion = new Set(); // 현재 문제에서 정답 맞춘 사용자 닉네임
 
-// Socket.IO 연결 (안정성 개선)
-const socket = io({
-  withCredentials: true,
-  transports: ['websocket', 'polling'],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000
-});
 const sessionId = window.location.pathname.split('/').pop();
 let userId = null;
+let isGuest = false;
+let guestNickname = null;
+
+// Socket.IO 연결은 나중에 초기화 (게스트/로그인 사용자 구분 후)
+let socket = null;
 
 // ========== 🛡️ 소켓 이벤트 보호 (콘솔 직접 호출 차단) ==========
-(function() {
+// Socket 초기화 후 호출되어야 함
+function protectSocketEvents() {
+  if (!socket) return;
+
   const protectedEvents = ['correct', 'choiceQuestionCorrect', 'choiceQuestionIncorrect'];
   const originalEmit = socket.emit.bind(socket);
   const internalToken = Symbol('internal'); // 외부에서 접근 불가
@@ -60,7 +67,7 @@ let userId = null;
   window.__protectedEmit = function(event, data) {
     return originalEmit(event, data, internalToken);
   };
-})();
+}
 
 // 🛡️ 정답 해시화 함수 (서버와 동일한 방식)
 function hashAnswer(answer) {
@@ -69,7 +76,7 @@ function hashAnswer(answer) {
   return CryptoJS.SHA256(normalized).toString();
 }
 
-// 인증 확인 함수
+// 인증 확인 함수 (게스트도 허용)
 async function fetchWithAuth(url, options = {}) {
     options.credentials = 'include';
     let response = await fetch(url, options);
@@ -83,31 +90,94 @@ async function fetchWithAuth(url, options = {}) {
         if (refreshResponse.ok) {
             response = await fetch(url, options);
         } else {
-            window.location.href = '/login';
-            return;
+            // 게스트는 로그인 페이지로 리다이렉트하지 않음
+            // 401 응답을 그대로 반환
         }
     }
     return response;
 }
 
-// 사용자 정보 가져오기 및 소켓 연결
+// 사용자 정보 가져오기 및 소켓 연결 (게스트 지원)
 async function initializeUser() {
     try {
         const response = await fetchWithAuth('/my-info');
-        if (!response.ok) {
-            throw new Error('Failed to fetch user info');
-        }
-        const userData = await response.json();
-        userId = userData._id;
 
-        // userId 설정 완료 후 joinSession
-        if (socket.connected) {
-            socket.emit('joinSession', { sessionId });
+        if (response && response.ok) {
+            // 로그인한 사용자
+            const userData = await response.json();
+            userId = userData._id;
+            isGuest = false;
+
+            // Socket.IO 연결 (로그인 사용자)
+            socket = io({
+              withCredentials: true,
+              transports: ['websocket', 'polling'],
+              reconnection: true,
+              reconnectionAttempts: 5,
+              reconnectionDelay: 1000
+            });
+
+            setupSocketListeners();
+            protectSocketEvents();
+
+            // userId 설정 완료 후 joinSession
+            if (socket.connected) {
+                socket.emit('joinSession', { sessionId });
+            }
+        } else {
+            // 게스트 사용자
+            await initializeGuest();
         }
-        // connect 이벤트는 setupSocketListeners에서 처리됨
     } catch (error) {
         console.error('Error fetching user info:', error);
-        window.location.href = '/login';
+        // 에러 발생 시 게스트로 처리
+        await initializeGuest();
+    }
+}
+
+// 게스트 사용자 초기화
+async function initializeGuest() {
+    isGuest = true;
+
+    // 로컬스토리지에서 닉네임 가져오기
+    let savedNickname = getGuestNickname();
+    let savedGuestId = getGuestId();
+
+    // 닉네임이 없으면 모달 표시
+    if (!savedNickname) {
+        savedNickname = await showNicknameModal();
+        setGuestNickname(savedNickname);
+    }
+
+    guestNickname = savedNickname;
+
+    // 게스트 ID가 없으면 생성
+    if (!savedGuestId) {
+        savedGuestId = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        setGuestId(savedGuestId);
+    }
+
+    userId = savedGuestId;
+
+    // Socket.IO 연결 (게스트)
+    socket = io({
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      query: {
+        guestId: userId,
+        guestNickname: guestNickname
+      }
+    });
+
+    setupSocketListeners();
+    protectSocketEvents();
+
+    // userId 설정 완료 후 joinSession
+    if (socket.connected) {
+        socket.emit('joinSession', { sessionId });
     }
 }
 
@@ -2026,8 +2096,6 @@ function renderFinalRanking(players) {
 // 페이지 초기화
 async function initializePage() {
     try {
-        // Socket 이벤트 리스너 먼저 설정 (이벤트를 놓치지 않도록)
-        setupSocketListeners();
         setupEventListeners();
 
         window.addEventListener('beforeunload', () => {
@@ -2045,25 +2113,15 @@ async function initializePage() {
         });
 
         // 병렬로 실행하여 로딩 시간 단축
-        const [user] = await Promise.all([
-            renderNavbar(),
-            // 다른 독립적인 작업들도 여기에 추가 가능
-        ]);
-
+        await renderNavbar();
         highlightCurrentPage();
 
-        // 로그인 체크
-        if (!user) {
-            window.location.href = '/login?message=' + encodeURIComponent('로그인이 필요합니다.');
-            return;
-        }
-
-        // 사용자 정보 초기화 (userId 설정 후 joinSession 전송)
+        // 사용자 정보 초기화 (로그인 또는 게스트)
         await initializeUser();
 
         // 채팅 기록 로딩 기능 제거됨 - 새로고침 시 채팅 초기화
-        
-        
+
+
     } catch (error) {
         console.error('페이지 초기화 실패:', error);
         alert('페이지 초기화 중 오류가 발생했습니다.');
