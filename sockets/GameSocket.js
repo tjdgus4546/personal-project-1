@@ -201,6 +201,12 @@ module.exports = (io, app, redisClient) => {
             nickname: socket.guestNickname,
             profileImage: null
           };
+
+          // 게스트도 캐시에 저장 (일반 채팅에서 사용)
+          if (!sessionUserCache.has(sessionId)) {
+            sessionUserCache.set(sessionId, new Map());
+          }
+          sessionUserCache.get(sessionId).set(socket.userId, userInfo);
         } else {
           // 로그인 사용자: 캐시 먼저 확인, 없으면 DB 조회
           userInfo = sessionUserCache.get(sessionId)?.get(socket.userId);
