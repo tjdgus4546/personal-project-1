@@ -343,11 +343,7 @@ async function loadSessionData() {
             showQuizInfoSection();
         }
 
-        // 댓글 모듈 초기화 (퀴즈 ID와 사용자 정보 전달)
-        const user = await getUserData();
-        if (data.quiz && data.quiz._id && user) {
-            initializeComments(data.quiz._id, user);
-        }
+        // 댓글 초기화는 join-success 이벤트에서 처리됨 (중복 방지)
 
     } catch (err) {
         console.error('세션 로딩 실패:', err);
@@ -1559,6 +1555,14 @@ function setupSocketListeners() {
         if (creatorSection && creatorNickname && data.quiz.creatorNickname) {
             creatorNickname.textContent = data.quiz.creatorNickname;
             creatorSection.classList.remove('hidden');
+        }
+
+        // 댓글 모듈 초기화 (퀴즈 ID와 사용자 정보 전달)
+        if (data.quiz && data.quiz._id) {
+            console.log('🔄 join-success에서 댓글 초기화:', data.quiz._id);
+            getUserData().then(user => {
+                initializeComments(data.quiz._id, user);
+            });
         }
 
         // 로딩 완료 플래그

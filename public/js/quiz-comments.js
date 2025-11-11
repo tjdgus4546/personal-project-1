@@ -5,6 +5,7 @@ let currentUser = null;
 let currentPage = 1;
 let totalPages = 1;
 let isLoading = false;
+let isInitialized = false; // 초기화 여부 플래그
 
 /**
  * 댓글 모듈 초기화
@@ -12,15 +13,32 @@ let isLoading = false;
  * @param {object} user - 현재 로그인한 사용자 정보
  */
 export function initializeComments(quizId, user) {
+  // 이미 초기화되었으면 quizId와 user만 업데이트하고 리턴
+  if (isInitialized) {
+    console.log('⚠️ 이미 초기화됨, quizId와 user만 업데이트');
+    currentQuizId = quizId;
+    currentUser = user;
+    return;
+  }
+
+  console.log('✅ initializeComments 호출 (첫 초기화):', { quizId, user });
   currentQuizId = quizId;
   currentUser = user;
+  isInitialized = true;
 
-  // 댓글 입력 이벤트 리스너 등록
-  const commentForm = document.getElementById('commentForm');
-  const commentInput = document.getElementById('commentInput');
-  const submitCommentBtn = document.getElementById('submitCommentBtn');
+  // DOM이 준비될 때까지 대기 후 초기화
+  const initializeDOM = () => {
+    // 댓글 입력 이벤트 리스너 등록
+    const commentForm = document.getElementById('commentForm');
+    const commentInput = document.getElementById('commentInput');
+    const submitCommentBtn = document.getElementById('submitCommentBtn');
 
-  if (commentForm && commentInput && submitCommentBtn) {
+    // DOM이 아직 준비되지 않았으면 100ms 후 재시도
+    if (!commentForm || !commentInput || !submitCommentBtn) {
+      setTimeout(initializeDOM, 100);
+      return;
+    }
+
     // 폼 제출 이벤트
     commentForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -32,87 +50,110 @@ export function initializeComments(quizId, user) {
       const content = commentInput.value.trim();
       submitCommentBtn.disabled = content.length === 0;
     });
-  }
 
-  // 페이지네이션 버튼 이벤트 리스너
-  const prevBtn = document.getElementById('prevCommentsBtn');
-  const nextBtn = document.getElementById('nextCommentsBtn');
+    // 페이지네이션 버튼 이벤트 리스너
+    const prevBtn = document.getElementById('prevCommentsBtn');
+    const nextBtn = document.getElementById('nextCommentsBtn');
 
-  if (prevBtn) {
-    prevBtn.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        loadComments();
-      }
-    });
-  }
-
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      if (currentPage < totalPages) {
-        currentPage++;
-        loadComments();
-      }
-    });
-  }
-
-  // 댓글 수정/삭제/신고 버튼 이벤트 위임
-  const commentsContainer = document.getElementById('commentsContainer');
-  if (commentsContainer) {
-    commentsContainer.addEventListener('click', async (e) => {
-      // 프로필 이미지 클릭 → 신고 버튼 토글
-      if (e.target.classList.contains('comment-profile-image') || e.target.classList.contains('comment-profile-avatar')) {
-        const commentItem = e.target.closest('.comment-item');
-        const reportBtn = commentItem.querySelector('.report-comment-btn');
-        if (reportBtn) {
-          reportBtn.classList.toggle('hidden');
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          loadComments();
         }
-      }
+      });
+    }
 
-      // 신고 버튼 클릭
-      if (e.target.classList.contains('report-comment-btn')) {
-        const commentId = e.target.dataset.commentId;
-        await reportComment(commentId);
-      }
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+          currentPage++;
+          loadComments();
+        }
+      });
+    }
 
-      // 수정 버튼 클릭
-      if (e.target.classList.contains('edit-comment-btn')) {
-        const commentId = e.target.dataset.commentId;
-        showEditForm(commentId);
-      }
+    // 댓글 수정/삭제/신고 버튼 이벤트 위임
+    const commentsContainer = document.getElementById('commentsContainer');
+    if (commentsContainer) {
+      commentsContainer.addEventListener('click', async (e) => {
+        // 프로필 이미지 클릭 → 신고 버튼 토글
+        if (e.target.classList.contains('comment-profile-image') || e.target.classList.contains('comment-profile-avatar')) {
+          const commentItem = e.target.closest('.comment-item');
+          const reportBtn = commentItem.querySelector('.report-comment-btn');
+          if (reportBtn) {
+            reportBtn.classList.toggle('hidden');
+          }
+        }
 
-      // 삭제 버튼 클릭
-      if (e.target.classList.contains('delete-comment-btn')) {
-        const commentId = e.target.dataset.commentId;
-        await deleteComment(commentId);
-      }
+        // 신고 버튼 클릭
+        if (e.target.classList.contains('report-comment-btn')) {
+          const commentId = e.target.dataset.commentId;
+          await reportComment(commentId);
+        }
 
-      // 수정 취소 버튼 클릭
-      if (e.target.classList.contains('cancel-edit-btn')) {
-        const commentItem = e.target.closest('.comment-item');
-        hideEditForm(commentItem);
-      }
+        // 수정 버튼 클릭
+        if (e.target.classList.contains('edit-comment-btn')) {
+          const commentId = e.target.dataset.commentId;
+          showEditForm(commentId);
+        }
 
-      // 수정 저장 버튼 클릭
-      if (e.target.classList.contains('save-edit-btn')) {
-        const commentItem = e.target.closest('.comment-item');
-        const commentId = commentItem.dataset.commentId;
-        await saveEditComment(commentId, commentItem);
-      }
-    });
-  }
+        // 삭제 버튼 클릭
+        if (e.target.classList.contains('delete-comment-btn')) {
+          const commentId = e.target.dataset.commentId;
+          await deleteComment(commentId);
+        }
 
-  // 초기 댓글 로드
-  loadComments();
+        // 수정 취소 버튼 클릭
+        if (e.target.classList.contains('cancel-edit-btn')) {
+          const commentItem = e.target.closest('.comment-item');
+          hideEditForm(commentItem);
+        }
+
+        // 수정 저장 버튼 클릭
+        if (e.target.classList.contains('save-edit-btn')) {
+          const commentItem = e.target.closest('.comment-item');
+          const commentId = commentItem.dataset.commentId;
+          await saveEditComment(commentId, commentItem);
+        }
+      });
+    }
+
+    // 초기 댓글 로드 (한 번만)
+    console.log('📋 초기 댓글 로딩 시작...');
+    loadComments();
+  };
+
+  // 초기화 시작
+  initializeDOM();
 }
 
 /**
  * 댓글 목록 로드
  */
 export async function loadComments() {
+  // currentQuizId가 없으면 세션에서 가져오기
   if (!currentQuizId) {
-    console.error('퀴즈 ID가 설정되지 않았습니다.');
-    return;
+    console.log('📋 loadComments: currentQuizId가 없어서 세션에서 가져오는 중...');
+    const sessionId = window.location.pathname.split('/').pop();
+    try {
+      const response = await fetch(`/game/session/${sessionId}`, { credentials: 'include' });
+      if (response.ok) {
+        const sessionData = await response.json();
+        currentQuizId = sessionData.quiz?._id;
+        console.log('📋 loadComments: 퀴즈 ID 가져옴:', currentQuizId);
+        if (!currentQuizId) {
+          console.error('퀴즈 ID를 찾을 수 없습니다.');
+          return;
+        }
+      } else {
+        console.error('세션 정보를 불러올 수 없습니다.');
+        return;
+      }
+    } catch (error) {
+      console.error('세션 정보 가져오기 실패:', error);
+      return;
+    }
   }
 
   if (isLoading) return;
@@ -272,6 +313,8 @@ function createCommentHTML(comment) {
  * 댓글 제출
  */
 async function submitComment() {
+  console.log('submitComment 호출됨', { currentQuizId, currentUser });
+
   const commentInput = document.getElementById('commentInput');
   const submitCommentBtn = document.getElementById('submitCommentBtn');
 
@@ -292,10 +335,50 @@ async function submitComment() {
     return;
   }
 
+  // currentQuizId가 없으면 세션 데이터에서 다시 가져오기
+  if (!currentQuizId) {
+    console.log('currentQuizId가 없어서 세션에서 다시 가져오는 중...');
+    const sessionId = window.location.pathname.split('/').pop();
+    try {
+      const response = await fetch(`/game/session/${sessionId}`, { credentials: 'include' });
+      if (response.ok) {
+        const sessionData = await response.json();
+        currentQuizId = sessionData.quiz?._id;
+        console.log('퀴즈 ID 다시 가져옴:', currentQuizId);
+        if (!currentQuizId) {
+          alert('퀴즈 정보를 찾을 수 없습니다.');
+          return;
+        }
+      } else {
+        alert('퀴즈 정보를 불러올 수 없습니다.');
+        return;
+      }
+    } catch (error) {
+      console.error('퀴즈 정보 가져오기 실패:', error);
+      alert('퀴즈 정보를 불러올 수 없습니다.');
+      return;
+    }
+  }
+
+  // currentUser가 없으면 실시간으로 다시 가져오기
   if (!currentUser) {
-    alert('로그인이 필요합니다.');
-    window.location.href = '/login';
-    return;
+    console.log('currentUser가 없어서 다시 가져오는 중...');
+    try {
+      const response = await fetch('/auth/me', { credentials: 'include' });
+      if (response.ok) {
+        currentUser = await response.json();
+        console.log('사용자 정보 다시 가져옴:', currentUser);
+      } else {
+        alert('로그인이 필요합니다.');
+        window.location.href = '/login';
+        return;
+      }
+    } catch (error) {
+      console.error('사용자 정보 가져오기 실패:', error);
+      alert('로그인이 필요합니다.');
+      window.location.href = '/login';
+      return;
+    }
   }
 
   // 버튼 비활성화 및 로딩 상태
@@ -579,3 +662,6 @@ function formatDate(date) {
     return `${year}.${month}.${day}`;
   }
 }
+
+// Window 객체에 노출 (HTML에서 직접 호출 가능하도록)
+window.submitQuizComment = submitComment;

@@ -248,19 +248,21 @@
           </div>
 
           <!-- 댓글 입력 -->
-          <form id="commentForm" class="relative">
+          <form id="commentForm" class="relative" onsubmit="return false;">
             <input
               type="text"
               id="commentInput"
               placeholder="댓글을 입력하세요 (최대 500자)"
               maxlength="500"
               class="w-full pr-14 pl-4 py-2 bg-[#2d2d3d] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 transition-all duration-300"
+              oninput="document.getElementById('submitCommentBtn').disabled = this.value.trim().length === 0"
             >
             <button
-              type="submit"
+              type="button"
               id="submitCommentBtn"
               disabled
               class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-transparent hover:opacity-80 transition-opacity p-1 disabled:opacity-30 disabled:cursor-not-allowed"
+              onclick="window.submitQuizComment && window.submitQuizComment()"
             >
               <img src="/images/Enter.png" alt="전송" class="w-8 h-8 object-contain">
             </button>
@@ -440,6 +442,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/CorrectUserManager.js"></script>
   <script type="module" src="/js/quiz-session.js"></script>
-  <script type="module" src="/js/quiz-comments.js"></script>
+  <!-- quiz-comments.js는 quiz-session.js에서 import되므로 별도 로드 불필요 -->
+
 </body>
 </html>

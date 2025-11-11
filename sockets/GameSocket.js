@@ -841,9 +841,10 @@ module.exports = (io, app, redisClient) => {
             nickname: null,
             profileImage: null
         };
-        
-        // 즉시 브로드캐스트
+
+        // 즉시 브로드캐스트 (userId 추가)
         io.to(sessionId).emit('chat', {
+            user: socket.userId,  // ← 추가: 클라이언트에서 isMyMessage 판단용
             nickname: userInfo.nickname || 'Unknown',
             profileImage: userInfo.profileImage,
             message
