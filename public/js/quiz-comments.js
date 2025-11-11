@@ -15,13 +15,11 @@ let isInitialized = false; // 초기화 여부 플래그
 export function initializeComments(quizId, user) {
   // 이미 초기화되었으면 quizId와 user만 업데이트하고 리턴
   if (isInitialized) {
-    console.log('⚠️ 이미 초기화됨, quizId와 user만 업데이트');
     currentQuizId = quizId;
     currentUser = user;
     return;
   }
 
-  console.log('✅ initializeComments 호출 (첫 초기화):', { quizId, user });
   currentQuizId = quizId;
   currentUser = user;
   isInitialized = true;
@@ -39,17 +37,24 @@ export function initializeComments(quizId, user) {
       return;
     }
 
-    // 폼 제출 이벤트
-    commentForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await submitComment();
-    });
+    // 비로그인 사용자는 댓글 입력란 비활성화
+    if (!currentUser) {
+      commentInput.disabled = true;
+      commentInput.placeholder = '댓글을 작성하려면 로그인이 필요합니다';
+      submitCommentBtn.disabled = true;
+    } else {
+      // 폼 제출 이벤트
+      commentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await submitComment();
+      });
 
-    // 입력 필드 변경 이벤트 (버튼 활성화/비활성화)
-    commentInput.addEventListener('input', () => {
-      const content = commentInput.value.trim();
-      submitCommentBtn.disabled = content.length === 0;
-    });
+      // 입력 필드 변경 이벤트 (버튼 활성화/비활성화)
+      commentInput.addEventListener('input', () => {
+        const content = commentInput.value.trim();
+        submitCommentBtn.disabled = content.length === 0;
+      });
+    }
 
     // 페이지네이션 버튼 이벤트 리스너
     const prevBtn = document.getElementById('prevCommentsBtn');
@@ -120,7 +125,6 @@ export function initializeComments(quizId, user) {
     }
 
     // 초기 댓글 로드 (한 번만)
-    console.log('📋 초기 댓글 로딩 시작...');
     loadComments();
   };
 
@@ -134,24 +138,19 @@ export function initializeComments(quizId, user) {
 export async function loadComments() {
   // currentQuizId가 없으면 세션에서 가져오기
   if (!currentQuizId) {
-    console.log('📋 loadComments: currentQuizId가 없어서 세션에서 가져오는 중...');
     const sessionId = window.location.pathname.split('/').pop();
     try {
       const response = await fetch(`/game/session/${sessionId}`, { credentials: 'include' });
       if (response.ok) {
         const sessionData = await response.json();
         currentQuizId = sessionData.quiz?._id;
-        console.log('📋 loadComments: 퀴즈 ID 가져옴:', currentQuizId);
         if (!currentQuizId) {
-          console.error('퀴즈 ID를 찾을 수 없습니다.');
           return;
         }
       } else {
-        console.error('세션 정보를 불러올 수 없습니다.');
         return;
       }
     } catch (error) {
-      console.error('세션 정보 가져오기 실패:', error);
       return;
     }
   }
@@ -164,7 +163,6 @@ export async function loadComments() {
   const commentsError = document.getElementById('commentsError');
 
   if (!commentsContainer) {
-    console.error('댓글 컨테이너를 찾을 수 없습니다.');
     isLoading = false;
     return;
   }
@@ -313,13 +311,10 @@ function createCommentHTML(comment) {
  * 댓글 제출
  */
 async function submitComment() {
-  console.log('submitComment 호출됨', { currentQuizId, currentUser });
-
   const commentInput = document.getElementById('commentInput');
   const submitCommentBtn = document.getElementById('submitCommentBtn');
 
   if (!commentInput || !submitCommentBtn) {
-    console.error('댓글 입력 요소를 찾을 수 없습니다.');
     return;
   }
 
@@ -337,14 +332,12 @@ async function submitComment() {
 
   // currentQuizId가 없으면 세션 데이터에서 다시 가져오기
   if (!currentQuizId) {
-    console.log('currentQuizId가 없어서 세션에서 다시 가져오는 중...');
     const sessionId = window.location.pathname.split('/').pop();
     try {
       const response = await fetch(`/game/session/${sessionId}`, { credentials: 'include' });
       if (response.ok) {
         const sessionData = await response.json();
         currentQuizId = sessionData.quiz?._id;
-        console.log('퀴즈 ID 다시 가져옴:', currentQuizId);
         if (!currentQuizId) {
           alert('퀴즈 정보를 찾을 수 없습니다.');
           return;
@@ -354,7 +347,6 @@ async function submitComment() {
         return;
       }
     } catch (error) {
-      console.error('퀴즈 정보 가져오기 실패:', error);
       alert('퀴즈 정보를 불러올 수 없습니다.');
       return;
     }
@@ -362,19 +354,16 @@ async function submitComment() {
 
   // currentUser가 없으면 실시간으로 다시 가져오기
   if (!currentUser) {
-    console.log('currentUser가 없어서 다시 가져오는 중...');
     try {
       const response = await fetch('/auth/me', { credentials: 'include' });
       if (response.ok) {
         currentUser = await response.json();
-        console.log('사용자 정보 다시 가져옴:', currentUser);
       } else {
         alert('로그인이 필요합니다.');
         window.location.href = '/login';
         return;
       }
     } catch (error) {
-      console.error('사용자 정보 가져오기 실패:', error);
       alert('로그인이 필요합니다.');
       window.location.href = '/login';
       return;

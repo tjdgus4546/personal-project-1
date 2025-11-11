@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middlewares/AuthMiddleware');
+const { optionalAuthenticateToken } = require('../middlewares/AuthMiddleware');
 const { ObjectId } = require('mongoose').Types;
 
 // GET /api/quiz/:quizId/comments - 퀴즈의 댓글 조회 (페이지네이션)
-router.get('/quiz/:quizId/comments', async (req, res) => {
+// 로그인 없이도 조회 가능
+router.get('/quiz/:quizId/comments', optionalAuthenticateToken, async (req, res) => {
   const { quizId } = req.params;
   const { page = 1, limit = 20 } = req.query;
 

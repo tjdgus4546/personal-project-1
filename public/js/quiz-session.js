@@ -1558,11 +1558,16 @@ function setupSocketListeners() {
         }
 
         // 댓글 모듈 초기화 (퀴즈 ID와 사용자 정보 전달)
+        // 로그인 없이도 댓글을 볼 수 있도록 user는 null일 수 있음
         if (data.quiz && data.quiz._id) {
-            console.log('🔄 join-success에서 댓글 초기화:', data.quiz._id);
-            getUserData().then(user => {
-                initializeComments(data.quiz._id, user);
-            });
+            getUserData()
+                .then(user => {
+                    initializeComments(data.quiz._id, user);
+                })
+                .catch(() => {
+                    // 로그인하지 않은 경우에도 댓글 목록은 볼 수 있도록
+                    initializeComments(data.quiz._id, null);
+                });
         }
 
         // 로딩 완료 플래그
