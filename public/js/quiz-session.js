@@ -36,6 +36,7 @@ const sessionId = window.location.pathname.split('/').pop();
 let userId = null;
 let isGuest = false;
 let guestNickname = null;
+let cachedUserData = null; // 사용자 정보 캐시
 
 // Socket.IO 연결은 나중에 초기화 (게스트/로그인 사용자 구분 후)
 let socket = null;
@@ -95,6 +96,15 @@ async function fetchWithAuth(url, options = {}) {
         }
     }
     return response;
+}
+
+// 캐시된 사용자 정보 가져오기
+async function getCachedUserData() {
+    if (cachedUserData) {
+        return cachedUserData;
+    }
+    cachedUserData = await getUserData();
+    return cachedUserData;
 }
 
 // 사용자 정보 가져오기 및 소켓 연결 (게스트 지원)
@@ -1559,8 +1569,9 @@ function setupSocketListeners() {
 
         // 댓글 모듈 초기화 (퀴즈 ID와 사용자 정보 전달)
         // 로그인 없이도 댓글을 볼 수 있도록 user는 null일 수 있음
+        // 캐시된 사용자 정보 사용 (중복 API 호출 방지)
         if (data.quiz && data.quiz._id) {
-            getUserData()
+            getCachedUserData()
                 .then(user => {
                     initializeComments(data.quiz._id, user);
                 })

@@ -184,7 +184,10 @@ const getUserInfo = async (req, res) => {
   const User = require('../models/User')(userDb);
 
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    // 필요한 필드만 선택 (성능 최적화: gameSessions, playedQuizzes 등 배열 제외)
+    const user = await User.findById(req.user.id).select(
+      '_id nickname email profileImage provider role isEmailVerified isSuspended suspendedUntil createdAt'
+    ).lean();
     if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
 
     res.json(user);
