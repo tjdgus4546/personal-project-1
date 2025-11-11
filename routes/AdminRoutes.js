@@ -303,7 +303,29 @@ router.patch('/quizzes/:quizId/visibility', async (req, res) => {
     const { isComplete } = req.body;
 
     const Quiz = require('../models/Quiz')(req.app.get('quizDb'));
-    await Quiz.findByIdAndUpdate(quizId, { isComplete });
+    const User = require('../models/User')(req.app.get('userDb'));
+
+    // 공개로 전환 시 제작자 닉네임 저장 (성능 최적화)
+    const updateData = { isComplete };
+
+    if (isComplete) {
+      const quiz = await Quiz.findById(quizId);
+      if (quiz) {
+        if (quiz.creatorId === 'seized') {
+          updateData.creatorNickname = '관리자';
+        } else {
+          try {
+            const creator = await User.findById(quiz.creatorId).select('nickname');
+            updateData.creatorNickname = creator?.nickname || '알 수 없음';
+          } catch (err) {
+            console.error('제작자 정보 조회 실패:', err);
+            updateData.creatorNickname = '알 수 없음';
+          }
+        }
+      }
+    }
+
+    await Quiz.findByIdAndUpdate(quizId, updateData);
 
     res.json({
       success: true,

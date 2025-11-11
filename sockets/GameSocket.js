@@ -313,15 +313,11 @@ module.exports = (io, app, redisClient) => {
         // ⚡ Redis에서 접속 인원 가져오기
         const connectedCount = await getConnectedCount(sessionId, session);
 
-        // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용)
-        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creatorId completedGameCount questions recommendationCount recommendations');
+        // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용) - creatorNickname 포함
+        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creatorId creatorNickname completedGameCount questions recommendationCount recommendations');
 
-        // 제작자 닉네임 조회
-        let creatorNickname = '알 수 없음';
-        if (quiz?.creatorId) {
-          const creator = await User.findById(quiz.creatorId).select('nickname');
-          creatorNickname = creator?.nickname || '알 수 없음';
-        }
+        // 제작자 닉네임 (Quiz에 저장된 값 사용 - DB 조회 불필요)
+        const creatorNickname = quiz?.creatorNickname || '알 수 없음';
 
         // 현재 사용자가 추천했는지 확인 (로그인한 경우만)
         const hasRecommended = socket.isGuest ? false : (quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false);
@@ -1730,12 +1726,16 @@ module.exports = (io, app, redisClient) => {
           session.players
         );
 
+        // 제작자 닉네임 (Quiz에 저장된 값 사용 - DB 조회 불필요)
+        const creatorNickname = quiz?.creatorNickname || '알 수 없음';
+
         io.to(sessionId).emit('end', {
           success: true,
           message: '퀴즈 종료!',
           data: {
             players: playersData,
-            percentileThresholds // 클라이언트에서 비교할 임계값 전송
+            percentileThresholds, // 클라이언트에서 비교할 임계값 전송
+            creatorNickname: creatorNickname // 제작자 닉네임 추가
           }
         });
         return;

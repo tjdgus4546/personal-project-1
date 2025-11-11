@@ -1958,8 +1958,8 @@ function setupSocketListeners() {
             return;
         }
 
-        // 퀴즈 종료 화면 표시
-        showGameEndScreen(data.players);
+        // 퀴즈 종료 화면 표시 (제작자 정보 포함)
+        showGameEndScreen(data.players, data.creatorNickname);
     });
 
     socket.on('forceRedirect', (data) => {
@@ -1969,7 +1969,7 @@ function setupSocketListeners() {
 }
 
 // 퀴즈 종료 화면 표시
-function showGameEndScreen(players) {
+function showGameEndScreen(players, creatorNickname) {
     // 유튜브 플레이어 정지 및 제거
     if (youtubePlayer) {
         try {
@@ -1994,10 +1994,10 @@ function showGameEndScreen(players) {
         document.getElementById('endQuizTitle').textContent = quizData.title;
         document.getElementById('endRecommendCount').textContent = quizData.recommendationCount || 0;
 
-        // 제작자 정보 표시
+        // 제작자 정보 표시 (서버에서 받은 값 우선 사용)
         const endCreatorNickname = document.getElementById('endCreatorNickname');
         if (endCreatorNickname) {
-            endCreatorNickname.textContent = quizData.creatorNickname || '알 수 없음';
+            endCreatorNickname.textContent = creatorNickname || quizData.creatorNickname || '알 수 없음';
         }
 
         // 추천 상태에 따라 아이콘 변경

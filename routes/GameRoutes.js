@@ -85,18 +85,8 @@ router.get('/session/:id', optionalAuthenticateToken, async (req, res) => {
     // 추천 정보 추가
     quiz.hasRecommended = !!hasRecommended;
 
-    // 제작자 닉네임 추가
-    if (quiz.creatorId === 'seized') {
-      quiz.creatorNickname = '관리자';
-    } else if (quiz.creatorId) {
-      try {
-        const creator = await User.findById(quiz.creatorId).select('nickname').lean();
-        quiz.creatorNickname = creator ? creator.nickname : '알 수 없음';
-      } catch (err) {
-        console.error('제작자 정보 조회 실패:', err);
-        quiz.creatorNickname = '알 수 없음';
-      }
-    } else {
+    // 제작자 닉네임 (Quiz에 저장된 값 사용 - DB 조회 불필요)
+    if (!quiz.creatorNickname) {
       quiz.creatorNickname = '알 수 없음';
     }
 

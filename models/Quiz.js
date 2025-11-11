@@ -65,6 +65,10 @@ const quizSchema = new Schema({
     type: String, // ObjectId 또는 'seized'
     required: true,
   },
+  creatorNickname: {
+    type: String, // 퀴즈 공개 시점의 제작자 닉네임 (성능 최적화)
+    default: null,
+  },
   originalCreatorId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
