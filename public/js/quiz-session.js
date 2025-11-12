@@ -1861,7 +1861,7 @@ function setupSocketListeners() {
             return;
         }
 
-        const { questionStartAt: startAt } = data;
+        const { questionStartAt: startAt, timeLimit, isReconnect } = data;
         questionStartAt = new Date(startAt);
 
         // 타이머 시작
@@ -1877,12 +1877,21 @@ function setupSocketListeners() {
             countdownInterval = null;
         }
 
-        const totalTimeLimit = (question.timeLimit || 90) * 1000;
+        let remainingTime;
+        let remainingSeconds;
 
-        // ✅ 경과 시간 계산 (재접속 시 대응)
-        const elapsed = Math.max(0, Date.now() - questionStartAt.getTime());
-        const remainingTime = Math.max(0, totalTimeLimit - elapsed);
-        const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
+        if (isReconnect) {
+            // ✅ 재접속 시: questionStartAt 기반으로 경과시간 계산
+            const totalTimeLimit = (timeLimit || question.timeLimit || 90) * 1000;
+            const elapsed = Math.max(0, Date.now() - questionStartAt.getTime());
+            remainingTime = Math.max(0, totalTimeLimit - elapsed);
+            remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
+        } else {
+            // ✅ 정상 진행 시: 서버에서 받은 timeLimit을 그대로 사용 (사용자 시간에 의존하지 않음)
+            const timeLimitValue = timeLimit || question.timeLimit || 90;
+            remainingTime = timeLimitValue * 1000;
+            remainingSeconds = timeLimitValue;
+        }
 
         // ✅ 남은 시간으로 타이머 시작
         questionTimer = setTimeout(() => {

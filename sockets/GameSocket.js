@@ -458,10 +458,17 @@ module.exports = (io, app, redisClient) => {
 
           // 타이머 시작 정보도 전송 (클라이언트가 타이머 복원할 수 있도록)
           if (session.questionStartAt) {
+            // 현재 문제의 timeLimit 가져오기 (재접속 시 경과시간 계산용)
+            const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+            const currentQuestion = quizDataToSend?.questions?.[actualQuestionIndex];
+            const timeLimit = currentQuestion?.timeLimit || 90;
+
             socket.emit('question-start', {
               success: true,
               data: {
-                questionStartAt: session.questionStartAt
+                questionStartAt: session.questionStartAt,
+                timeLimit: timeLimit,
+                isReconnect: true // 재접속 플래그 추가
               }
             });
           }
@@ -821,11 +828,18 @@ module.exports = (io, app, redisClient) => {
             return;
           }
 
+          // 현재 문제의 timeLimit 가져오기
+          const actualQuestionIndex = session.questionOrder[session.currentQuestionIndex];
+          const quizData = session.cachedQuizData;
+          const currentQuestion = quizData?.questions?.[actualQuestionIndex];
+          const timeLimit = currentQuestion?.timeLimit || 90;
+
           // 모든 클라이언트에게 시작 신호 전송
           io.to(sessionId).emit('question-start', {
             success: true,
             data: {
-              questionStartAt: startResult.questionStartAt
+              questionStartAt: startResult.questionStartAt,
+              timeLimit: timeLimit // 클라이언트가 타이머를 직접 카운트다운하도록 전송
             }
           });
         }
