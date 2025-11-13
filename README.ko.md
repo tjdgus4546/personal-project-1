@@ -57,7 +57,7 @@
 ### Infrastructure & DevOps
 - **AWS S3** - 이미지 저장 (Presigned URL)
 - **JWT** - httpOnly 쿠키 기반 인증
-- **OAuth 2.0** - 소셜 로그인 (카카오, 구글, 네이버)
+- **OAuth 2.0** - 소셜 로그인 (구글, 네이버)
 - **YouTube IFrame API** - 동기화된 영상 재생
 
 ---

@@ -58,7 +58,7 @@
 ### Infrastructure & DevOps
 - **AWS S3** - Image storage (Presigned URL)
 - **JWT** - httpOnly cookie-based authentication
-- **OAuth 2.0** - Social login (Kakao, Google, Naver)
+- **OAuth 2.0** - Social login (Google, Naver)
 - **YouTube IFrame API** - Synchronized video playback
 
 ---
