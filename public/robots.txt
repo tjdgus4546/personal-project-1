@@ -6,6 +6,7 @@ Allow: /
 # 크롤링 차단할 페이지
 Disallow: /admin/
 Disallow: /admin-*
+Disallow: /portfolio/
 Disallow: /my-page.html
 Disallow: /edit-profile.html
 Disallow: /quiz-edit.html

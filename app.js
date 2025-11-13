@@ -16,6 +16,7 @@ const adminSetupRoutes = require('./routes/AdminSetupRoutes');
 const commentRoutes = require('./routes/CommentRoutes');
 const contactRoutes = require('./routes/ContactRoutes');
 const s3Routes = require('./routes/S3Routes');
+const portfolioRoutes = require('./routes/PortfolioRoutes');
 const authenticateToken = require('./middlewares/AuthMiddleware');
 const quizApiRoutesFactory = require('./routes/QuizApiRoutes');
 
@@ -79,6 +80,10 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 */
+
+// View engine 설정
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false // index.html 자동 제공 비활성화 (명시적 라우트 사용)
@@ -242,6 +247,7 @@ connectDB().then(({ userDb, quizDb }) => {
   app.use('/game', apiLimiter, gameRoutes); // 인증은 각 라우트에서 개별 처리 (게스트 지원)
   app.use('/admin-setup', adminSetupRoutes); // 관리자 권한 부여 (authenticateToken으로 보호)
   app.use('/admin', adminRoutes); // 관리자 페이지 (checkAdmin 미들웨어로 보호)
+  app.use('/', portfolioRoutes); // 포트폴리오 페이지 (토큰 기반 접근 제어)
 
   app.get('/', async (req, res) => {
     const quizId = req.query.quiz;
