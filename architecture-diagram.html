@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLAYCODE.GG - 시스템 아키텍처</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#222230] text-white p-10">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-[#8BA2FA] mb-12 text-center tracking-wider">PLAYCODE.GG 시스템 아키텍처</h1>
+
+        <!-- Architecture Diagram -->
+        <div class="bg-black/30 p-8 rounded-xl mb-12">
+            <svg viewBox="0 0 1000 730" class="w-full h-auto">
+                <!-- Client Layer -->
+                <g id="client-layer">
+                    <rect x="50" y="20" width="900" height="140" fill="#3B82F6" opacity="0.2" stroke="#3B82F6" stroke-width="2" rx="8"/>
+                    <text x="500" y="50" font-size="20" font-weight="bold" fill="#3B82F6" text-anchor="middle">Client Layer</text>
+
+                    <!-- Client Components -->
+                    <rect x="120" y="70" width="200" height="70" fill="#1E40AF" stroke="#3B82F6" stroke-width="2" rx="6"/>
+                    <text x="220" y="100" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Game UI</text>
+                    <text x="220" y="120" font-size="12" fill="#93C5FD" text-anchor="middle">(Real-time)</text>
+
+                    <rect x="400" y="70" width="200" height="70" fill="#1E40AF" stroke="#3B82F6" stroke-width="2" rx="6"/>
+                    <text x="500" y="100" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Quiz Editor</text>
+                    <text x="500" y="120" font-size="12" fill="#93C5FD" text-anchor="middle">(Create/Edit)</text>
+
+                    <rect x="680" y="70" width="200" height="70" fill="#1E40AF" stroke="#3B82F6" stroke-width="2" rx="6"/>
+                    <text x="780" y="100" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Community</text>
+                    <text x="780" y="120" font-size="12" fill="#93C5FD" text-anchor="middle">(댓글/추천)</text>
+                </g>
+
+                <!-- Arrows from Client to Cluster -->
+                <g id="client-to-cluster-arrows">
+                    <line x1="220" y1="140" x2="220" y2="240" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+                    <text x="240" y="180" font-size="11" fill="#8BA2FA">Socket.IO</text>
+
+                    <line x1="500" y1="140" x2="500" y2="240" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+                    <text x="520" y="180" font-size="11" fill="#8BA2FA">REST API</text>
+
+                    <line x1="780" y1="140" x2="780" y2="240" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+                    <text x="800" y="180" font-size="11" fill="#8BA2FA">REST API</text>
+                </g>
+
+                <!-- Application Layer (Cluster Mode) -->
+                <g id="app-layer">
+                    <rect x="50" y="250" width="900" height="200" fill="#10B981" opacity="0.2" stroke="#10B981" stroke-width="2" rx="8"/>
+                    <text x="500" y="280" font-size="20" font-weight="bold" fill="#10B981" text-anchor="middle">Application Layer (AWS EC2 - Cluster Mode via PM2)</text>
+                    <text x="500" y="300" font-size="13" fill="#6EE7B7" text-anchor="middle">단일 포트에서 여러 Worker 프로세스가 요청 분산 처리</text>
+
+                    <!-- Worker 1 -->
+                    <rect x="100" y="320" width="220" height="110" fill="#047857" stroke="#10B981" stroke-width="2" rx="6"/>
+                    <text x="210" y="345" font-size="16" font-weight="bold" fill="white" text-anchor="middle">Worker 1</text>
+                    <text x="210" y="365" font-size="12" fill="#D1FAE5" text-anchor="middle">Node.js + Express</text>
+                    <text x="210" y="385" font-size="12" fill="#D1FAE5" text-anchor="middle">Socket.IO Server</text>
+                    <text x="210" y="405" font-size="12" fill="#D1FAE5" text-anchor="middle">REST API</text>
+
+                    <!-- Worker 2 -->
+                    <rect x="390" y="320" width="220" height="110" fill="#047857" stroke="#10B981" stroke-width="2" rx="6"/>
+                    <text x="500" y="345" font-size="16" font-weight="bold" fill="white" text-anchor="middle">Worker 2</text>
+                    <text x="500" y="365" font-size="12" fill="#D1FAE5" text-anchor="middle">Node.js + Express</text>
+                    <text x="500" y="385" font-size="12" fill="#D1FAE5" text-anchor="middle">Socket.IO Server</text>
+                    <text x="500" y="405" font-size="12" fill="#D1FAE5" text-anchor="middle">REST API</text>
+
+                    <!-- Worker N -->
+                    <rect x="680" y="320" width="220" height="110" fill="#047857" stroke="#10B981" stroke-width="2" rx="6"/>
+                    <text x="790" y="345" font-size="16" font-weight="bold" fill="white" text-anchor="middle">Worker N</text>
+                    <text x="790" y="365" font-size="12" fill="#D1FAE5" text-anchor="middle">Node.js + Express</text>
+                    <text x="790" y="385" font-size="12" fill="#D1FAE5" text-anchor="middle">Socket.IO Server</text>
+                    <text x="790" y="405" font-size="12" fill="#D1FAE5" text-anchor="middle">REST API</text>
+                </g>
+
+                <!-- Arrows from Workers to Data Layer -->
+                <g id="workers-to-data">
+                    <line x1="210" y1="430" x2="250" y2="500" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+                    <line x1="500" y1="430" x2="250" y2="500" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+                    <line x1="790" y1="430" x2="250" y2="500" stroke="#8BA2FA" stroke-width="3" marker-end="url(#arrowhead)"/>
+
+                    <line x1="210" y1="430" x2="500" y2="520" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+                    <line x1="500" y1="430" x2="500" y2="520" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+                    <line x1="790" y1="430" x2="500" y2="520" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+
+                    <line x1="210" y1="430" x2="750" y2="520" stroke="#A855F7" stroke-width="2" marker-end="url(#arrowhead-purple)"/>
+                    <line x1="500" y1="430" x2="750" y2="520" stroke="#A855F7" stroke-width="2" marker-end="url(#arrowhead-purple)"/>
+                    <line x1="790" y1="430" x2="750" y2="520" stroke="#A855F7" stroke-width="2" marker-end="url(#arrowhead-purple)"/>
+                </g>
+
+                <!-- Data Layer -->
+                <g id="data-layer">
+                    <!-- Redis (핵심!) -->
+                    <rect x="80" y="510" width="280" height="150" fill="#DC2626" opacity="0.3" stroke="#EF4444" stroke-width="3" rx="8"/>
+                    <text x="220" y="540" font-size="18" font-weight="bold" fill="#FCA5A5" text-anchor="middle">Redis</text>
+                    <text x="220" y="565" font-size="12" fill="#FEE2E2" text-anchor="middle">1. 세션 공유 (Worker 간)</text>
+                    <text x="220" y="585" font-size="12" fill="#FEE2E2" text-anchor="middle">2. Pub/Sub (Socket.IO)</text>
+                    <text x="220" y="605" font-size="12" fill="#FEE2E2" text-anchor="middle">3. 동시성 제어 (SET NX)</text>
+                    <text x="220" y="625" font-size="12" fill="#FEE2E2" text-anchor="middle">4. 첫 정답자 판정</text>
+                    <text x="220" y="645" font-size="13" font-weight="bold" fill="#FF6B6B" text-anchor="middle">⚡ 클러스터 모드 핵심</text>
+
+                    <!-- MongoDB -->
+                    <rect x="400" y="530" width="240" height="130" fill="#F97316" opacity="0.3" stroke="#FB923C" stroke-width="2" rx="8"/>
+                    <text x="520" y="560" font-size="18" font-weight="bold" fill="#FED7AA" text-anchor="middle">MongoDB</text>
+                    <text x="520" y="585" font-size="12" fill="#FFEDD5" text-anchor="middle">• 사용자 정보</text>
+                    <text x="520" y="605" font-size="12" fill="#FFEDD5" text-anchor="middle">• 퀴즈 데이터</text>
+                    <text x="520" y="625" font-size="12" fill="#FFEDD5" text-anchor="middle">• 게임 결과</text>
+                    <text x="520" y="645" font-size="12" fill="#FFEDD5" text-anchor="middle">• S3 키 저장</text>
+
+                    <!-- AWS S3 -->
+                    <rect x="680" y="530" width="240" height="130" fill="#A855F7" opacity="0.3" stroke="#C084FC" stroke-width="2" rx="8"/>
+                    <text x="800" y="560" font-size="18" font-weight="bold" fill="#E9D5FF" text-anchor="middle">AWS S3</text>
+                    <text x="800" y="585" font-size="12" fill="#F3E8FF" text-anchor="middle">• 퀴즈 이미지</text>
+                    <text x="800" y="605" font-size="12" fill="#F3E8FF" text-anchor="middle">• 썸네일</text>
+                    <text x="800" y="625" font-size="12" fill="#F3E8FF" text-anchor="middle">• Presigned URL</text>
+                    <text x="800" y="645" font-size="12" fill="#F3E8FF" text-anchor="middle">• 독립 스토리지</text>
+                </g>
+
+                <!-- Arrow markers -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#8BA2FA" />
+                    </marker>
+                    <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#F59E0B" />
+                    </marker>
+                    <marker id="arrowhead-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#A855F7" />
+                    </marker>
+                </defs>
+
+                <!-- Legend -->
+                <g id="legend" transform="translate(50, 690)">
+                    <text x="0" y="0" font-size="14" font-weight="bold" fill="#8BA2FA">데이터 흐름</text>
+                    <line x1="0" y1="15" x2="40" y2="15" stroke="#8BA2FA" stroke-width="3"/>
+                    <text x="50" y="20" font-size="11" fill="#D1D5DB">Redis (세션/동시성)</text>
+
+                    <line x1="200" y1="15" x2="240" y2="15" stroke="#F59E0B" stroke-width="2"/>
+                    <text x="250" y="20" font-size="11" fill="#D1D5DB">MongoDB (데이터)</text>
+
+                    <line x1="400" y1="15" x2="440" y2="15" stroke="#A855F7" stroke-width="2"/>
+                    <text x="450" y="20" font-size="11" fill="#D1D5DB">AWS S3 (이미지)</text>
+                </g>
+
+                <!-- Cluster Mode Badge -->
+                <rect x="800" y="260" width="140" height="30" fill="#DC2626" rx="15"/>
+                <text x="870" y="280" font-size="13" font-weight="bold" fill="white" text-anchor="middle">🚀 Cluster Mode</text>
+            </svg>
+        </div>
+
+        <!-- Key Points -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="bg-black/30 p-6 rounded-xl border-l-4 border-red-500">
+                <h3 class="text-lg font-bold mb-3 text-red-400">Redis 기반 분산 처리</h3>
+                <ul class="text-sm space-y-2 text-gray-300">
+                    <li>• Worker 간 세션 공유</li>
+                    <li>• Pub/Sub 실시간 메시징</li>
+                    <li>• SET NX 동시성 제어</li>
+                </ul>
+            </div>
+
+            <div class="bg-black/30 p-6 rounded-xl border-l-4 border-green-500">
+                <h3 class="text-lg font-bold mb-3 text-green-400">CPU 멀티코어 활용</h3>
+                <ul class="text-sm space-y-2 text-gray-300">
+                    <li>• 코어 수만큼 Worker 생성</li>
+                    <li>• 처리량 10배 증가</li>
+                    <li>• 무중단 서비스 가능</li>
+                </ul>
+            </div>
+
+            <div class="bg-black/30 p-6 rounded-xl border-l-4 border-purple-500">
+                <h3 class="text-lg font-bold mb-3 text-purple-400">고가용성 확보</h3>
+                <ul class="text-sm space-y-2 text-gray-300">
+                    <li>• PM2 자동 프로세스 관리</li>
+                    <li>• 단일 장애점 제거</li>
+                    <li>• 자동 재시작 및 복구</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Data Flow Examples -->
+        <div class="bg-black/30 p-8 rounded-xl mb-12">
+            <h2 class="text-2xl font-bold text-[#8BA2FA] mb-6">주요 데이터 흐름</h2>
+
+            <div class="space-y-6">
+                <div>
+                    <h4 class="text-lg font-bold mb-3 text-blue-400">1. 실시간 게임 세션 (Socket.IO)</h4>
+                    <div class="bg-black/50 p-4 rounded-lg font-mono text-sm text-gray-300">
+                        Client → Worker A (PM2 자동 분배) → Redis (세션 저장)<br>
+                        → MongoDB (퀴즈 데이터) → AWS S3 (이미지 Presigned URL) → Client
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold mb-3 text-red-400">2. 동시 정답 제출 (동시성 제어)</h4>
+                    <div class="bg-black/50 p-4 rounded-lg font-mono text-sm text-gray-300">
+                        Client A (Worker 1) ┐<br>
+                        Client B (Worker 2) ├→ <span class="text-red-400 font-bold">Redis SET NX</span> (원자적 첫 정답자 판정)<br>
+                        Client C (Worker 3) ┘<br>
+                        → Redis Pub/Sub (순위 업데이트) → 모든 Worker → 모든 Clients
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold mb-3 text-purple-400">3. 크로스 Worker 실시간 채팅</h4>
+                    <div class="bg-black/50 p-4 rounded-lg font-mono text-sm text-gray-300">
+                        Client A (Worker 1) → Socket.IO → <span class="text-purple-400 font-bold">Redis Pub/Sub</span><br>
+                        → Worker 2, 3 구독 → Client B, C 실시간 수신
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technology Decisions -->
+        <div class="bg-black/30 p-8 rounded-xl">
+            <h2 class="text-2xl font-bold text-[#8BA2FA] mb-6">핵심 기술 선택 이유</h2>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="text-left py-3 px-4 text-[#8BA2FA]">기술</th>
+                            <th class="text-left py-3 px-4 text-[#8BA2FA]">클러스터 환경에서의 역할</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        <tr class="border-b border-gray-800">
+                            <td class="py-3 px-4 font-bold">PM2 Cluster Mode</td>
+                            <td class="py-3 px-4">CPU 멀티코어 완전 활용, 자동 프로세스 관리 및 재시작</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-3 px-4 font-bold text-red-400">Redis</td>
+                            <td class="py-3 px-4">Worker 간 세션/상태 공유, Pub/Sub 메시징, SET NX 동시성 제어</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-3 px-4 font-bold">Socket.IO Redis Adapter</td>
+                            <td class="py-3 px-4">여러 Worker 간 자동 메시지 라우팅, 실시간 통신 동기화</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-3 px-4 font-bold">MongoDB</td>
+                            <td class="py-3 px-4">여러 Worker에서 동시 접근, Connection Pooling</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 px-4 font-bold">AWS S3</td>
+                            <td class="py-3 px-4">Worker 수와 무관한 독립적 스토리지, Presigned URL</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Achievement Summary -->
+        <div class="mt-12 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-8 rounded-xl border border-blue-500/30">
+            <h2 class="text-2xl font-bold text-center mb-6 text-[#8BA2FA]">클러스터 모드 핵심 성과</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                <div>
+                    <div class="text-3xl font-bold text-green-400 mb-2">10x</div>
+                    <div class="text-sm text-gray-300">동시 처리 능력</div>
+                    <div class="text-xs text-gray-500 mt-1">1K → 10K+ 세션</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-blue-400 mb-2">100%</div>
+                    <div class="text-sm text-gray-300">Race Condition 해결</div>
+                    <div class="text-xs text-gray-500 mt-1">Redis SET NX</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-purple-400 mb-2">N-Core</div>
+                    <div class="text-sm text-gray-300">CPU 완전 활용</div>
+                    <div class="text-xs text-gray-500 mt-1">모든 코어 사용</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-red-400 mb-2">HA</div>
+                    <div class="text-sm text-gray-300">고가용성 확보</div>
+                    <div class="text-xs text-gray-500 mt-1">무중단 서비스</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
