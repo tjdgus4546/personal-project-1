@@ -214,7 +214,13 @@
 <!-- Page 3: System Architecture -->
 <div class="page min-h-screen p-10 md:px-16 md:py-6">
     <div class="max-w-4xl mx-auto">
-        <h2 class="text-2xl font-bold text-[#8BA2FA] mb-8 tracking-wider">시스템 아키텍처</h2>
+        <h2 class="text-2xl font-bold text-[#8BA2FA] mb-6 tracking-wider">시스템 아키텍처</h2>
+
+        <div class="mb-8 text-sm leading-relaxed text-gray-300">
+            PM2 클러스터 모드를 활용한 분산 시스템 구조로,
+            여러 Worker 프로세스가 Redis를 통해 협력하여
+            높은 확장성과 안정성을 확보했습니다.
+        </div>
 
         <!-- Architecture Diagram -->
         <div class="bg-black/30 p-6 rounded-xl mb-8">
