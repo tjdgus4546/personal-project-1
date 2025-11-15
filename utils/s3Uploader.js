@@ -37,7 +37,7 @@ function detectImageType(base64String) {
   if (base64String.startsWith('data:image/jpeg') || base64String.startsWith('data:image/jpg')) return 'jpeg';
   if (base64String.startsWith('data:image/gif')) return 'gif';
   if (base64String.startsWith('data:image/webp')) return 'webp';
-  return 'jpeg'; // 기본값
+  return 'webp'; // 기본값 (WebP로 변경)
 }
 
 /**

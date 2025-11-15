@@ -145,7 +145,7 @@ export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
             reject(new Error('파일 읽기 실패. 다른 이미지를 선택해주세요.'));
         };
 
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             const img = new Image();
 
             // Image 로드 에러 핸들러
@@ -154,7 +154,7 @@ export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
                 reject(new Error('이미지 로드 실패. 올바른 이미지 파일인지 확인해주세요.'));
             };
 
-            img.onload = () => {
+            img.onload = async () => {
                 try {
                     // 해상도 체크 및 리사이징 (최대 4096x4096)
                     const MAX_DIMENSION = 4096;
@@ -168,7 +168,6 @@ export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
                         height = Math.floor(height * ratio);
                     }
 
-                    let quality = 0.9;
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
@@ -182,32 +181,54 @@ export async function resizeImageToBlob(file, maxKB = 1024, minKB = 100) {
 
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    function tryCompress() {
-                        canvas.toBlob((blob) => {
-                            if (!blob) {
-                                clearTimeout(timeout);
-                                reject(new Error('이미지 변환 실패'));
-                                return;
-                            }
-
-                            const sizeKB = blob.size / 1024;
-
-                            if (sizeKB <= maxKB || quality <= 0.1) {
-                                if (sizeKB < minKB && quality < 0.9) {
-                                    quality = Math.min(0.9, quality + 0.1);
-                                    tryCompress();
-                                } else {
-                                    clearTimeout(timeout);
+                    // 재귀 대신 async/await 반복문 사용 (안정성 향상)
+                    const createBlob = (quality) => {
+                        return new Promise((resolve, reject) => {
+                            canvas.toBlob((blob) => {
+                                if (blob) {
                                     resolve(blob);
+                                } else {
+                                    reject(new Error('Blob 생성 실패'));
                                 }
-                            } else {
-                                quality -= 0.05;
-                                tryCompress();
-                            }
-                        }, 'image/jpeg', quality);
+                            }, 'image/webp', quality);
+                        });
+                    };
+
+                    let quality = 0.9;
+                    let blob = null;
+
+                    // 반복문으로 압축 (재귀 문제 해결)
+                    while (quality >= 0.1) {
+                        blob = await createBlob(quality);
+                        const sizeKB = blob.size / 1024;
+
+                        // 목표 크기 달성
+                        if (sizeKB <= maxKB && sizeKB >= minKB) {
+                            clearTimeout(timeout);
+                            resolve(blob);
+                            return;
+                        }
+
+                        // 너무 작으면 품질 올리기
+                        if (sizeKB < minKB && quality < 0.9) {
+                            quality = Math.min(0.9, quality + 0.1);
+                            continue;
+                        }
+
+                        // 너무 크면 품질 낮추기
+                        if (sizeKB > maxKB) {
+                            quality -= 0.05;
+                            continue;
+                        }
+
+                        // 조건 만족하면 반환
+                        break;
                     }
 
-                    tryCompress();
+                    // 최종 결과 반환
+                    clearTimeout(timeout);
+                    resolve(blob);
+
                 } catch (error) {
                     clearTimeout(timeout);
                     reject(new Error(`이미지 처리 중 오류: ${error.message}`));
@@ -246,7 +267,7 @@ export async function uploadToS3WithPresignedUrl(file, folder, fileName) {
             body: JSON.stringify({
                 folder,
                 fileName,
-                contentType: 'image/jpeg'
+                contentType: 'image/webp'
             })
         });
 
@@ -262,7 +283,7 @@ export async function uploadToS3WithPresignedUrl(file, folder, fileName) {
             method: 'PUT',
             body: blob,
             headers: {
-                'Content-Type': 'image/jpeg'
+                'Content-Type': 'image/webp'
             }
         });
 

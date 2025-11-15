@@ -25,14 +25,16 @@ router.post('/presigned-url', async (req, res) => {
 
     // 고유한 파일명 생성 (해시 추가)
     const hash = crypto.randomBytes(8).toString('hex');
-    const extension = contentType === 'image/png' ? 'png' : 'jpg';
+    let extension = 'jpg';
+    if (contentType === 'image/png') extension = 'png';
+    else if (contentType === 'image/webp') extension = 'webp';
     const s3Key = `${folder}/${fileName}_${hash}.${extension}`;
 
     // Presigned URL 생성 (15분 유효)
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: s3Key,
-      ContentType: contentType || 'image/jpeg',
+      ContentType: contentType || 'image/webp',
       CacheControl: 'max-age=31536000' // 1년 캐싱
     });
 
