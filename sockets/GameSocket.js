@@ -175,7 +175,7 @@ module.exports = (io, app, redisClient) => {
           disconnectTimers.delete(timerKey);
         }
 
-        const session = await safeFindSessionById(GameSession, sessionId);
+        let session = await safeFindSessionById(GameSession, sessionId);
         if (!session) return;
 
         // 최대 인원 체크 (12명)
@@ -226,26 +226,49 @@ module.exports = (io, app, redisClient) => {
         }
 
 
-        let updated = false;
         let player = session.players.find(p => {
           const playerUserId = p.userId ? p.userId.toString() : p.userId;
           return playerUserId === userId.toString();
         });
 
+        let updatedSession = session;
+
         if (!player) {
-          // 신규 플레이어 추가
-          session.players.push({
-            userId,
-            nickname: userInfo.nickname,
-            profileImage: userInfo.profileImage,
-            score: 0,
-            correctAnswersCount: 0,
-            answered: {},
-            connected: true,
-            lastSeen: new Date(),
-            socketId: socket.id,
-          });
-          updated = true;
+          // ✅ 신규 플레이어: 원자적 업데이트로 추가
+          // userId 타입 정규화 (게스트는 String, 로그인 사용자는 ObjectId)
+          const normalizedUserId = socket.isGuest ? userId : (ObjectId.isValid(userId) ? new ObjectId(userId) : userId);
+
+          const updateOps = {
+            $push: {
+              players: {
+                userId: normalizedUserId,
+                nickname: userInfo.nickname,
+                profileImage: userInfo.profileImage,
+                score: 0,
+                correctAnswersCount: 0,
+                answered: {},
+                connected: true,
+                lastSeen: new Date(),
+                socketId: socket.id,
+              }
+            }
+          };
+
+          // host가 없으면 이 사용자를 host로 설정
+          if (!session.host || session.host.toString() === '__NONE__') {
+            updateOps.$set = { host: normalizedUserId };
+          }
+
+          updatedSession = await GameSession.findByIdAndUpdate(
+            sessionId,
+            updateOps,
+            { new: true }
+          );
+
+          if (!updatedSession) {
+            console.error('❌ 세션 업데이트 실패 - joinSession (신규 플레이어)');
+            return;
+          }
 
           // ⚡ Redis 접속 인원 카운터 증가
           if (redisClient && redisClient.isOpen) {
@@ -256,49 +279,49 @@ module.exports = (io, app, redisClient) => {
             }
           }
         } else {
-          // 재접속 시 갱신 (실제로 변경된 값만 체크)
-          if (!player.connected) {
-            player.connected = true;
-            updated = true;
+          // ✅ 재접속: 원자적 업데이트로 상태 갱신
+          const wasDisconnected = !player.connected;
 
-            // ⚡ Redis 접속 인원 카운터 증가 (재접속)
-            if (redisClient && redisClient.isOpen) {
-              try {
-                await redisClient.incr(`session:${sessionId}:connected`);
-              } catch (redisErr) {
-                console.error('Redis 카운터 증가 실패:', redisErr);
-              }
+          // 기존 플레이어의 userId를 그대로 사용 (타입 일치 보장)
+          const playerUserId = player.userId;
+
+          const updateOps = {
+            $set: {
+              'players.$.connected': true,
+              'players.$.socketId': socket.id,
+              'players.$.lastSeen': new Date(),
+              'players.$.nickname': userInfo.nickname,
+              'players.$.profileImage': userInfo.profileImage
             }
-          }
-          if (player.socketId !== socket.id) {
-            player.socketId = socket.id;
-            updated = true;
-          }
-          // ⚡ nickname, profileImage 업데이트 (이전에 저장 안 되어있을 수 있음)
-          if (player.nickname !== userInfo.nickname) {
-            player.nickname = userInfo.nickname;
-            updated = true;
-          }
-          if (player.profileImage !== userInfo.profileImage) {
-            player.profileImage = userInfo.profileImage;
-            updated = true;
-          }
-          player.lastSeen = new Date(); // lastSeen은 항상 갱신 (저장은 updated가 true일 때만)
-        }
-        
-        // 방장 지정 (세션 생성자) → 제일 먼저 들어온 사람을 host로 지정
-        if (!session.host || session.host.toString() === '__NONE__') {
-          session.host = userId;
-          updated = true;
-        }
+          };
 
-        if (updated) {
-          const success = await safeSaveSession(session);
-          if (!success) {
-            console.error('❌ 세션 저장 중 에러 발생 - joinSession');
+          updatedSession = await GameSession.findOneAndUpdate(
+            { _id: sessionId, 'players.userId': playerUserId },
+            updateOps,
+            { new: true }
+          );
+
+          if (!updatedSession) {
+            console.error('❌ 세션 업데이트 실패 - joinSession (재접속)', {
+              sessionId,
+              playerUserId,
+              userIdType: typeof playerUserId
+            });
             return;
           }
+
+          // ⚡ Redis 접속 인원 카운터 증가 (재접속인 경우만)
+          if (wasDisconnected && redisClient && redisClient.isOpen) {
+            try {
+              await redisClient.incr(`session:${sessionId}:connected`);
+            } catch (redisErr) {
+              console.error('Redis 카운터 증가 실패:', redisErr);
+            }
+          }
         }
+
+        // 업데이트된 세션으로 교체
+        session = updatedSession;
 
         const hostUser = session.players.find(p => {
           if (!session.host) return false;
@@ -313,14 +336,33 @@ module.exports = (io, app, redisClient) => {
         // ⚡ Redis에서 접속 인원 가져오기
         const connectedCount = await getConnectedCount(sessionId, session);
 
-        // ⚡ 퀴즈 정보 조회 (loadSessionData 대체용) - creatorNickname 포함
-        const quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creatorId creatorNickname completedGameCount questions recommendationCount recommendations');
+        // ✅ 캐시된 퀴즈 정보 사용 (DB 조회 최소화)
+        let quizData = session.cachedQuizData;
+        let quiz = null;
+        let hasRecommended = false;
 
-        // 제작자 닉네임 (Quiz에 저장된 값 사용 - DB 조회 불필요)
-        const creatorNickname = quiz?.creatorNickname || '알 수 없음';
+        // cachedQuizData가 없으면 DB 조회 (fallback)
+        if (!quizData) {
+          quiz = await Quiz.findById(session.quizId).select('title description titleImageBase64 creatorId creatorNickname completedGameCount questions recommendationCount recommendations');
+          quizData = {
+            title: quiz?.title || '제목 없음',
+            description: quiz?.description || '',
+            titleImageBase64: quiz?.titleImageBase64 || null,
+            creatorId: quiz?.creatorId,
+            creatorNickname: quiz?.creatorNickname || '알 수 없음',
+            completedGameCount: quiz?.completedGameCount || 0,
+            questionCount: quiz?.questions?.length || 0,
+            recommendationCount: quiz?.recommendationCount || 0
+          };
+        }
 
-        // 현재 사용자가 추천했는지 확인 (로그인한 경우만)
-        const hasRecommended = socket.isGuest ? false : (quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false);
+        // 추천 여부 확인 (로그인한 경우만, Quiz 문서가 필요함)
+        if (!socket.isGuest) {
+          if (!quiz) {
+            quiz = await Quiz.findById(session.quizId).select('recommendations');
+          }
+          hasRecommended = quiz?.recommendations?.some(rec => rec.toString() === userId.toString()) || false;
+        }
 
         const joinSuccessData = {
           success: true,
@@ -329,17 +371,17 @@ module.exports = (io, app, redisClient) => {
             host: session.host?.toString() || '__NONE__',
             inviteCode: session.inviteCode || null, // ⚡ GameSession에서 가져오기
             quiz: {
-              _id: quiz?._id,
-              title: quiz?.title || '제목 없음',
-              description: quiz?.description || '',
-              titleImageBase64: quiz?.titleImageBase64 || null,
-              completedGameCount: quiz?.completedGameCount || 0,
+              _id: session.quizId,
+              title: quizData.title,
+              description: quizData.description,
+              titleImageBase64: quizData.titleImageBase64,
+              completedGameCount: quizData.completedGameCount,
               questions: [], // ⚡ 빈 배열 (문제 수만 필요하므로)
-              recommendationCount: quiz?.recommendationCount || 0,
+              recommendationCount: quizData.recommendationCount,
               hasRecommended: hasRecommended,
-              creatorNickname: creatorNickname
+              creatorNickname: quizData.creatorNickname
             },
-            questionCount: quiz?.questions?.length || 0,
+            questionCount: quizData.questionCount,
             players: session.players.map(p => ({
               nickname: p.nickname,
               userId: p.userId.toString(),

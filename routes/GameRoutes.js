@@ -140,6 +140,18 @@ router.post('/start', optionalAuthenticateToken, async (req, res) => {
       return res.status(403).json({ message: '비공개 상태의 퀴즈는 플레이할 수 없습니다.' });
     }
 
+    // ✅ 퀴즈 메타 정보 캐싱 (DB 조회 횟수 감소)
+    const cachedQuizData = {
+      title: quiz.title,
+      description: quiz.description,
+      titleImageBase64: quiz.titleImageBase64,
+      creatorId: quiz.creatorId,
+      creatorNickname: quiz.creatorNickname || '알 수 없음',
+      completedGameCount: quiz.completedGameCount || 0,
+      questionCount: quiz.questions?.length || 0,
+      recommendationCount: quiz.recommendationCount || 0
+    };
+
     let session;
     let inviteCode;
     const maxRetries = 10; // 최대 10번 재시도
@@ -147,7 +159,7 @@ router.post('/start', optionalAuthenticateToken, async (req, res) => {
     for (let i = 0; i < maxRetries; i++) {
       try {
         inviteCode = Math.random().toString(36).substring(2, 8);
-        
+
         session = await GameSession.create({
           quizId,
           players: [{
@@ -167,6 +179,7 @@ router.post('/start', optionalAuthenticateToken, async (req, res) => {
           inviteCode,
           isStarted: false,
           host: isGuest ? userId : new ObjectId(userId),
+          cachedQuizData, // ✅ 퀴즈 메타 정보 캐싱
         });
 
         // 성공 시 루프 탈출
@@ -226,49 +239,72 @@ router.post('/join', optionalAuthenticateToken, async (req, res) => {
   }
 
   try {
-    const session = await GameSession.findOne({ inviteCode });
+    // ✅ 먼저 세션이 존재하는지 확인
+    const session = await GameSession.findOne({ inviteCode }).lean();
     if (!session) {
       return res.status(404).json({ message: '유효하지 않은 초대 코드입니다.' });
     }
 
+    const normalizedUserId = isGuest ? userId : new ObjectId(userId);
+
+    // 기존 플레이어 확인
     const existingPlayer = session.players.find(player => {
       const playerUserId = player.userId ? player.userId.toString() : player.userId;
       return playerUserId === userId.toString();
     });
 
-    if (existingPlayer) {
-      // 이미 참여한 플레이어면 상태만 업데이트 (재연결)
-      existingPlayer.connected = true;
-      existingPlayer.lastSeen = new Date();
-      existingPlayer.socketId = null; // Socket ID는 나중에 업데이트됨
+    let updatedSession;
+    let reconnected = false;
 
-      await session.save();
+    if (existingPlayer) {
+      // ✅ 재연결: 원자적 업데이트로 connected 상태 갱신
+      updatedSession = await GameSession.findOneAndUpdate(
+        {
+          inviteCode,
+          'players.userId': normalizedUserId
+        },
+        {
+          $set: {
+            'players.$.connected': true,
+            'players.$.lastSeen': new Date(),
+            'players.$.socketId': null
+          }
+        },
+        { new: true }
+      );
+      reconnected = true;
 
       return res.status(200).json({
         message: '세션에 다시 참여했습니다.',
-        sessionId: session._id,
+        sessionId: updatedSession._id,
         reconnected: true,
         guestId: isGuest ? userId : null
       });
     }
 
-    // 새 플레이어 추가
-    session.players.push({
-      userId: isGuest ? userId : new ObjectId(userId),
-      nickname: isGuest ? guestNickname : null,
-      isGuest: isGuest,
-      score: 0,
-      answered: {},
-      connected: true, // 초기 연결 상태
-      lastSeen: new Date(),
-      socketId: null
-    });
-
-    await session.save();
+    // ✅ 신규 플레이어: 원자적 업데이트로 배열에 추가
+    updatedSession = await GameSession.findOneAndUpdate(
+      { inviteCode },
+      {
+        $push: {
+          players: {
+            userId: normalizedUserId,
+            nickname: isGuest ? guestNickname : null,
+            isGuest: isGuest,
+            score: 0,
+            answered: {},
+            connected: true,
+            lastSeen: new Date(),
+            socketId: null
+          }
+        }
+      },
+      { new: true }
+    );
 
     res.status(200).json({
       message: '세션에 성공적으로 참여했습니다.',
-      sessionId: session._id,
+      sessionId: updatedSession._id,
       guestId: isGuest ? userId : null
     });
 
