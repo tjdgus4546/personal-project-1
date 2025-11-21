@@ -93,12 +93,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Rate Limiting 설정
-// 부하 테스트용 임시 설정 - 테스트 후 원래 값으로 복구 필요!
-// 원래 값: globalLimiter max: 100, apiLimiter max: 60
 // 1. 전역 제한: 모든 요청에 적용 (느슨하게)
 const globalLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1분
-  max: 10000, // 1분당 최대 10000개 요청 (부하 테스트용)
+  max: 100, // 1분당 최대 100개 요청
   message: '너무 많은 요청을 보냈습니다. 잠시 후 다시 시도해주세요.',
   standardHeaders: true, // RateLimit-* 헤더 반환
   legacyHeaders: false, // X-RateLimit-* 헤더 비활성화
@@ -107,7 +105,7 @@ const globalLimiter = rateLimit({
 // 2. API 제한: 일반 API 엔드포인트 (중간)
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1분
-  max: 5000, // 1분당 최대 5000개 요청 (부하 테스트용)
+  max: 60, // 1분당 최대 60개 요청
   message: 'API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
   standardHeaders: true,
   legacyHeaders: false,
