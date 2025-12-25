@@ -334,6 +334,16 @@ connectDB().then(({ userDb, quizDb }) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
   });
+
+  // 헬스체크 엔드포인트 (Docker, 로드밸런서 등에서 사용)
+  app.get('/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  });
+
   // 소켓 로직 파일 연결 (Redis client 추가 전달)
   const gameSocketMonitor = require('./sockets/GameSocket')(io, app, pubClient);
 
